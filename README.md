@@ -31,7 +31,7 @@ python Specim2PLC.py
 소재 예측(예: PET, PVC)을 처리하고 해당 신호를 PLC로 전송.
 
 시스템 아키텍처
-
+```
       [Gram]    <--->   [카메라 시스템]
         |    Ethernet 연결  
         |
@@ -64,7 +64,7 @@ python Specim2PLC.py
         |            
         v
 [PLC 하드웨어]
-
+```
 카메라 시스템: 플라스틱 소재 이미지를 캡처.
 
 Breeze Runtime: 소재를 분류하고 예측을 전송.
