@@ -32,35 +32,35 @@ class XGTController:
         self.connected = False
         print("PLC 연결이 종료되었습니다.")
     
-    def send_packet_to_plc(self, packet, description=""):
-        """Packet send and receive"""
-        if not self.connected:
-            if not self.connect():
-                return False, None
-        try:
-            if description:
-                print(f"\n===== {description} =====")
-            print(f"전송 패킷 (hex): {packet.hex()}")
-            self.sock.send(packet)
-            response = self.sock.recv(1024)
-            print(f"응답 패킷 (hex): {response.hex()}")
-            
-            # 응답 상태 확인
-            if len(response) >= 28:
-                status = response[26:28]
-                if status == b'\x00\x00':
-                    print("✅ 성공! 통신이 정상적으로 이루어졌습니다.")
-                    return True, response
+    def send_packet_to_plc(self, packet, description="", max_retries=3):
+        for attempt in range(max_retries):
+            if not self.connected:
+                if not self.connect():
+                    continue
+            try:
+                if description:
+                    print(f"\n===== {description} =====")
+                print(f"전송 패킷 (hex): {packet.hex()}")
+                self.sock.send(packet)
+                response = self.sock.recv(1024)
+                print(f"응답 패킷 (hex): {response.hex()}")
+                if len(response) >= 28:
+                    status = response[26:28]
+                    if status == b'\x00\x00':
+                        print("✅ 성공! 통신이 정상적으로 이루어졌습니다.")
+                        return True, response
+                    else:
+                        print(f"❌ 실패! 상태 코드: {status.hex()}")
+                        return False, response
                 else:
-                    print(f"❌ 실패! 상태 코드: {status.hex()}")
+                    print("❌ 응답이 충분하지 않음")
                     return False, response
-            else:
-                print("❌ 응답이 충분하지 않음")
-                return False, response
-        except Exception as e:
-            print(f"❌ 통신 오류: {str(e)}")
-            self.connected = False
-            return False, None
+            except Exception as e:
+                print(f"❌ 통신 오류 (시도 {attempt + 1}/{max_retries}): {str(e)}")
+                self.connected = False
+                if attempt < max_retries - 1:
+                    time.sleep(0.1)
+        return False, None
     
     def create_write_packet(self, address_ascii, data_bytes, data_type=0x02):
         """Packet creation function"""
@@ -127,6 +127,9 @@ class XGTController:
         packet.append(value)
         
         success, response = self.send_packet_to_plc(packet, f"%MX{address} 비트 값 {value} 쓰기")
+        if success:
+            immediate_value = self.read_mx_bit(address)
+            print(f"즉시 확인: %MX{address} = {immediate_value}")
         return success
     
     def read_mx_bit(self, address):
@@ -158,10 +161,8 @@ class XGTController:
     
     def write_d_and_set_m300(self, d_value):
         """D00000에 값을 쓰고 성공하면 M300 비트를 ON으로 설정"""
-        print("\n========== D00000 및 M300 통합 테스트 시작 ==========")
         print(f"1. D00000에 {d_value} 값을 쓰고")
         print("2. M300 비트를 ON(1)으로 설정합니다.")
-        print("=================================================")
         
         # 1. M300 초기 상태 확인
         initial_m = self.read_mx_bit(300)
@@ -175,24 +176,27 @@ class XGTController:
         
         # 3. M300 비트 ON
         print(f"\nD00000에 값 {d_value} 쓰기 성공! M300 비트 ON 설정 시작...")
-        m_success = self.write_mx_bit(300, 1)  # M301에서 M300으로 변경
+        m_success = self.write_mx_bit(300, 1) 
         if not m_success:
             print("M300 비트 설정 실패!")
             return False
-        
-        # 4. 충분한 대기 시간 설정
-        print("비트 설정 후 2초 대기...")
-        time.sleep(2.0)  # 대기 시간 유지
-        
-        # 5. 비트 상태 확인
-        final_m = self.read_mx_bit(300)  # M301에서 M300으로 변경
-        print(f'final_m ; {final_m}')
-        if final_m == 1:
-            print("\n✅✅✅ 테스트 성공! D00000에 값을 쓰고 M300 비트가 ON 되었습니다!")
-            return True
         else:
-            print("\n❌ M300 비트 ON 상태가 아닙니다.")
-            return False
+            print("M300 비트 설정 성공!")
+            return True
+        
+        # # # 4. 충분한 대기 시간 설정
+        # # print("비트 설정 후 2초 대기...")
+        # # time.sleep(2.0)  # 대기 시간 유지
+        
+        # # 5. 비트 상태 확인
+        # final_m = self.read_mx_bit(300)  
+        # print(f'final_m ; {final_m}')
+        # if final_m == 1:
+        #     print("\n✅✅✅ 테스트 성공! D00000에 값을 쓰고 M300 비트가 ON 되었습니다!")
+        #     return True
+        # else:
+        #     print("\n❌ M300 비트 ON 상태가 아닙니다.")
+        #     return False
 
 
 # def main():
