@@ -7,7 +7,6 @@ import sys
 from CAMController import CAMController
 from PLCController import XGTController
 import conf
-from breeze import BreezeController
 
 # Configure logging (single configuration)
 logging.basicConfig(
@@ -98,6 +97,7 @@ def main():
 
     # Initialize Breeze
     global breeze
+    from breeze import BreezeController
     breeze = BreezeController()
     try:
         breeze.start()

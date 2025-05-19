@@ -6,6 +6,7 @@ import logging
 # Logging is configured in sample_code.py
 logger = logging.getLogger(__name__)
 
+
 class BreezeController:
     def __init__(self, shortcut_path=r"C:\Users\withwe\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Prediktera\Breeze\Breeze.lnk"):
         """
