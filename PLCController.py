@@ -12,7 +12,7 @@ class XGTController:
         self.connected = False
         
     def connect(self):
-        """PLC 연결"""
+        """PLC Connect"""
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.settimeout(self.timeout)
@@ -26,14 +26,14 @@ class XGTController:
             return False
     
     def disconnect(self):
-        """PLC 연결 종료"""
+        """PLC Connect close"""
         if self.sock:
             self.sock.close()
         self.connected = False
         print("PLC 연결이 종료되었습니다.")
     
     def send_packet_to_plc(self, packet, description=""):
-        """패킷 전송 및 응답 수신"""
+        """Packet send and receive"""
         if not self.connected:
             if not self.connect():
                 return False, None
@@ -63,7 +63,7 @@ class XGTController:
             return False, None
     
     def create_write_packet(self, address_ascii, data_bytes, data_type=0x02):
-        """패킷 생성 함수"""
+        """Packet creation function"""
         packet = bytearray()
         packet.extend(b'LSIS-XGT')
         packet.extend(b'\x00\x00')
