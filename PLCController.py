@@ -176,7 +176,7 @@ class XGTController:
         
         # 3. M300 비트 ON
         print(f"\nD00000에 값 {d_value} 쓰기 성공! M300 비트 ON 설정 시작...")
-        m_success = self.write_mx_bit(300, 1) 
+        m_success = self.write_mx_bit(300, 1)
         if not m_success:
             print("M300 비트 설정 실패!")
             return False
