@@ -2,11 +2,8 @@ import subprocess
 import os
 import time
 import logging
-import pyautogui
-# Optional: import psutil for advanced process management
-import psutil
 
-# Logging is configured in sample_code.py, so we only get the logger
+# Logging is configured in sample_code.py
 logger = logging.getLogger(__name__)
 
 class BreezeController:
@@ -20,7 +17,7 @@ class BreezeController:
         self.process = None
 
     def start(self):
-        """Launch Breeze and simulate Enter key press to establish connection."""
+        """Launch Breeze application."""
         if not os.path.exists(self.shortcut_path):
             logger.critical(f"Breeze shortcut not found at {self.shortcut_path}")
             raise FileNotFoundError(f"Breeze shortcut not found at {self.shortcut_path}")
@@ -35,15 +32,8 @@ class BreezeController:
             )
             logger.info(f"Breeze launched with PID {self.process.pid}")
 
-            # Wait for Breeze to initialize
-            time.sleep(30)  # Adjust as needed
-
-            # Simulate Enter key press
-            logger.info("Simulating Enter key press to establish connection")
-            pyautogui.press('enter')
-            logger.info("Enter key press simulated")
-
             # Check if process is still running
+            time.sleep(1)  # Brief wait to ensure process starts
             if self.process.poll() is not None:
                 error_output = self.process.stderr.read().decode() if self.process.stderr else "No error output"
                 logger.error(f"Breeze process terminated prematurely. Exit code: {self.process.returncode}, Error: {error_output}")
@@ -52,7 +42,7 @@ class BreezeController:
 
             return True
         except Exception as e:
-            logger.error(f"Failed to launch Breeze or simulate Enter key press: {str(e)}")
+            logger.error(f"Failed to launch Breeze: {str(e)}")
             self.process = None
             raise
 
@@ -67,17 +57,6 @@ class BreezeController:
             except subprocess.TimeoutExpired:
                 logger.warning("Breeze process did not terminate gracefully, forcing kill")
                 self.process.kill()
-                # Optional: Use psutil to ensure all child processes are terminated
-                try:
-                    parent = psutil.Process(self.process.pid)
-                    for child in parent.children(recursive=True):
-                        child.kill()
-                    parent.kill()
-                    logger.info("All Breeze processes and children terminated")
-                except psutil.NoSuchProcess:
-                    logger.info("Breeze process already terminated")
-                except Exception as e:
-                    logger.error(f"Error terminating Breeze processes with psutil: {str(e)}")
             except Exception as e:
                 logger.error(f"Error terminating Breeze process: {str(e)}")
             finally:
