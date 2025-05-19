@@ -1,4 +1,4 @@
-HOST = '192.168.250.130'  # 카메라 IP 주소
+HOST = '127.0.0.1'  # 카메라 IP 주소
 EVENT_PORT = 2500
 WORKFLOW_PATH = "C:/Users/withwe/breeze/Data/Runtime/Plastic_Classification_1.xml"
 
