@@ -7,7 +7,7 @@ class XGTController:
         """XGT 통신 초기화"""
         self.ip = ip
         self.port = port
-        self.timeout = 5.0
+        self.timeout = 15
         self.sock = None
         self.connected = False
         
