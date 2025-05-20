@@ -1,13 +1,17 @@
 import socket
 import time
 import struct
+import logging
+
+logger = logging.getLogger(__name__)
 
 class XGTController:
     def __init__(self, ip="192.168.250.120", port=2004):
         """XGT 통신 초기화"""
         self.ip = ip
         self.port = port
-        self.timeout = 15
+        self.timeout = 30
+          # 타임아웃 5초로 조정
         self.sock = None
         self.connected = False
         
@@ -18,10 +22,10 @@ class XGTController:
             self.sock.settimeout(self.timeout)
             self.sock.connect((self.ip, self.port))
             self.connected = True
-            print(f"✅ PLC {self.ip}:{self.port}에 연결되었습니다.")
+            logger.info(f"PLC {self.ip}:{self.port}에 연결되었습니다.")
             return True
         except Exception as e:
-            print(f"❌ PLC 연결 실패: {str(e)}")
+            logger.error(f"PLC 연결 실패: {str(e)}")
             self.connected = False
             return False
     
@@ -30,36 +34,36 @@ class XGTController:
         if self.sock:
             self.sock.close()
         self.connected = False
-        print("PLC 연결이 종료되었습니다.")
+        logger.info("PLC 연결이 종료되었습니다.")
     
     def send_packet_to_plc(self, packet, description="", max_retries=3):
         for attempt in range(max_retries):
             if not self.connected:
                 if not self.connect():
+                    time.sleep(0.5)  # 재시도 전 대기
                     continue
             try:
-                if description:
-                    print(f"\n===== {description} =====")
-                print(f"전송 패킷 (hex): {packet.hex()}")
+                logger.debug(f"{description}: 전송 패킷 (hex): {packet.hex()}")
                 self.sock.send(packet)
                 response = self.sock.recv(1024)
-                print(f"응답 패킷 (hex): {response.hex()}")
+                logger.debug(f"{description}: 응답 패킷 (hex): {response.hex()}")
                 if len(response) >= 28:
                     status = response[26:28]
                     if status == b'\x00\x00':
-                        print("✅ 성공! 통신이 정상적으로 이루어졌습니다.")
+                        logger.info(f"{description}: 통신 성공")
                         return True, response
                     else:
-                        print(f"❌ 실패! 상태 코드: {status.hex()}")
+                        logger.error(f"{description}: 실패, 상태 코드: {status.hex()}")
                         return False, response
                 else:
-                    print("❌ 응답이 충분하지 않음")
+                    logger.error(f"{description}: 응답 부족 (길이: {len(response)})")
                     return False, response
             except Exception as e:
-                print(f"❌ 통신 오류 (시도 {attempt + 1}/{max_retries}): {str(e)}")
+                logger.error(f"{description}: 통신 오류 (시도 {attempt + 1}/{max_retries}): {str(e)}")
                 self.connected = False
                 if attempt < max_retries - 1:
-                    time.sleep(0.1)
+                    time.sleep(0.5)  # 재시도 간 대기 증가
+        logger.error(f"{description}: 최대 재시도 실패")
         return False, None
     
     def create_write_packet(self, address_ascii, data_bytes, data_type=0x02):
@@ -89,23 +93,20 @@ class XGTController:
         return packet
     
     def write_d_value(self, value):
-        """D00000에 값 쓰기 (첫 번째 코드 블록 참조)"""
-        d_address = b'\x25\x44\x42\x30'  # %DB0 형식 사용
-        data_bytes = struct.pack('<H', value)  # 리틀 엔디안 형식으로 변환
-        
+        """D00000에 값 쓰기"""
+        d_address = b'\x25\x44\x42\x30'  # %DB0
+        data_bytes = struct.pack('<H', value)
         packet = self.create_write_packet(d_address, data_bytes)
-        print(f"D00000에 값 {value} 쓰기 시도 중...")
+        logger.info(f"D00000에 값 {value} 쓰기 시도")
         success, response = self.send_packet_to_plc(packet, f"D00000에 값 {value} 쓰기")
-        
         if success:
-            print(f"D00000에 값 {value} 쓰기 성공!")
+            logger.info(f"D00000에 값 {value} 쓰기 성공")
             return True
-        else:
-            print(f"D00000에 값 쓰기 실패!")
-            return False
+        logger.error(f"D00000에 값 {value} 쓰기 실패")
+        return False
     
     def write_mx_bit(self, address, value):
-        """MX 비트 값 쓰기 (두 번째 코드 블록 참조)"""
+        """MX 비트 값 쓰기"""
         packet = bytearray()
         packet.extend(b'LSIS-XGT')
         packet.extend(b'\x00\x00\x00\x00')
@@ -129,11 +130,11 @@ class XGTController:
         success, response = self.send_packet_to_plc(packet, f"%MX{address} 비트 값 {value} 쓰기")
         if success:
             immediate_value = self.read_mx_bit(address)
-            print(f"즉시 확인: %MX{address} = {immediate_value}")
+            logger.info(f"즉시 확인: %MX{address} = {immediate_value}")
         return success
     
     def read_mx_bit(self, address):
-        """MX 비트 값 읽기 (두 번째 코드 블록 참조)"""
+        """MX 비트 값 읽기"""
         packet = bytearray()
         packet.extend(b'LSIS-XGT')
         packet.extend(b'\x00\x00\x00\x00')
@@ -152,83 +153,30 @@ class XGTController:
         packet.extend(device_name)
         
         success, response = self.send_packet_to_plc(packet, f"%MX{address} 비트 값 읽기")
-        
         if success and len(response) >= 30:
             bit_value = response[29]
-            print(f"%MX{address} 현재 값: {bit_value} ({'ON' if bit_value else 'OFF'})")
+            logger.info(f"%MX{address} 현재 값: {bit_value} ({'ON' if bit_value else 'OFF'})")
             return bit_value
         return None
     
     def write_d_and_set_m300(self, d_value):
         """D00000에 값을 쓰고 성공하면 M300 비트를 ON으로 설정"""
-        print(f"1. D00000에 {d_value} 값을 쓰고")
-        print("2. M300 비트를 ON(1)으로 설정합니다.")
-        
+        logger.info(f"D00000에 {d_value} 쓰고 M300 비트 ON")
         # 1. M300 초기 상태 확인
         initial_m = self.read_mx_bit(300)
-        print(f'initial_m ;{initial_m}')
+        logger.debug(f"Initial M300: {initial_m}")
         
         # 2. D00000에 값 쓰기
         d_success = self.write_d_value(d_value)
         if not d_success:
-            print("D00000 쓰기 실패! M300 비트 설정을 건너뜁니다.")
+            logger.error("D00000 쓰기 실패, M300 설정 건너뜀")
             return False
         
         # 3. M300 비트 ON
-        print(f"\nD00000에 값 {d_value} 쓰기 성공! M300 비트 ON 설정 시작...")
+        logger.info(f"D00000에 {d_value} 쓰기 성공, M300 비트 ON 설정")
         m_success = self.write_mx_bit(300, 1)
         if not m_success:
-            print("M300 비트 설정 실패!")
+            logger.error("M300 비트 설정 실패")
             return False
-        else:
-            print("M300 비트 설정 성공!")
-            return True
-        
-        # # # 4. 충분한 대기 시간 설정
-        # # print("비트 설정 후 2초 대기...")
-        # # time.sleep(2.0)  # 대기 시간 유지
-        
-        # # 5. 비트 상태 확인
-        # final_m = self.read_mx_bit(300)  
-        # print(f'final_m ; {final_m}')
-        # if final_m == 1:
-        #     print("\n✅✅✅ 테스트 성공! D00000에 값을 쓰고 M300 비트가 ON 되었습니다!")
-        #     return True
-        # else:
-        #     print("\n❌ M300 비트 ON 상태가 아닙니다.")
-        #     return False
-
-
-# def main():
-#     # PLC 연결 정보
-#     plc_ip = "192.168.250.120"  # PLC IP 주소
-#     plc_port = 2004             # XGT 서버 포트
-    
-#     tester = XGTController(plc_ip, plc_port)
-    
-#     try:
-#         print("XGT 통신 테스트 유틸리티")
-#         print("D00000에 값을 쓰고 M300 비트 활성화하기")
-#         print("1. D00000에 값 1 쓰기")
-#         print("2. D00000에 값 2 쓰기")
-#         print("3. D00000에 값 3 쓰기")
-        
-#         choice = input("선택하세요 (1-3, 기본값 1): ").strip() or "1"
-        
-#         if choice == "1":
-#             tester.write_d_and_set_m300(1)
-#         elif choice == "2":
-#             tester.write_d_and_set_m300(2)
-#         elif choice == "3":
-#             tester.write_d_and_set_m300(3)
-#         else:
-#             print("잘못된 선택입니다. 1로 기본 설정합니다.")
-#             tester.write_d_and_set_m300(1)
-        
-#     except Exception as e:
-#         print(f"\n❌ 테스트 중 오류 발생: {str(e)}")
-#     finally:
-#         tester.disconnect()
-
-# if __name__ == "__main__":
-#     main()
+        logger.info("M300 비트 설정 성공")
+        return True

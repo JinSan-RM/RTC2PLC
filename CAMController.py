@@ -8,7 +8,7 @@ from dateutil import tz
 import time
 import pyautogui
 from queue import Queue
-import queue  # queue.Empty를 위해 추가
+import queue
 from threading import Lock
 from collections import defaultdict
 
@@ -16,15 +16,6 @@ logger = logging.getLogger(__name__)
 
 class CAMController:
     def __init__(self, host='127.0.0.1', command_port=2000, event_port=2500, data_stream_port=3000, class_mapping=None):
-        """
-        Initialize the CAMController for interacting with a Specim FX17 camera.
-
-        :param host: The IP address of the camera.
-        :param command_port: Port for sending commands (default: 2000).
-        :param event_port: Port for receiving events (default: 2500).
-        :param data_stream_port: Port for receiving data stream (default: 3000).
-        :param class_mapping: Dictionary mapping descriptor values to classifications (e.g., {1: 'PET Bottle', 2: 'PET sheet'}).
-        """
         self.host = host
         self.command_port = command_port
         self.event_port = event_port
@@ -33,11 +24,11 @@ class CAMController:
         self.stop_event = threading.Event()
         self.command_socket = None
         self._lock = threading.Lock()
-        self.prediction_queue = Queue()
+        self.prediction_queue = Queue(maxsize=1000)
         self.queue_lock = Lock()
+        self.class_priority = {'PET sheet': 2, 'PVC': 1, 'PET Bottle': 0, 'PET G': 0, 'PC': 0, 'Background': -1, '-': -1}
 
     def start_command_client(self):
-        """Initialize and connect the command socket, then simulate Enter key press."""
         try:
             soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -55,7 +46,6 @@ class CAMController:
             raise
 
     def close_command_client(self):
-        """Close the command socket."""
         with self._lock:
             if self.command_socket:
                 self.command_socket.close()
@@ -63,12 +53,6 @@ class CAMController:
                 logger.info("Command socket closed")
 
     def send_command(self, command):
-        """
-        Send a command to the camera and return the response.
-
-        :param command: Dictionary with the command details (e.g., {"Command": "InitializeCamera"}).
-        :return: Response dictionary or None if failed.
-        """
         if not self.command_socket:
             raise RuntimeError("Command socket not initialized")
         command_id = uuid.uuid4().hex[:8]
@@ -83,6 +67,7 @@ class CAMController:
                     if not part:
                         logger.warning("Socket closed by server")
                         break
+                    
                     message_buffer += part
                     while '\r\n' in message_buffer:
                         full_response_str, message_buffer = message_buffer.split('\r\n', 1)
@@ -102,7 +87,6 @@ class CAMController:
         return None
 
     def _handle_response(self, response):
-        """Process a command response and return the message."""
         if not response:
             raise ValueError(f"No response received: {response}")
         message = response.get('Message', '')
@@ -110,19 +94,12 @@ class CAMController:
             raise RuntimeError(f"Command not successful: {message}")
         return message
 
-    def process_predictions_batch(self, interval, callback):
-        """
-        Process predictions in batches over a specified time interval and return the most frequent classification.
-
-        :param interval: Time interval (in seconds) to collect predictions (e.g., 1.0 for 1 second).
-        :param callback: Function to call with the most frequent classification and its details.
-        """
+    def process_predictions_batch(self, interval, callback, min_predictions=3):
         def batch_processor():
             while not self.stop_event.is_set():
                 try:
                     predictions = []
                     start_time = time.time()
-                    # Collect predictions for the specified interval
                     while time.time() - start_time < interval:
                         try:
                             prediction = self.prediction_queue.get(timeout=0.1)
@@ -130,38 +107,42 @@ class CAMController:
                         except queue.Empty:
                             continue
                     if predictions:
-                        # Group by classification
                         class_counts = defaultdict(list)
                         for classification, details in predictions:
                             class_counts[classification].append(details)
                         if class_counts:
-                            # Select the most frequent classification
-                            dominant_class = max(class_counts, key=lambda k: len(class_counts[k]))
-                            dominant_details = class_counts[dominant_class][0]  # Use first details as representative
+                            dominant_class = max(
+                                class_counts,
+                                key=lambda k: (len(class_counts[k]), self.class_priority.get(k, 0))
+                            )
                             count = len(class_counts[dominant_class])
-                            # Log summary
-                            summary = {cls: [d['start_line'] for d in details] for cls, details in class_counts.items()}
-                            logger.info(f"Batch processed {len(predictions)} predictions over {interval}s, dominant: {dominant_class} ({count} occurrences), Summary: {summary}")
-                            # Call callback with dominant classification
-                            callback(dominant_class, dominant_details)
+                            if count >= min_predictions:
+                                dominant_details = class_counts[dominant_class][0]
+                                summary = {cls: [d['start_line'] for d in details] for cls, details in class_counts.items()}
+                                logger.info(
+                                    f"Batch processed {len(predictions)} predictions over {interval}s, "
+                                    f"dominant: {dominant_class} ({count} occurrences), Summary: {summary}"
+                                )
+                                callback(dominant_class, dominant_details)
+                            else:
+                                logger.debug(
+                                    f"Batch skipped: {len(predictions)} predictions, "
+                                    f"dominant: {dominant_class} ({count} < {min_predictions})"
+                                )
                         else:
                             logger.debug(f"No valid classifications in {interval}s batch")
                     else:
                         logger.debug(f"No predictions collected in {interval}s batch")
-                    time.sleep(0.1)  # Prevent tight loop
+                    if self.prediction_queue.qsize() > 800:
+                        logger.warning(f"Queue size high: {self.prediction_queue.qsize()}")
+                    time.sleep(0.1)
                 except Exception as e:
                     logger.error(f"Error in batch_processor: {e}")
-                    time.sleep(1)  # Prevent rapid error loops
+                    time.sleep(1)
 
         threading.Thread(target=batch_processor, daemon=True).start()
 
-    def start_listening(self, callback, batch_interval=1.0):
-        """
-        Start listening for events from the camera in a separate thread, processing predictions in batches.
-
-        :param callback: Function to call with the most frequent classification (e.g., handle_classification(classification, details)).
-        :param batch_interval: Time interval (in seconds) for batch processing (default: 1.0).
-        """
+    def start_listening(self, callback, batch_interval=1.0, min_predictions=3):
         def listen():
             while not self.stop_event.is_set():
                 try:
@@ -200,7 +181,10 @@ class CAMController:
                                                 classification = self.class_mapping.get(descriptor_value, "Unknown")
                                                 with self.queue_lock:
                                                     self.prediction_queue.put((classification, details))
-                                                logger.debug(f"Received classification: {classification}, StartLine: {details['start_line']}, Details: {details}")
+                                                logger.debug(
+                                                    f"Received classification: {classification}, "
+                                                    f"StartLine: {details['start_line']}, Details: {details}"
+                                                )
                                     except json.JSONDecodeError:
                                         logger.error("Invalid JSON received from camera")
                             except socket.timeout:
@@ -211,13 +195,10 @@ class CAMController:
                     logger.error(f"Error in event listen loop: {e}")
                     time.sleep(5)
 
-        # Start listening thread
         threading.Thread(target=listen, daemon=True).start()
-        # Start batch processing thread
-        self.process_predictions_batch(batch_interval, callback)
+        self.process_predictions_batch(batch_interval, callback, min_predictions)
 
     def start_data_stream(self):
-        """Start listening for data stream in a separate thread."""
         def listen():
             while not self.stop_event.is_set():
                 try:
@@ -257,17 +238,9 @@ class CAMController:
         threading.Thread(target=listen, daemon=True).start()
 
     def _convert_ticks_to_datetime(self, ticks):
-        """Convert ticks to a timezone-aware datetime."""
         return (datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)).replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
 
-    def initialize_and_start(self, workflow_path, callback, batch_interval=1.0):
-        """
-        Initialize the camera, load workflow, and start prediction with batch processing.
-
-        :param workflow_path: Path to the workflow XML file.
-        :param callback: Function to handle classification results.
-        :param batch_interval: Time interval (in seconds) for batch processing (default: 1.0).
-        """
+    def initialize_and_start(self, workflow_path, callback, batch_interval=1.0, min_predictions=3):
         try:
             self.start_command_client()
             self.send_command({"Command": "InitializeCamera"})
@@ -277,7 +250,7 @@ class CAMController:
             self.send_command({"Command": "StartPredict", "IncludeObjectShape": True})
             time.sleep(5)
             pyautogui.press('enter')
-            self.start_listening(callback, batch_interval)
+            self.start_listening(callback, batch_interval, min_predictions)
             self.start_data_stream()
         except Exception as e:
             logger.error(f"Initialization failed: {e}")
@@ -285,7 +258,6 @@ class CAMController:
             raise
 
     def stop(self):
-        """Stop prediction and all listening threads."""
         try:
             if self.command_socket:
                 self.send_command({"Command": "StopPredict"})
