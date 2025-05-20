@@ -26,7 +26,7 @@ class CAMController:
         self._lock = threading.Lock()
         self.prediction_queue = Queue(maxsize=1000)
         self.queue_lock = Lock()
-        self.class_priority = {'PET sheet': 2, 'PVC': 1, 'PET Bottle': 0, 'PET G': 0, 'PC': 0, 'Background': -1, '-': -1}
+        self.class_priority = {'PET Bottle': 1, 'PET sheet': 2, 'PET G': 3, 'PVC': 4, 'PC': 5, 'Background': 6, '-': -1}
 
     def start_command_client(self):
         try:

@@ -1,3 +1,8 @@
+pip install -r requirements.txt
+set FLASK_APP=src/web/server.py
+flask run --host=0.0.0.0 --port=5000
+
+-----
 PLC-카메라 통합 프로세스 흐름
 
 이 문서는 카메라 이벤트를 처리하여 PLC(Programmable Logic Controller)를 제어하는 PLC-카메라 통합 시스템의 프로세스 흐름을 설명합니다.

@@ -34,13 +34,12 @@ class BreezeController:
             logger.info(f"Breeze launched with PID {self.process.pid}")
 
             # Check if process is still running
-            time.sleep(10)  # Brief wait to ensure process starts
             if self.process.poll() is not None:
                 error_output = self.process.stderr.read().decode() if self.process.stderr else "No error output"
                 logger.error(f"Breeze process terminated prematurely. Exit code: {self.process.returncode}, Error: {error_output}")
                 self.process = None
                 raise RuntimeError("Breeze process failed to stay running")
-            time.sleep(10)  # Brief wait to ensure process starts
+            time.sleep(30)  # Brief wait to ensure process starts
 
             return True
         except Exception as e:
