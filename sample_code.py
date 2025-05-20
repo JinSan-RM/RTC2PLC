@@ -6,9 +6,9 @@ import signal
 import sys
 from CAMController import CAMController
 from PLCController import XGTController
+from breeze import BreezeController
 import conf
 
-# Configure logging (single configuration)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
@@ -18,25 +18,19 @@ logging.basicConfig(
     ]
 )
 
-# Inverse class mapping
 INV_CLASS_MAPPING = {v: k for k, v in conf.CLASS_MAPPING.items()}
 
-# PLC write queue
 plc_queue = queue.Queue()
-
-# Global variables for resource management
 plc = None
 cam = None
 breeze = None
 
 def signal_handler(sig, frame):
-    """Handle SIGINT (Ctrl+C) to ensure clean shutdown."""
     logging.info("Received Ctrl+C (SIGINT), shutting down...")
     cleanup()
     sys.exit(0)
 
 def cleanup():
-    """Clean up all resources."""
     logging.info("Shutting down system")
     if cam:
         cam.stop()
@@ -54,18 +48,26 @@ def process_plc_queue():
                 f"Processing queued PLC write: class_id={class_id} (Plastic: {plastic_type}), "
                 f"StartLine={details['start_line']}, StartTime={details['start_time']}"
             )
-            success = plc.write_d_and_set_m300(class_id)
-            if success:
-                logging.info(f"Successfully wrote class_id={class_id} to D00000 and set M300")
+            for attempt in range(3):
+                try:
+                    success = plc.write_d_and_set_m300(class_id)
+                    if success:
+                        logging.info(f"Successfully wrote class_id={class_id} to D00000 and set M300")
+                        break
+                    else:
+                        logging.error(f"Failed to write class_id={class_id} to PLC (attempt {attempt + 1}/3)")
+                        time.sleep(0.5)
+                except Exception as e:
+                    logging.error(f"PLC write error (attempt {attempt + 1}/3): {str(e)}")
+                    time.sleep(0.5)
             else:
-                logging.error(f"Failed to write class_id={class_id} to PLC")
+                logging.error(f"PLC write failed after 3 attempts for class_id={class_id}")
             plc_queue.task_done()
         except queue.Empty:
             continue
         except Exception as e:
             logging.error(f"Error processing PLC queue: {str(e)}")
 
-# Start queue processor
 threading.Thread(target=process_plc_queue, daemon=True).start()
 
 def handle_classification(classification, details):
@@ -91,13 +93,9 @@ def handle_classification(classification, details):
 
 def main():
     logging.info("Starting Camera-PLC integration system")
-
-    # Register SIGINT handler
     signal.signal(signal.SIGINT, signal_handler)
 
-    # Initialize Breeze
     global breeze
-    from breeze import BreezeController
     breeze = BreezeController()
     try:
         breeze.start()
@@ -106,7 +104,6 @@ def main():
         cleanup()
         return
 
-    # Initialize PLC
     global plc
     plc = XGTController(conf.PLC_IP, conf.PLC_PORT)
     try:
@@ -119,7 +116,6 @@ def main():
         cleanup()
         return
 
-    # Initialize Camera
     global cam
     cam = CAMController(
         host=conf.HOST,
@@ -130,23 +126,37 @@ def main():
     )
 
     try:
-        cam.initialize_and_start(conf.WORKFLOW_PATH, handle_classification)
+        cam.initialize_and_start(conf.WORKFLOW_PATH, handle_classification, batch_interval=1.0, min_predictions=3)
         logging.info("Camera initialized and listening for events")
     except Exception as e:
         logging.critical(f"Camera initialization failed: {str(e)}")
         cleanup()
         return
 
-    # Main loop
     try:
         while True:
             time.sleep(1)
             if not plc.connected:
                 logging.warning("PLC disconnected. Attempting to reconnect...")
-                plc.connect()
+                for attempt in range(3):
+                    if plc.connect():
+                        logging.info("PLC reconnected successfully")
+                        break
+                    logging.error(f"PLC reconnect failed (attempt {attempt + 1}/3)")
+                    time.sleep(1)
+                else:
+                    logging.critical("PLC reconnect failed after 3 attempts. Exiting.")
+                    break
             if not breeze.is_running():
-                logging.critical("Breeze process stopped unexpectedly. Exiting.")
-                break
+                logging.warning("Breeze process stopped. Attempting to restart...")
+                try:
+                    breeze.start()
+                    logging.info("Breeze restarted successfully")
+                    cam.initialize_and_start(conf.WORKFLOW_PATH, handle_classification, batch_interval=1.0, min_predictions=3)
+                    logging.info("Camera reinitialized")
+                except Exception as e:
+                    logging.critical(f"Breeze restart failed: {str(e)}. Exiting.")
+                    break
     except Exception as e:
         logging.error(f"Unexpected error in main loop: {str(e)}")
     finally:
