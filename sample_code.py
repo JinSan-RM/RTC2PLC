@@ -4,10 +4,11 @@ import queue
 import threading
 import signal
 import sys
-from CAMController import CAMController
-from PLCController import XGTController
-from breeze import BreezeController
-import conf
+import pyautogui
+from RTC2PLC.rtc.CAMController import CAMController
+from RTC2PLC.src.plc.PLCController import XGTController
+from RTC2PLC.rtc.breeze import BreezeController
+import RTC2PLC.src.conf as conf
 
 logging.basicConfig(
     level=logging.INFO,
@@ -99,6 +100,11 @@ def main():
     breeze = BreezeController()
     try:
         breeze.start()
+        time.sleep(30)  # Wait for Breeze to stabilize
+        for _ in range(2):
+            pyautogui.press('enter')
+            time.sleep(5)
+        
     except Exception as e:
         logging.critical(f"Failed to start Breeze: {str(e)}")
         cleanup()
