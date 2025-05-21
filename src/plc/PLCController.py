@@ -40,13 +40,27 @@ class XGTController:
         for attempt in range(max_retries):
             if not self.connected:
                 if not self.connect():
-                    time.sleep(0.5)  # 재시도 전 대기
+                    time.sleep(0.5)
                     continue
             try:
-                logger.debug(f"{description}: 전송 패킷 (hex): {packet.hex()}")
+                # TX: safe hex logging
+                if isinstance(packet, (bytes, bytearray)):
+                    logger.debug(f"{description}: 전송 패킷 (hex): {packet.hex()}")
+                else:
+                    logger.debug(f"{description}: 전송 패킷 (non‐bytes): {packet!r}")
+                    # 잘못된 타입은 보내지 않고 에러 처리
+                    return False, None
+
                 self.sock.send(packet)
                 response = self.sock.recv(1024)
-                logger.debug(f"{description}: 응답 패킷 (hex): {response.hex()}")
+
+                # RX: safe hex logging
+                if isinstance(response, (bytes, bytearray)):
+                    logger.debug(f"{description}: 응답 패킷 (hex): {response.hex()}")
+                else:
+                    logger.debug(f"{description}: 응답 패킷 (non‐bytes): {response!r}")
+                    return False, None
+
                 if len(response) >= 28:
                     status = response[26:28]
                     if status == b'\x00\x00':
@@ -58,13 +72,17 @@ class XGTController:
                 else:
                     logger.error(f"{description}: 응답 부족 (길이: {len(response)})")
                     return False, response
+
             except Exception as e:
+                # Exception 자체에 .hex()를 쓰지 않음
                 logger.error(f"{description}: 통신 오류 (시도 {attempt + 1}/{max_retries}): {str(e)}")
                 self.connected = False
                 if attempt < max_retries - 1:
-                    time.sleep(0.5)  # 재시도 간 대기 증가
+                    time.sleep(0.5)
+
         logger.error(f"{description}: 최대 재시도 실패")
         return False, None
+
     
     def create_write_packet(self, address_ascii, data_bytes, data_type=0x02):
         """Packet creation function"""
@@ -104,7 +122,7 @@ class XGTController:
             return True
         logger.error(f"D00000에 값 {value} 쓰기 실패")
         return False
-    
+
     def write_mx_bit(self, address, value):
         """MX 비트 값 쓰기"""
         packet = bytearray()
@@ -126,11 +144,11 @@ class XGTController:
         
         packet.extend(b'\x01\x01')       # 데이터 타입 및 길이
         packet.append(value)
-        
+        logger.info(f"[TX] M{address} {'ON' if value else 'OFF'} 패킷(hex): {packet.hex()}")
         success, response = self.send_packet_to_plc(packet, f"%MX{address} 비트 값 {value} 쓰기")
         if success:
             immediate_value = self.read_mx_bit(address)
-            logger.info(f"즉시 확인: %MX{address} = {immediate_value}")
+            logger.info(f"즉시 확인: %MX{address} = {immediate_value}, {response}")
         return success
     
     def read_mx_bit(self, address):
@@ -158,6 +176,60 @@ class XGTController:
             logger.info(f"%MX{address} 현재 값: {bit_value} ({'ON' if bit_value else 'OFF'})")
             return bit_value
         return None
+    
+    # def write_mx_bit(self, address, value):
+    #     """MX 비트 값 쓰기"""
+    #     packet = bytearray()
+    #     packet.extend(b'LSIS-XGT')
+    #     packet.extend(b'\x00\x00\x00\x00')
+    #     packet.append(0xB0)
+    #     packet.append(0x33)
+    #     packet.extend(b'\x00\x00')
+    #     packet.extend(b'\x13\x00')
+    #     packet.extend(b'\x00\x00')
+    #     packet.extend(b'\x58\x00')       # 쓰기 명령
+    #     packet.extend(b'\x00\x00')       # 비트 타입
+    #     packet.extend(b'\x00\x00')
+    #     packet.extend(b'\x01\x00')
+        
+    #     device_name = f'%MX{address}'.encode('ascii')
+    #     packet.extend(bytes([len(device_name), 0x00]))  # 변수명 길이
+    #     packet.extend(device_name)
+        
+    #     packet.extend(b'\x01\x01')       # 데이터 타입 및 길이
+    #     packet.append(value)
+        
+    #     success, response = self.send_packet_to_plc(packet, f"%MX{address} 비트 값 {value} 쓰기")
+    #     if success:
+    #         immediate_value = self.read_mx_bit(address)
+    #         logger.info(f"즉시 확인: %MX{address} = {immediate_value}")
+    #     return success
+    
+    # def read_mx_bit(self, address):
+    #     """MX 비트 값 읽기"""
+    #     packet = bytearray()
+    #     packet.extend(b'LSIS-XGT')
+    #     packet.extend(b'\x00\x00\x00\x00')
+    #     packet.append(0xB0)
+    #     packet.append(0x33)
+    #     packet.extend(b'\x00\x00')
+    #     packet.extend(b'\x10\x00')
+    #     packet.extend(b'\x00\x00')
+    #     packet.extend(b'\x54\x00')       # 읽기 명령
+    #     packet.extend(b'\x00\x00')       # 비트 타입
+    #     packet.extend(b'\x00\x00')
+    #     packet.extend(b'\x01\x00')
+        
+    #     device_name = f'%MX{address}'.encode('ascii')
+    #     packet.extend(bytes([len(device_name), 0x00]))  # 변수명 길이
+    #     packet.extend(device_name)
+        
+    #     success, response = self.send_packet_to_plc(packet, f"%MX{address} 비트 값 읽기")
+    #     if success and len(response) >= 30:
+    #         bit_value = response[29]
+    #         logger.info(f"%MX{address} 현재 값: {bit_value} ({'ON' if bit_value else 'OFF'})")
+    #         return bit_value
+    #     return None
     
     def write_d_and_set_m300(self, d_value):
         """D00000에 값을 쓰고 성공하면 M300 비트를 ON으로 설정"""

@@ -5,10 +5,10 @@ import threading
 import signal
 import sys
 import pyautogui
-from RTC2PLC.rtc.CAMController import CAMController
-from RTC2PLC.src.plc.PLCController import XGTController
-from RTC2PLC.rtc.breeze import BreezeController
-import RTC2PLC.src.conf as conf
+from src.rtc.CAMController import CAMController
+from src.plc.PLCController import XGTController
+from src.rtc.breeze import BreezeController
+from src.config import conf
 
 logging.basicConfig(
     level=logging.INFO,
