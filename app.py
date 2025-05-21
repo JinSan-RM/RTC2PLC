@@ -1,13 +1,14 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, scrolledtext
 import binascii
 import logging
 import threading
+import struct
 
-from PLCController import XGTController
-from CAMController import CAMController
-from breeze import BreezeController
-import conf
+from src.plc.PLCController import XGTController
+from src.rtc.CAMController import CAMController
+from src.rtc.breeze import BreezeController
+from src.config import conf
 
 logging.basicConfig(level=logging.INFO)
 
@@ -81,6 +82,10 @@ class TestToolApp:
         self.cam_conn_btn.grid(row=6, column=0)
         self.cam_disc_btn = tk.Button(root, text="CAM Streaming Disconnect", command=self.disconnect_cam)
         self.cam_disc_btn.grid(row=6, column=1)
+        
+        # 실시간 로그/결과 표시용 ScrolledText 추가
+        self.log_widget = scrolledtext.ScrolledText(root, width=100, height=15, state='disabled')
+        self.log_widget.grid(row=8, column=0, columnspan=7, padx=5, pady=5)
 
         self.status = tk.Label(root, text="상태: 대기중")
         self.status.grid(row=7, column=0, columnspan=7)
@@ -105,7 +110,6 @@ class TestToolApp:
             messagebox.showerror("오류", "PLC가 연결되어 있지 않습니다.")
             return
         value = int(self.d_value.get())
-        # D주소 커스텀 지원 (기본은 D00000)
         addr = self.d_addr.get()
         # address_ascii 생성 (예: 'D00001' → b'%DB1')
         if addr.startswith("D"):
@@ -113,24 +117,82 @@ class TestToolApp:
             address_ascii = b'\x25\x44\x42' + str(num).encode()
         else:
             address_ascii = addr.encode()
-        data_bytes = struct.pack('<H', value)
+        data_bytes = struct.pack('=h', value)
         packet = self.plc.create_write_packet(address_ascii, data_bytes)
-        success, _ = self.plc.send_packet_to_plc(packet, f"{addr}에 {value} 쓰기")
-        if success:
-            self.status.config(text=f"{addr}에 {value} 쓰기 성공")
+        self.append_log(f"[TX] D값 쓰기 패킷(hex): {packet.hex()}")
+        success, response = self.plc.send_packet_to_plc(packet, description="D값 쓰기")
+        if isinstance(response, bytes):
+            self.append_log(f"[RX] 응답 패킷(hex): {response.hex()}")
         else:
-            self.status.config(text=f"{addr} 쓰기 실패")
+            self.append_log(f"[RX] 응답 없음 또는 오류")
+        if success:
+            self.status.config(text=f"{addr} 쓰기 성공")
+        else:
+            self.status.config(text=f"{addr} 쓰기 실패 (재연결 필요)")
 
-    def write_m_bit(self, val):
+    # def write_d_value(self):
+    #     if not self.plc or not self.plc.connected:
+    #         messagebox.showerror("오류", "PLC가 연결되어 있지 않습니다.")
+    #         return
+    #     value = int(self.d_value.get())
+    #     # D주소 커스텀 지원 (기본은 D00000)
+    #     addr = self.d_addr.get()
+    #     # address_ascii 생성 (예: 'D00001' → b'%DB1')
+    #     if addr.startswith("D"):
+    #         num = int(addr[1:])
+    #         address_ascii = b'\x25\x44\x42' + str(num).encode()
+    #     else:
+    #         address_ascii = addr.encode()
+    #     data_bytes = struct.pack('<H', value)
+    #     packet = self.plc.create_write_packet(address_ascii, data_bytes)
+    #     self.append_log(f"[TX] D값 쓰기 패킷(hex): {packet.hex()}")
+    #     success, response = self.plc.send_packet_to_plc(packet, f"{addr}에 {value} 쓰기")
+    #     if response:
+    #         self.append_log(f"[RX] 응답 패킷(hex): {response.hex()}")
+    #     if success:
+    #         self.status.config(text=f"{addr}에 {value} 쓰기 성공")
+    #     else:
+    #         self.status.config(text=f"{addr} 쓰기 실패")
+    
+    # def write_m_bit(self, value):
+    #     if not self.plc or not self.plc.connected:
+    #         messagebox.showerror("오류", "PLC가 연결되어 있지 않습니다.")
+    #         return
+    #     m_addr = int(self.m_addr.get())
+    #     # M 비트 주소를 ASCII로 변환: b'%MX' + 번호
+    #     address_ascii = b'%MX' + str(m_addr).encode()
+    #     # 값(ON/OFF)을 2바이트로 변환
+    #     import struct
+    #     data_bytes = struct.pack('=h', value)
+    #     # 패킷 생성
+    #     packet = self.plc.create_write_packet(address_ascii, data_bytes)
+    #     self.append_log(f"[TX] M{m_addr} {'ON' if value else 'OFF'} 패킷(hex): {packet.hex()}")
+    #     # 송수신
+    #     success, response = self.plc.send_packet_to_plc(packet, description=f"M{m_addr} {'ON' if value else 'OFF'}")
+    #     if isinstance(response, bytes):
+    #         self.append_log(f"[RX] 응답 패킷(hex): {response.hex()}")
+    #     else:
+    #         self.append_log(f"[RX] 응답 없음 또는 오류")
+    #     if success:
+    #         self.status.config(text=f"M{m_addr} {'ON' if value else 'OFF'} 성공")
+    #     else:
+    #         self.status.config(text=f"M{m_addr} {'ON' if value else 'OFF'} 실패 (재연결 필요)")
+
+
+    def write_m_bit(self, value):
         if not self.plc or not self.plc.connected:
             messagebox.showerror("오류", "PLC가 연결되어 있지 않습니다.")
             return
-        addr = int(self.m_addr.get())
-        success = self.plc.write_mx_bit(addr, val)
+        m_addr = int(self.m_addr.get())
+        # 반드시 비트 쓰기 전용 함수 사용
+        success = self.plc.write_mx_bit(m_addr, value)
+        self.append_log(f"M{m_addr} {'ON' if value else 'OFF'} 요청")
         if success:
-            self.status.config(text=f"M{addr} {'ON' if val else 'OFF'} 성공")
+            self.append_log(f"M{m_addr} {'ON' if value else 'OFF'} 성공")
+            self.status.config(text=f"M{m_addr} {'ON' if value else 'OFF'} 성공")
         else:
-            self.status.config(text=f"M{addr} {'ON' if val else 'OFF'} 실패")
+            self.append_log(f"M{m_addr} {'ON' if value else 'OFF'} 실패")
+            self.status.config(text=f"M{m_addr} {'ON' if value else 'OFF'} 실패")
 
     def read_m_bit(self):
         if not self.plc or not self.plc.connected:
@@ -138,6 +200,7 @@ class TestToolApp:
             return
         addr = int(self.m_addr.get())
         val = self.plc.read_mx_bit(addr)
+        self.append_log(f"M{addr} 상태: {'ON' if val else 'OFF'}")
         if val is not None:
             self.status.config(text=f"M{addr} 상태: {'ON' if val else 'OFF'}")
         else:
@@ -155,6 +218,9 @@ class TestToolApp:
             messagebox.showerror("오류", f"Hex 변환 실패: {e}")
             return
         success, response = self.plc.send_packet_to_plc(packet, description)
+        self.append_log(f"[TX] 패킷 전송: {packet.hex()}")
+        if response:
+            self.append_log(f"[RX] 응답 패킷(hex): {response.hex()}")
         if success:
             self.packet_response.config(text=f"성공: {binascii.hexlify(response).decode()}")
         else:
@@ -174,29 +240,114 @@ class TestToolApp:
             self.breeze.stop()
             self.status.config(text="Breeze 종료")
 
-    # ---------- CAM ----------
-    def connect_cam(self):
-        def cam_thread():
-            try:
-                self.cam = CAMController(
-                    host=conf.HOST,
-                    command_port=2000,
-                    event_port=conf.EVENT_PORT,
-                    data_stream_port=3000,
-                    class_mapping=conf.CLASS_MAPPING
-                )
-                self.cam.start_command_client()
-                self.cam_streaming = True
-                self.status.config(text="CAM Streaming 연결됨")
-            except Exception as e:
-                self.status.config(text=f"CAM 연결 실패: {e}")
-        threading.Thread(target=cam_thread, daemon=True).start()
+    # ---------- Breeze ----------
+    def start_breeze(self):
+        try:
+            self.breeze = BreezeController()
+            self.breeze.start()
+            self.status.config(text="Breeze 실행됨")
+        except Exception as e:
+            self.status.config(text=f"Breeze 실행 실패: {e}")
 
+    def stop_breeze(self):
+        if self.breeze:
+            self.breeze.stop()
+            self.status.config(text="Breeze 종료")
+
+    # ---------- CAM ----------
+    # def connect_cam(self):
+    #     def cam_thread():
+    #         try:
+    #             self.cam = CAMController(
+    #                 host=conf.HOST,
+    #                 command_port=2000,
+    #                 event_port=conf.EVENT_PORT,
+    #                 data_stream_port=3000,
+    #                 class_mapping=conf.CLASS_MAPPING
+    #             )
+    #             self.cam.start_command_client()
+    #             self.cam_streaming = True
+    #             self.status.config(text="CAM Streaming 연결됨")
+    #         except Exception as e:
+    #             self.status.config(text=f"CAM 연결 실패: {e}")
+    #     threading.Thread(target=cam_thread, daemon=True).start()
+    def connect_cam(self):
+        if self.cam_streaming:
+            self.append_log("이미 CAM이 연결되어 있습니다.")
+            return
+        self.cam = CAMController(
+            host=conf.HOST,
+            command_port=2000,
+            event_port=conf.EVENT_PORT,
+            data_stream_port=3000,
+            class_mapping=conf.CLASS_MAPPING
+        )
+        try:
+            self.cam.initialize_and_start(
+                conf.WORKFLOW_PATH,
+                self.handle_classification_gui,   # 아래 함수와 연결
+                batch_interval=1.0,
+                min_predictions=3
+            )
+            self.cam_streaming = True
+            self.append_log("CAM 스트리밍 연결됨")
+            self.status.config(text="CAM 스트리밍 연결됨")
+        except Exception as e:
+            self.append_log(f"CAM 연결 실패: {e}")
+            self.status.config(text="CAM 연결 실패")
+            
     def disconnect_cam(self):
         if self.cam:
             self.cam.close_command_client()
             self.cam_streaming = False
             self.status.config(text="CAM Streaming 해제")
+    
+    def handle_classification_gui(self, classification, details):
+        msg = (f"[{details['start_time']}] 분류: {classification}, "
+            f"Line: {details['start_line']}")
+        self.append_log(msg)
+        if self.plc and self.plc.connected:
+            class_id = {v: k for k, v in conf.CLASS_MAPPING.items()}.get(classification, None)
+            if class_id is not None:
+                addr = conf.PLC_D_ADDRESS
+                num = int(addr[1:])
+                address_ascii = b'\x25\x44\x42' + str(num).encode()
+                import struct
+                data_bytes = struct.pack('=h', class_id)
+                packet = self.plc.create_write_packet(address_ascii, data_bytes)
+                self.append_log(f"[TX] D00000 쓰기 요청: 값={class_id}")
+                self.append_log(f"[TX] D00000 쓰기 패킷(hex): {packet.hex()}")
+                success, response = self.plc.send_packet_to_plc(packet, description="D00000 쓰기")
+                if isinstance(response, bytes):
+                    self.append_log(f"[RX] D00000 응답 패킷(hex): {response.hex()}")
+                else:
+                    self.append_log(f"[RX] D00000 응답 없음 또는 오류")
+                if success:
+                    # M300 ON
+                    self.append_log("M300 ON 요청")
+                    m_packet = self.plc.write_mx_bit(300, 1)
+                    # self.append_log(f"[TX] M300 ON 패킷(hex): {m_packet.hex()}")
+                    m_success, m_response = self.plc.send_packet_to_plc(m_packet, description="M300 ON")
+                    if m_success:
+                        self.append_log("M300 ON 성공")
+                    # else:
+                    #     self.append_log("M300 ON 실패")
+                else:
+                    self.append_log("D00000 쓰기 실패, M300 설정 건너뜀")
+            else:
+                self.append_log(f"→ PLC 연동 불필요 (분류: {classification})")
+        else:
+            self.append_log("PLC가 연결되어 있지 않아 동작 생략")
+
+
+    #---------- 로그 출력 ----------
+    def append_log(self, msg):
+        def _append():
+            self.log_widget.config(state='normal')
+            self.log_widget.insert(tk.END, msg + '\n')
+            self.log_widget.see(tk.END)
+            self.log_widget.config(state='disabled')
+        self.root.after(0, _append)
 
 if __name__ == "__main__":
     root = tk.Tk()
