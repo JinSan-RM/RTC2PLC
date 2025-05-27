@@ -22,7 +22,7 @@
   - `tkinter`
 - **Breeze Runtime**: 워크플로우 파일이 `C:/Users/withwe/breeze/Data/Runtime/Plastic_Classification_1.xml`에 있어야 함.
 - **PLC 하드웨어**: `192.168.250.120:2004`에서 실행.
-- **Breeze Runtime 서버**: `192.168.1.185`에서 실행, 포트 2000(명령), 2500(이벤트), 3000(데이터 스트림) 개방.
+- **Breeze Runtime 서버**: `127.0.0.1`에서 실행, 포트 2000(명령), 2500(이벤트), 3000(데이터 스트림) 개방.
 
 ### 설치 단계
 1. 프로젝트 파일을 복사하거나 저장소를 클론.
@@ -32,7 +32,7 @@
    ```
 3. 네트워크 설정 확인:
    - PLC: `192.168.250.120:2004`에서 접근 가능.
-   - Breeze Runtime: `192.168.1.185`에서 실행, 포트 2000, 2500, 3000 개방.
+   - Breeze Runtime: `127.0.0.1`에서 실행, 포트 2000, 2500, 3000 개방.
 4. `conf.py`에서 워크플로우 경로 확인:
    ```
    WORKFLOW_PATH = "C:/Users/withwe/breeze/Data/Runtime/Plastic_Classification_1.xml"
