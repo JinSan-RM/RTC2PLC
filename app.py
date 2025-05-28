@@ -130,55 +130,6 @@ class TestToolApp:
         else:
             self.status.config(text=f"{addr} 쓰기 실패 (재연결 필요)")
 
-    # def write_d_value(self):
-    #     if not self.plc or not self.plc.connected:
-    #         messagebox.showerror("오류", "PLC가 연결되어 있지 않습니다.")
-    #         return
-    #     value = int(self.d_value.get())
-    #     # D주소 커스텀 지원 (기본은 D00000)
-    #     addr = self.d_addr.get()
-    #     # address_ascii 생성 (예: 'D00001' → b'%DB1')
-    #     if addr.startswith("D"):
-    #         num = int(addr[1:])
-    #         address_ascii = b'\x25\x44\x42' + str(num).encode()
-    #     else:
-    #         address_ascii = addr.encode()
-    #     data_bytes = struct.pack('<H', value)
-    #     packet = self.plc.create_write_packet(address_ascii, data_bytes)
-    #     self.append_log(f"[TX] D값 쓰기 패킷(hex): {packet.hex()}")
-    #     success, response = self.plc.send_packet_to_plc(packet, f"{addr}에 {value} 쓰기")
-    #     if response:
-    #         self.append_log(f"[RX] 응답 패킷(hex): {response.hex()}")
-    #     if success:
-    #         self.status.config(text=f"{addr}에 {value} 쓰기 성공")
-    #     else:
-    #         self.status.config(text=f"{addr} 쓰기 실패")
-    
-    # def write_m_bit(self, value):
-    #     if not self.plc or not self.plc.connected:
-    #         messagebox.showerror("오류", "PLC가 연결되어 있지 않습니다.")
-    #         return
-    #     m_addr = int(self.m_addr.get())
-    #     # M 비트 주소를 ASCII로 변환: b'%MX' + 번호
-    #     address_ascii = b'%MX' + str(m_addr).encode()
-    #     # 값(ON/OFF)을 2바이트로 변환
-    #     import struct
-    #     data_bytes = struct.pack('=h', value)
-    #     # 패킷 생성
-    #     packet = self.plc.create_write_packet(address_ascii, data_bytes)
-    #     self.append_log(f"[TX] M{m_addr} {'ON' if value else 'OFF'} 패킷(hex): {packet.hex()}")
-    #     # 송수신
-    #     success, response = self.plc.send_packet_to_plc(packet, description=f"M{m_addr} {'ON' if value else 'OFF'}")
-    #     if isinstance(response, bytes):
-    #         self.append_log(f"[RX] 응답 패킷(hex): {response.hex()}")
-    #     else:
-    #         self.append_log(f"[RX] 응답 없음 또는 오류")
-    #     if success:
-    #         self.status.config(text=f"M{m_addr} {'ON' if value else 'OFF'} 성공")
-    #     else:
-    #         self.status.config(text=f"M{m_addr} {'ON' if value else 'OFF'} 실패 (재연결 필요)")
-
-
     def write_m_bit(self, value):
         if not self.plc or not self.plc.connected:
             messagebox.showerror("오류", "PLC가 연결되어 있지 않습니다.")
@@ -271,6 +222,7 @@ class TestToolApp:
     #         except Exception as e:
     #             self.status.config(text=f"CAM 연결 실패: {e}")
     #     threading.Thread(target=cam_thread, daemon=True).start()
+    
     def connect_cam(self):
         if self.cam_streaming:
             self.append_log("이미 CAM이 연결되어 있습니다.")
