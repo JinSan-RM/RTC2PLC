@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from dateutil import tz
 import struct
 import os
-from test_p_4 import XGTTester
+from XGT_run import XGTTester
 
 # 로깅 설정
 logging.basicConfig(
@@ -119,7 +119,6 @@ def listen_for_events(XGT):
                         message_json = json.loads(message)
                         event = message_json.get('Event', '')
                         inner_message = json.loads(message_json.get('Message', '{}'))
-                        position = json.loads(message_json.get('Shape', '{}'))
                         if event == "PredictionObject":
                             descriptors = inner_message.get('Descriptors', [])
                             descriptor_value = int(descriptors[0]) if descriptors else 0
@@ -132,7 +131,7 @@ def listen_for_events(XGT):
                             pos = calculate_shape_metrics(border)
                             logging.info(f'pos data {pos}')
 
-                            if plc_value is not None and (not (pos['width'] > 500 and pos['height'] > 5000) or not (pos['width'] < 30 and pos['height'] < 30)):
+                            if plc_value is not None and not (30 <= pos['width'] <= 800 and 30 <= pos['height'] <= 2000):
                                 try:
                                     success = XGT.write_d_and_set_m300(plc_value)
                                     if success:
@@ -188,7 +187,7 @@ def listen_for_data_stream():
                 timestamp = int.from_bytes(header[9:17], byteorder='little', signed=False)
                 metadata_size = int.from_bytes(header[17:21], byteorder='little', signed=False)
                 data_body_size = int.from_bytes(header[21:25], byteorder='little', signed=False)
-                logging.info(f'stream_type {stream_type} \n frame_number {frame_number} \n timestamp {timestamp} \n metadata_size {metadata_size} data_body_size {data_body_size}')
+                # logging.info(f'stream_type {stream_type} \n frame_number {frame_number} \n timestamp {timestamp} \n metadata_size {metadata_size} data_body_size {data_body_size}')
 
                 # 메타데이터 수신
                 metadata = b""
@@ -198,7 +197,7 @@ def listen_for_data_stream():
                         logging.warning("Incomplete metadata received")
                         break
                     metadata += chunk
-                logging.info(f'metadata (hex): {metadata.hex()}')
+                # logging.info(f'metadata (hex): {metadata.hex()}')
 
                 # 데이터 본문 수신
                 data_body = b""
@@ -208,7 +207,7 @@ def listen_for_data_stream():
                         logging.warning("Incomplete data body received")
                         break
                     data_body += chunk
-                logging.info(f'data_body (hex): {data_body.hex()}')
+                # logging.info(f'data_body (hex): {data_body.hex()}')
 
                 current_time = time.time()
                 if current_time - last_processed_time >= throttle_interval:
@@ -287,6 +286,40 @@ def handle_response(response):
     logging.debug(f"Id: {response.get('Id')} successfully received message body: '{message[:100]}'")
     return message
 
+def calculate_shape_metrics(border):
+    """
+    Calculate width, height, and center position from border coordinates.
+    
+    Args:
+        border (list): List of [x, y] coordinate pairs defining the shape boundary.
+    
+    Returns:
+        dict: Dictionary containing width, height, and center coordinates.
+    """
+    if not border or len(border) < 2:
+        return {"width": 0, "height": 0, "center_x": 0, "center_y": 0}
+
+    # Extract x and y coordinates
+    x_coords = [point[0] for point in border]
+    y_coords = [point[1] for point in border]
+
+    # Calculate width (max x - min x)
+    width = max(x_coords) - min(x_coords)
+
+    # Calculate height (max y - min y)
+    height = max(y_coords) - min(y_coords)
+
+    # Calculate center (average of min and max x, y)
+    center_x = (max(x_coords) + min(x_coords)) / 2
+    center_y = (max(y_coords) + min(y_coords)) / 2
+
+    return {
+        "width": width,
+        "height": height,
+        "center_x": center_x,
+        "center_y": center_y
+    }
+
 def main():
     logging.info("Starting main function")
     XGT = XGTTester(ip="192.168.250.120", port=2004)
@@ -305,10 +338,10 @@ def main():
             logging.info(f"Loading workflow: {workflow_path}")
             handle_response(send_command(command_socket, {"Command": "LoadWorkflow", "FilePath": workflow_path}))
             
-            logging.info("Taking Dark Reference")
-            handle_response(send_command(command_socket, {"Command": "TakeDarkReference"}))
-            logging.info("Taking White Reference")
-            handle_response(send_command(command_socket, {"Command": "TakeWhiteReference"}))
+            # logging.info("Taking Dark Reference")
+            # handle_response(send_command(command_socket, {"Command": "TakeDarkReference"}))
+            # logging.info("Taking White Reference")
+            # handle_response(send_command(command_socket, {"Command": "TakeWhiteReference"}))
             
             logging.info("Starting prediction")
             handle_response(send_command(command_socket, {"Command": "StartPredict", "IncludeObjectShape": True}))
@@ -373,40 +406,6 @@ def main():
                 logging.warning("Data stream thread did not terminate properly")
         
         logging.info("Program terminated")
-
-def calculate_shape_metrics(border):
-    """
-    Calculate width, height, and center position from border coordinates.
-    
-    Args:
-        border (list): List of [x, y] coordinate pairs defining the shape boundary.
-    
-    Returns:
-        dict: Dictionary containing width, height, and center coordinates.
-    """
-    if not border or len(border) < 2:
-        return {"width": 0, "height": 0, "center_x": 0, "center_y": 0}
-
-    # Extract x and y coordinates
-    x_coords = [point[0] for point in border]
-    y_coords = [point[1] for point in border]
-
-    # Calculate width (max x - min x)
-    width = max(x_coords) - min(x_coords)
-
-    # Calculate height (max y - min y)
-    height = max(y_coords) - min(y_coords)
-
-    # Calculate center (average of min and max x, y)
-    center_x = (max(x_coords) + min(x_coords)) / 2
-    center_y = (max(y_coords) + min(y_coords)) / 2
-
-    return {
-        "width": width,
-        "height": height,
-        "center_x": center_x,
-        "center_y": center_y
-    }
 
 if __name__ == '__main__':
     main()
