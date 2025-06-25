@@ -6,8 +6,6 @@ import time
 import logging
 from datetime import datetime, timedelta
 from dateutil import tz
-import struct
-import os
 from XGT_run import XGTTester
 
 # 로깅 설정
@@ -78,12 +76,16 @@ def listen_for_events(XGT):
         0: "_",
         1: "PP",
         2: "HDPE",
-        3: "PS"
+        3: "PS",
+        4: "LDPE",
+        5: "ABS"
     }
     PLASTIC_VALUE_MAPPING = {
         "PP": 1,
-        "HDPE": 2,
-        "PS": 3,
+        "HDPE": 1,
+        "PS": 2,
+        "LDPE": 3,
+        "ABS": 3,
         "Background": None,
     }
 
@@ -130,8 +132,8 @@ def listen_for_events(XGT):
                             center, border = shape.get('Center', []), shape.get('Border', [])
                             pos = calculate_shape_metrics(border)
                             logging.info(f'pos data {pos}')
-
-                            if plc_value is not None and not (30 <= pos['width'] <= 800 and 30 <= pos['height'] <= 2000):
+                            # Event 가 발생하고 Noise를 잡기 위해서
+                            if plc_value is not None and (pos['width'] > 20 and pos['width'] < 800 ) and (pos['height'] > 20 and pos['height'] < 2000):
                                 try:
                                     success = XGT.write_d_and_set_m300(plc_value)
                                     if success:
@@ -286,40 +288,6 @@ def handle_response(response):
     logging.debug(f"Id: {response.get('Id')} successfully received message body: '{message[:100]}'")
     return message
 
-def calculate_shape_metrics(border):
-    """
-    Calculate width, height, and center position from border coordinates.
-    
-    Args:
-        border (list): List of [x, y] coordinate pairs defining the shape boundary.
-    
-    Returns:
-        dict: Dictionary containing width, height, and center coordinates.
-    """
-    if not border or len(border) < 2:
-        return {"width": 0, "height": 0, "center_x": 0, "center_y": 0}
-
-    # Extract x and y coordinates
-    x_coords = [point[0] for point in border]
-    y_coords = [point[1] for point in border]
-
-    # Calculate width (max x - min x)
-    width = max(x_coords) - min(x_coords)
-
-    # Calculate height (max y - min y)
-    height = max(y_coords) - min(y_coords)
-
-    # Calculate center (average of min and max x, y)
-    center_x = (max(x_coords) + min(x_coords)) / 2
-    center_y = (max(y_coords) + min(y_coords)) / 2
-
-    return {
-        "width": width,
-        "height": height,
-        "center_x": center_x,
-        "center_y": center_y
-    }
-
 def main():
     logging.info("Starting main function")
     XGT = XGTTester(ip="192.168.250.120", port=2004)
@@ -406,6 +374,40 @@ def main():
                 logging.warning("Data stream thread did not terminate properly")
         
         logging.info("Program terminated")
+
+def calculate_shape_metrics(border):
+    """
+    Calculate width, height, and center position from border coordinates.
+    
+    Args:
+        border (list): List of [x, y] coordinate pairs defining the shape boundary.
+    
+    Returns:
+        dict: Dictionary containing width, height, and center coordinates.
+    """
+    if not border or len(border) < 2:
+        return {"width": 0, "height": 0, "center_x": 0, "center_y": 0}
+
+    # Extract x and y coordinates
+    x_coords = [point[0] for point in border]
+    y_coords = [point[1] for point in border]
+
+    # Calculate width (max x - min x)
+    width = max(x_coords) - min(x_coords)
+
+    # Calculate height (max y - min y)
+    height = max(y_coords) - min(y_coords)
+
+    # Calculate center (average of min and max x, y)
+    center_x = (max(x_coords) + min(x_coords)) / 2
+    center_y = (max(y_coords) + min(y_coords)) / 2
+
+    return {
+        "width": width,
+        "height": height,
+        "center_x": center_x,
+        "center_y": center_y
+    }
 
 if __name__ == '__main__':
     main()
