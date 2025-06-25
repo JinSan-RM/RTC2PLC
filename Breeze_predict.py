@@ -223,57 +223,6 @@ def listen_for_data_stream():
                 logging.error(f"Error in data stream: {e}")
                 continue
 
-# def listen_for_data_stream():
-#     logging.info(f"Connecting to data stream at {HOST}:{DATA_STREAM_PORT}")
-#     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as stream_socket:
-#         stream_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-#         stream_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-#         try:
-#             stream_socket.connect((HOST, DATA_STREAM_PORT))
-#             logging.info("Data stream connected")
-#         except Exception as e:
-#             logging.error(f"Failed to connect to data stream: {e}")
-#             return
-
-#         expected_header_size = 25
-#         last_processed_time = 0
-#         throttle_interval = 1.0  # 1초 간격
-
-#         while not stop_event.is_set():
-#             stream_socket.settimeout(1)
-#             try:
-#                 header = b""
-#                 while len(header) < expected_header_size:
-#                     chunk = stream_socket.recv(expected_header_size - len(header))
-#                     if not chunk:
-#                         logging.warning("No data received from stream")
-#                         break
-#                     header += chunk
-#                 if len(header) != expected_header_size:
-#                     logging.warning("Incomplete header received")
-#                     continue
-
-#                 stream_type = header[0]
-#                 frame_number = int.from_bytes(header[1:9], byteorder='little', signed=True)
-#                 timestamp = int.from_bytes(header[9:17], byteorder='little', signed=False)
-#                 metadata_size = int.from_bytes(header[17:21], byteorder='little', signed=False)
-#                 data_body_size = int.from_bytes(header[21:25], byteorder='little', signed=False)
-#                 logging.info(f'stream_type {stream_type} \n frame_number {frame_number} \n timestamp {timestamp} \n metadata_size {metadata_size} data_body_size {data_body_size}')
-#                 current_time = time.time()
-#                 if current_time - last_processed_time >= throttle_interval:
-#                     logging.info(f"Processing frame {frame_number} at {timestamp}")
-#                     stream_socket.recv(metadata_size)  # 메타데이터 읽기
-#                     stream_socket.recv(data_body_size)  # 데이터 본문 읽기
-#                     last_processed_time = current_time
-#                 else:
-#                     stream_socket.recv(metadata_size + data_body_size)  # 데이터 스킵
-#                     logging.debug(f"Skipping frame {frame_number} due to throttle limit")
-#             except socket.timeout:
-#                 continue
-#             except Exception as e:
-#                 logging.error(f"Error in data stream: {e}")
-#                 continue
-
 def convert_ticks_to_datetime(ticks):
     return (datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)).replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
 
@@ -305,11 +254,6 @@ def main():
             workflow_path = f"C:/Users/withwe/Breeze/Data/Runtime/PP_PS_HDPE_Classification.xml"
             logging.info(f"Loading workflow: {workflow_path}")
             handle_response(send_command(command_socket, {"Command": "LoadWorkflow", "FilePath": workflow_path}))
-            
-            # logging.info("Taking Dark Reference")
-            # handle_response(send_command(command_socket, {"Command": "TakeDarkReference"}))
-            # logging.info("Taking White Reference")
-            # handle_response(send_command(command_socket, {"Command": "TakeWhiteReference"}))
             
             logging.info("Starting prediction")
             handle_response(send_command(command_socket, {"Command": "StartPredict", "IncludeObjectShape": True}))
