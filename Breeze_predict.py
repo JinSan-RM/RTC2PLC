@@ -71,7 +71,7 @@ def send_command(command_socket, command):
         return None
     return None
 
-def listen_for_events(XGT):
+def listen_for_events(XGT, size_event=False):
     CLASS_MAPPING = {
         0: "_",
         1: "PP",
@@ -135,7 +135,22 @@ def listen_for_events(XGT):
                             # Event 가 발생하고 Noise를 잡기 위해서
                             if plc_value is not None and (pos['width'] > 20 and pos['width'] < 800 ) and (pos['height'] > 20 and pos['height'] < 2000):
                                 try:
-                                    success = XGT.write_d_and_set_m300(plc_value)
+                                    if size_event:
+                                        if pos['width'] < 200 and pos['height'] < 500:
+                                            plc_value = 1  # 1번 블로우
+                                            size_category = "small"
+                                            success = XGT.write_d_and_set_m300(plc_value)  # 1번 블로우
+                                        elif pos['width'] < 500 and pos['height'] < 1000:
+                                            plc_value = 2  # 1번 블로우
+                                            size_category = "medium"
+                                            success = XGT.write_d_and_set_m300(plc_value)  # 1번 블로우
+                                        else:
+                                            plc_value = 3  # 1번 블로우
+                                            size_category = "large"
+                                            success = XGT.write_d_and_set_m300(plc_value)  # 2번 블로우
+                                    else:
+                                        success = XGT.write_d_and_set_m300(plc_value)
+                                    
                                     if success:
                                         logging.info(f"PLC action successful for value {plc_value}")
                                     else:
