@@ -78,7 +78,8 @@ def listen_for_events(XGT, size_event=False):
         2: "HDPE",
         3: "PS",
         4: "LDPE",
-        5: "ABS"
+        5: "ABS",
+        6: "PET"
     }
     PLASTIC_VALUE_MAPPING = {
         "PP": 1,
@@ -86,6 +87,7 @@ def listen_for_events(XGT, size_event=False):
         "PS": 2,
         "LDPE": 3,
         "ABS": 3,
+        "PET": 3,
         "Background": None,
     }
 
