@@ -82,10 +82,10 @@ def listen_for_events(XGT, size_event=False):
         6: "PET"
     }
     PLASTIC_VALUE_MAPPING = {
-        "PP": 1,
         "HDPE": 1,
-        "PS": 2,
-        "LDPE": 3,
+        "PS": 1,
+        "PP": 2,
+        "LDPE": 2,
         "ABS": 3,
         "PET": 3,
         "Background": None,
@@ -138,13 +138,11 @@ def listen_for_events(XGT, size_event=False):
                             if plc_value is not None and (pos['width'] > 20 and pos['width'] < 800 ) and (pos['height'] > 20 and pos['height'] < 2000):
                                 try:
                                     if size_event:
-                                        if pos['width'] < 200 and pos['height'] < 500:
+                                        if pos['size_category'] == "small":
                                             plc_value = 1  # 1번 블로우
-                                            size_category = "small"
                                             success = XGT.write_d_and_set_m300(plc_value)  # 1번 블로우
-                                        elif pos['width'] < 500 and pos['height'] < 1000:
+                                        elif pos['size_category'] == "medium":
                                             plc_value = 2  # 1번 블로우
-                                            size_category = "medium"
                                             success = XGT.write_d_and_set_m300(plc_value)  # 1번 블로우
                                         else:
                                             plc_value = 3  # 1번 블로우
@@ -170,6 +168,7 @@ def listen_for_events(XGT, size_event=False):
             except Exception as e:
                 logging.error(f"Error in event loop: {e}")
                 continue
+
 
 def listen_for_data_stream():
     logging.info(f"Connecting to data stream at {HOST}:{DATA_STREAM_PORT}")
@@ -239,6 +238,8 @@ def listen_for_data_stream():
             except Exception as e:
                 logging.error(f"Error in data stream: {e}")
                 continue
+
+
 
 def convert_ticks_to_datetime(ticks):
     return (datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)).replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
