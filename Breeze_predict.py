@@ -146,7 +146,6 @@ def listen_for_events(XGT, size_event=False):
                                             success = XGT.write_d_and_set_m300(plc_value)  # 1번 블로우
                                         else:
                                             plc_value = 3  # 1번 블로우
-                                            size_category = "large"
                                             success = XGT.write_d_and_set_m300(plc_value)  # 2번 블로우
                                     else:
                                         success = XGT.write_d_and_set_m300(plc_value)
