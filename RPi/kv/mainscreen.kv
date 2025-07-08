@@ -1,0 +1,24 @@
+# 메인 화면
+<MainScreen>:
+    name: 'main'
+    orientation: 'horizontal'
+    spacing: 10
+    padding: 10
+
+    Button:
+        text: "수동화면"
+        color: 0, 0, 1, 1
+        bold: True
+        on_press: root.manager.current = 'manual'
+
+    Button:
+        text: "시간설정"
+        color: 0, 0, 1, 1
+        bold: True
+        on_press: root.manager.current = 'time'
+
+    Button:
+        text: "서보화면"
+        color: 0, 0, 1, 1
+        bold: True
+        on_press: root.manager.current = 'servo'
