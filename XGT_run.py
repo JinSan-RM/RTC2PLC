@@ -193,3 +193,43 @@ class XGTTester:
         # else:
         #     print("\n❌ M300 비트 ON 상태가 아닙니다.")
         #     return False`
+    
+    def write_set_d_and_set_m300(self, d_set, d_value):
+        """D00000에 값을 쓰고 성공하면 M300 비트를 ON으로 설정"""
+        # print("\n========== D00000 및 M300 통합 테스트 시작 ==========")
+        # print(f"1. D00000에 {d_value} 값을 쓰고")
+        # print("2. M300 비트를 ON(1)으로 설정합니다.")
+        # print("=================================================")
+        
+        # 1. M300 초기 상태 확인
+        initial_m = self.read_mx_bit(300)
+        # print(f'initial_m ;{initial_m}')
+        
+        # 2. D00000에 값 쓰기
+        d_success = self.write_set_d_value(d_set, d_value)
+        if not d_success:
+            print("D00000 쓰기 실패! M300 비트 설정을 건너뜁니다.")
+            return False
+        
+        # 3. M300 비트 ON
+        print(f"\nD00000에 값 {d_value} 쓰기 성공! M300 비트 ON 설정 시작...")
+        m_success = self.write_mx_bit(300, 1)  # M301에서 M300으로 변경
+        if not m_success:
+            print("M300 비트 설정 실패!")
+            return False
+        
+    def write_set_d_value(self, d_address=None, value):
+        """D00000에 값 쓰기 (첫 번째 코드 블록 참조)"""
+        d_address = b'\x25\x44\x42\x30'  # %DB0 형식 사용
+        data_bytes = struct.pack('<H', value)  # 리틀 엔디안 형식으로 변환
+        
+        packet = self.create_write_packet(d_address, data_bytes)
+        # print(f"D00000에 값 {value} 쓰기 시도 중...")
+        success, response = self.send_packet_to_plc(packet, f"D00000에 값 {value} 쓰기")
+        
+        if success:
+            # print(f"D00000에 값 {value} 쓰기 성공!")
+            return True
+        else:
+            # print(f"D00000에 값 쓰기 실패!")
+            return False
