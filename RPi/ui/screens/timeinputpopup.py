@@ -1,4 +1,3 @@
-from kivy.uix.screenmanager import Screen
 from kivy.properties import StringProperty
 from kivy.uix.popup import Popup
 
@@ -28,20 +27,3 @@ class TimeInputPopup(Popup):
                 self.dismiss()
             else:
                 self.raw_input = ""  # 잘못된 시간 초기화
-
-class TimeScreen(Screen):
-    def popup_start_time_setting(self, button):
-        popup = TimeInputPopup()
-        popup.callback = lambda time_str: self.set_start_time(button, time_str)
-        popup.open()
-
-    def popup_end_time_setting(self, button):
-        popup = TimeInputPopup()
-        popup.callback = lambda time_str: self.set_end_time(button, time_str)
-        popup.open()
-    
-    def set_start_time(self, button, time_str):
-        button.text = time_str
-
-    def set_end_time(self, button, time_str):
-        button.text = time_str
