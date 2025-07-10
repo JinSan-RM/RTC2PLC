@@ -87,8 +87,7 @@ def listen_for_events(XGT, size_event=False):
         "PP": 2,
         "LDPE": 2,
         "ABS": 3,
-        "PET": 3,
-        "Background": None,
+        "PET": 3
     }
 
     logging.info(f"Connecting to camera event port at {HOST}:{EVENT_PORT}")
