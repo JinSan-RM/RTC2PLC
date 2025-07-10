@@ -13,15 +13,19 @@
 
         LocationBox:
             title: "#1 위치"
+            option_name: "LOC_1"
 
         LocationBox:
             title: "#2 위치"
+            option_name: "LOC_2"
 
         LocationBox:
             title: "#3 위치"
+            option_name: "LOC_3"
 
         LocationBox:
             title: "#4 위치"
+            option_name: "LOC_4"
 
     # 오른쪽: 사이즈 이동, 동작시간, 버튼들
     BoxLayout:
@@ -136,7 +140,7 @@
             background_down: ""
             background_color: 0, 0, 0, 0
             color: 1, 1, 1, 1
-            on_press: root.popup_start_time_setting(self)
+            on_press: root.on_time_setting(self, "start")
 
         Label:
             text: root.text2
@@ -149,7 +153,7 @@
             background_down: ""
             background_color: 0, 0, 0, 0
             color: 1, 1, 1, 1
-            on_press: root.popup_end_time_setting(self)
+            on_press: root.on_time_setting(self, "stop")
 
 <TimeBox@BoxLayout>
     orientation: 'horizontal'
@@ -163,7 +167,7 @@
         background_down: ""
         background_color: 0, 0, 0, 0
         color: 1, 1, 1, 1
-        on_press: root.popup_time_setting(self)
+        on_press: root.on_time_setting(self, "delay")
 
     Button:
         text: "0.0 초"
@@ -171,7 +175,7 @@
         background_down: ""
         background_color: 0, 0, 0, 0
         color: 1, 1, 1, 1
-        on_press: root.popup_time_setting(self)
+        on_press: root.on_time_setting(self, "duration")
 
 <TimeInput@BoxLayout>
     orientation: 'vertical'
