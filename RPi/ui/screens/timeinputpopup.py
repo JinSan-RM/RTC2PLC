@@ -2,28 +2,37 @@ from kivy.properties import StringProperty
 from kivy.uix.popup import Popup
 
 class TimeInputPopup(Popup):
-    raw_input = StringProperty("")
-    callback = None  # 외부에서 설정할 콜백 함수
-
-    @property
-    def time_display(self):
-        padded = self.raw_input.ljust(4, "_")
-        return f"{padded[:2]}:{padded[2:]}"
+    def __init__(self, callback, **kwargs):
+        super().__init__(**kwargs)
+        self.callback = callback
 
     def add_digit(self, digit):
-        if len(self.raw_input) < 4:
-            self.raw_input += digit
+        current_text = self.ids.text_input.text
+        if digit == ".":
+            if "." in current_text:
+                return
+        else:
+            current_text += digit
+            float_num = float(current_text)
+            if float_num > 999: # 일단 999초까지만 입력 가능하게 처리
+                current_text = "999"
+            elif float_num < 0:
+                current_text = "0"
 
     def backspace(self):
-        self.raw_input = self.raw_input[:-1]
+        self.ids.text_input.text = self.ids.text_input.text[:-1]
 
     def confirm_time(self):
-        if len(self.raw_input) == 4:
-            hour = int(self.raw_input[:2])
-            minute = int(self.raw_input[2:])
-            if 0 <= hour < 24 and 0 <= minute < 60:
-                if self.callback:
-                    self.callback(f"{hour:02}:{minute:02}")
-                self.dismiss()
-            else:
-                self.raw_input = ""  # 잘못된 시간 초기화
+        current_text = self.ids.text_input.text
+        if current_text[-1] == ".": # 소수점으로 끝나면 .0으로 만들어줌
+            current_text += "0"
+
+        float_num = float(current_text)
+        if float_num > 999: # 예외처리 한번 더
+            current_text = "999"
+        elif float_num < 0:
+            current_text = "0"
+        else:
+            if self.callback:
+                self.callback(current_text)
+            self.dismiss()

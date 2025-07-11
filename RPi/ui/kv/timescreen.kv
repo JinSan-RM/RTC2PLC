@@ -13,19 +13,23 @@
 
         LocationBox:
             title: "#1 위치"
-            option_name: "LOC_1"
+            option_name_1: "LOC_1 start"
+            option_name_2: "LOC_1 stop"
 
         LocationBox:
             title: "#2 위치"
-            option_name: "LOC_2"
+            option_name_1: "LOC_2 start"
+            option_name_2: "LOC_2 stop"
 
         LocationBox:
             title: "#3 위치"
-            option_name: "LOC_3"
+            option_name_1: "LOC_3 start"
+            option_name_2: "LOC_3 stop"
 
         LocationBox:
             title: "#4 위치"
-            option_name: "LOC_4"
+            option_name_1: "LOC_4 start"
+            option_name_2: "LOC_4 stop"
 
     # 오른쪽: 사이즈 이동, 동작시간, 버튼들
     BoxLayout:
@@ -37,6 +41,7 @@
             title: "사이즈 위치 이동"
             text1: "사이즈 변경 시간"
             text2: "사이즈 복귀 시간"
+            
 
         BoxLayout:
             orientation: 'vertical'
@@ -114,6 +119,8 @@
     title: "위치"
     text1: "브로워 동작 시간"
     text2: "브로워 정지 시간"
+    option_name_1: "start"
+    option_name_2: "stop"
 
     Label:
         text: root.title
@@ -140,7 +147,7 @@
             background_down: ""
             background_color: 0, 0, 0, 0
             color: 1, 1, 1, 1
-            on_press: root.on_time_setting(self, "start")
+            on_press: root.on_time_setting(self, root.option_name_1)
 
         Label:
             text: root.text2
@@ -153,7 +160,7 @@
             background_down: ""
             background_color: 0, 0, 0, 0
             color: 1, 1, 1, 1
-            on_press: root.on_time_setting(self, "stop")
+            on_press: root.on_time_setting(self, root.option_name_2)
 
 <TimeBox@BoxLayout>
     orientation: 'horizontal'
@@ -197,8 +204,9 @@
                 size: self.size
 
     Label:
+        id: text_input
         size_hint_y: 0.15
-        text: "0.0"
+        text: "0"
         bold: True
         halign: 'center'
         valign: 'middle'
@@ -214,9 +222,7 @@
 
         GridLayout:
             cols: 3
-            rows: 4
             spacing: 10
-            size_hint_x: 0.75
 
             Button:
                 text: '1'
@@ -260,18 +266,22 @@
 
             Button:
                 text: '.'
-                on_press: root.add_digit('0')
+                on_press: root.add_digit('.')
 
             Button:
                 text: '←'
                 on_press: root.backspace()
 
-        AnchorLayout:
-            anchor_x: 'center'
-            anchor_y: 'bottom'
+        GridLayout:
+            cols: 3
             spacing: 10
 
             Button:
                 size_hint_y: 0.5
-                text: 'OK'
+                text: '확인'
                 on_press: root.confirm_time()
+
+            Button:
+                size_hint_y: 0.5
+                text: '취소'
+                on_press: root.dismiss()

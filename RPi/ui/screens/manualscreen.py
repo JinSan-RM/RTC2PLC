@@ -2,7 +2,7 @@ from kivy.uix.screenmanager import Screen
 from kivy.lang import Builder
 import os
 
-from rpiconfig.rpiconfig import MANUAL_PARTS
+from common.config import PIN_MAPPING
 
 kv_path = os.path.join(os.path.dirname(__file__), '../kv/manualscreen.kv')
 Builder.load_file(kv_path)
@@ -34,8 +34,8 @@ class ManualScreen(Screen):
     
     # 각 파트 운전
     def on_start_manual(self, part_name, part_num):
-        self.gpio.set_high(MANUAL_PARTS[part_name][part_num])
+        self.gpio.write_pin(PIN_MAPPING[part_name][part_num], 1)
     
     # 각 파트 정지
     def on_stop_manual(self, part_name, part_num):
-        self.gpio.set_low(MANUAL_PARTS[part_name][part_num])
+        self.gpio.write_pin(PIN_MAPPING[part_name][part_num], 0)

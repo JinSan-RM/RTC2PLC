@@ -13,7 +13,7 @@ from ui.screens.manualscreen import ManualScreen
 from ui.screens.timescreen import TimeScreen
 from ui.screens.servoscreen import ServoScreen
 
-from rpiconfig.rpiconfig import TCP_HOST, TCP_PORT, GPIO_PINS, load_config, save_config
+from common.config import TCP_HOST, TCP_PORT, TCP_SLAVE_1, load_config, save_config
 
 class TouchApp(App):
     def __init__(self, **kwargs):
@@ -22,8 +22,8 @@ class TouchApp(App):
 
     def build(self):
         # GPIO 컨트롤러 설정
-        self.gpio_controller = GPIOController(pins = GPIO_PINS) # 사용할 핀 번호를 전달
-        self.cmd_handler = CommandHandler(self.gpio_controller)
+        self.gpio_controller = GPIOController(slave_ip = TCP_SLAVE_1)
+        self.cmd_handler = CommandHandler(self.gpio_controller, self.config_data)
 
         # TCP 서버 설정
         self.tcp_server = TCPServer(
