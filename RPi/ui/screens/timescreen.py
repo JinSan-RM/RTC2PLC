@@ -3,9 +3,14 @@ from kivy.uix.screenmanager import Screen
 from kivy.lang import Builder
 import os
 
+from ui.screens.timebox import TimeBox
 from ui.screens.timeinputpopup import TimeInputPopup
 from common.config import TIME_CONFIG
 
+box_path = os.path.join(os.path.dirname(__file__), '../kv/timebox.kv')
+Builder.load_file(box_path)
+popup_path = os.path.join(os.path.dirname(__file__), '../kv/timeinputpopup.kv')
+Builder.load_file(popup_path)
 kv_path = os.path.join(os.path.dirname(__file__), '../kv/timescreen.kv')
 Builder.load_file(kv_path)
 

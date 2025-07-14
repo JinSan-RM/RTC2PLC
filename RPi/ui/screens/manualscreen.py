@@ -2,8 +2,11 @@ from kivy.uix.screenmanager import Screen
 from kivy.lang import Builder
 import os
 
+from ui.screens.runbox import RunBox
 from common.config import PIN_MAPPING
 
+box_path = os.path.join(os.path.dirname(__file__), '../kv/runbox.kv')
+Builder.load_file(box_path)
 kv_path = os.path.join(os.path.dirname(__file__), '../kv/manualscreen.kv')
 Builder.load_file(kv_path)
 

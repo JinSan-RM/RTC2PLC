@@ -13,7 +13,7 @@ from ui.screens.manualscreen import ManualScreen
 from ui.screens.timescreen import TimeScreen
 from ui.screens.servoscreen import ServoScreen
 
-from common.config import TCP_HOST, TCP_PORT, TCP_SLAVE_1, load_config, save_config
+from common.config import TCP_HOST, TCP_PORT, USE_TCP_SLAVE, TCP_SLAVE_1, load_config, save_config
 
 class TouchApp(App):
     def __init__(self, **kwargs):
@@ -22,7 +22,11 @@ class TouchApp(App):
 
     def build(self):
         # GPIO 컨트롤러 설정
-        self.gpio_controller = GPIOController(slave_ip = TCP_SLAVE_1)
+        if USE_TCP_SLAVE:
+            self.gpio_controller = GPIOController(slave_ip = TCP_SLAVE_1)
+        else:
+            self.gpio_controller = GPIOController()
+
         self.cmd_handler = CommandHandler(self.gpio_controller, self.config_data)
 
         # TCP 서버 설정
@@ -41,6 +45,7 @@ class TouchApp(App):
 
         return self.sm
     
+    # 패킷 처리하는 함수. 추후 패킷 구조 정하면 다시 짜야 함
     def handle_tcp_command(self, cmd):
         cmd = cmd.strip().upper()
         return self.cmd_handler.handle(cmd)

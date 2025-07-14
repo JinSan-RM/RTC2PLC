@@ -1,0 +1,32 @@
+<RunBox@BoxLayout>
+    orientation: 'vertical'
+    title: "항목"
+    type: "None"
+    num: 0
+
+    Label:
+        text: root.title
+        bold: True
+        color: 1, 1, 1, 1
+        size_hint_y: 0.4
+        canvas.before:
+            Color:
+                rgba: 0, 0, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+    BoxLayout:
+        orientation: 'horizontal'
+
+        Button:
+            text: "운전"
+            bold: True
+            color: 0, 0, 1, 1
+            on_press: root.on_start
+
+        Button:
+            text: "정지"
+            bold: True
+            color: 0, 0, 1, 1
+            on_press: root.on_stop

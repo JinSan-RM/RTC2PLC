@@ -11,6 +11,7 @@ class DeviceRole(Enum):
 CONFIG_PATH = "config.json"
 TCP_HOST = "0.0.0.0"
 TCP_PORT = 8888
+USE_TCP_SLAVE = False
 TCP_SLAVE_1 = "192.168.0.21" # slave rpi의 ip주소. 이거 별도의 설정 파일에서 조정 가능하던지 아니면 다른 방법을 강구해야 한다.
 
 # 장비 각 파츠와 GPIO 매핑(master/slave, pin 번호)

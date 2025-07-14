@@ -15,7 +15,7 @@ class GPIOController:
             self.slave_pi = pigpio.pi(slave_ip)
             if not self.slave_pi.connected:
                 raise RuntimeError("슬레이브의 pigpio 데몬이 실행되고 있지 않습니다.")
-        self.slave_initialized = set()
+            self.slave_initialized = set()
 
     def _get_pi(self, target: DeviceRole):
         if target == DeviceRole.MASTER:
