@@ -7,12 +7,17 @@ class DeviceRole(Enum):
     MASTER = auto()
     SLAVE = auto()
 
+class PinRole(Enum):
+    INPUT = auto()
+    OUTPUT = auto()
+
 # 상수값
 CONFIG_PATH = "config.json"
 TCP_HOST = "0.0.0.0"
-TCP_PORT = 8888
+TCP_PORT = 8999
 USE_TCP_SLAVE = False
 TCP_SLAVE_1 = "192.168.0.21" # slave rpi의 ip주소. 이거 별도의 설정 파일에서 조정 가능하던지 아니면 다른 방법을 강구해야 한다.
+TCP_SLAVE_PORT = 8889
 
 # 장비 각 파츠와 GPIO 매핑(master/slave, pin 번호)
 # pin 번호는 bcm 방식(내부 번호 사용)

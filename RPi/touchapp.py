@@ -1,6 +1,7 @@
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
-import pigpio
+import lgpio
+import rgpio
 import threading
 import time
 
@@ -15,7 +16,7 @@ from ui.screens.manualscreen import ManualScreen
 from ui.screens.timescreen import TimeScreen
 from ui.screens.servoscreen import ServoScreen
 
-from common.config import TCP_HOST, TCP_PORT, USE_TCP_SLAVE, TCP_SLAVE_1, load_config, save_config
+from common.config import TCP_HOST, TCP_PORT, USE_TCP_SLAVE, TCP_SLAVE_1, TCP_SLAVE_PORT, load_config, save_config
 
 class TouchApp(App):
     def __init__(self, **kwargs):
@@ -25,7 +26,7 @@ class TouchApp(App):
     def build(self):
         # GPIO 컨트롤러 설정
         if USE_TCP_SLAVE:
-            self.gpio_controller = GPIOController(slave_ip = TCP_SLAVE_1)
+            self.gpio_controller = GPIOController(slave_ip = TCP_SLAVE_1, slave_port = TCP_SLAVE_PORT)
         else:
             self.gpio_controller = GPIOController()
 
@@ -46,19 +47,7 @@ class TouchApp(App):
         self.sm.add_widget(ServoScreen(name='servo', gpio = self.gpio_controller))
 
         return self.sm
-    
-    def wait_for_pigpiod(timeout = 30):
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout:
-            try:
-                pi = pigpio.pi()
-                if pi.connected:
-                    pi.stop()
-                    return True
-            except:
-                pass
-    
+
     # 패킷 처리하는 함수. 추후 패킷 구조 정하면 다시 짜야 함
     def handle_tcp_command(self, cmd):
         cmd = cmd.strip().upper()
