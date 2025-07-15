@@ -14,11 +14,11 @@ class TCPServer:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((self.host, self.port))
             s.listen()
-            print(f"[TCP] 서버 대기 중: {self.host}:{self.port}")
+            print(f"[TCP] wait server: {self.host}:{self.port}")
             while True:
                 conn, addr = s.accept()
                 with conn:
-                    print(f"[TCP] 연결됨: {addr}")
+                    print(f"[TCP] connected: {addr}")
                     while True:
                         data = conn.recv(1024)
                         if not data:

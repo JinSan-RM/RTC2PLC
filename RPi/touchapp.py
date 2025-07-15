@@ -1,6 +1,8 @@
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
+import pigpio
 import threading
+import time
 
 # 내부 모듈
 from gpio.controller import GPIOController
@@ -44,6 +46,18 @@ class TouchApp(App):
         self.sm.add_widget(ServoScreen(name='servo', gpio = self.gpio_controller))
 
         return self.sm
+    
+    def wait_for_pigpiod(timeout = 30):
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            try:
+                pi = pigpio.pi()
+                if pi.connected:
+                    pi.stop()
+                    return True
+            except:
+                pass
     
     # 패킷 처리하는 함수. 추후 패킷 구조 정하면 다시 짜야 함
     def handle_tcp_command(self, cmd):

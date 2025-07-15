@@ -8,13 +8,13 @@ class GPIOController:
     def __init__(self, slave_ip = None):
         self.master_pi = pigpio.pi()
         if not self.master_pi.connected:
-            raise RuntimeError("pigpio 데몬이 실행되고 있지 않습니다.")
+            raise RuntimeError("pigpio daemon is not connected")
         self.master_initialized = set()
         
         if slave_ip:
             self.slave_pi = pigpio.pi(slave_ip)
             if not self.slave_pi.connected:
-                raise RuntimeError("슬레이브의 pigpio 데몬이 실행되고 있지 않습니다.")
+                raise RuntimeError("slave pigpio daemon is not connected")
             self.slave_initialized = set()
 
     def _get_pi(self, target: DeviceRole):
@@ -23,7 +23,7 @@ class GPIOController:
         elif target == DeviceRole.SLAVE:
             return self.slave_pi, self.slave_initialized
         else:
-            raise ValueError("target은 'master' 또는 'slave' 이어야 합니다")
+            raise ValueError("GPIO target must be master or slave")
         
     def setup_pin(self, target: DeviceRole, pin, mode):
         pi, initialized = self._get_pi(target)
