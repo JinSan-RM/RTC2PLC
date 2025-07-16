@@ -1,6 +1,12 @@
+#!/bin/bash
+
 echo "update system packages and install basic requirements..."
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y build-essential git python3-dev python3-pip
+sudo apt install -y \
+    build-essential \
+    git \
+    python3-dev \
+    python3-pip
 
 echo "remove existing lg directory..."
 rm -rf ~/lg
@@ -17,7 +23,7 @@ echo "upgrade pip for Python..."
 python3 -m pip install --upgrade pip
 
 echo "check installation of Python modules..."
-python3 -c "import lgpio, rgpio; print('lgpio, rgpio 임포트 성공')"
+python3 -c "import lgpio, rgpio; print('lgpio, rgpio import succeeded')"
 
 echo "install kivy dependency..."
 sudo apt install -y \
