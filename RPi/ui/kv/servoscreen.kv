@@ -1,22 +1,45 @@
 # 서보 화면
 <ServoScreen>
     name: 'servo'
-    orientation: 'vertical'
 
-    Button:
-        text: "메인화면"
-        font_name: 'NanumGothic'
-        color: 0, 0, 1, 1
-        on_press: root.manager.current = 'main'
+    StackLayout:
+        orientation: 'lr-tb'
+        size_hint: 1, 1
+        padding: 10
+        spacing: 5
 
-    Button:
-        text: "수동화면"
-        font_name: 'NanumGothic'
-        color: 0, 0, 1, 1
-        on_press: root.manager.current = 'manual'
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint_x: 0.9
+            padding: 10
+            spacing: 5
 
-    Button:
-        text: "시간설정"
-        font_name: 'NanumGothic'
-        color: 0, 0, 1, 1
-        on_press: root.manager.current = 'time'
+        StackLayout:
+            orientation: 'bt-rl'
+            size_hint_x: 0.1
+            padding: 10
+            spacing: 5
+
+            Button:
+                text: "시간설정"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                on_press: root.manager.current = 'time'
+
+            Button:
+                text: "수동화면"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                on_press: root.manager.current = 'manual'
+
+            Button:
+                text: "메인화면"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                on_press: root.manager.current = 'main'
