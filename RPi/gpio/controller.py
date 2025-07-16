@@ -122,15 +122,17 @@ class GPIOController:
         threading.Thread(target = _task, daemon = True).start()
 
     def cleanup(self):
-        for pin, mode in self.slave_initialized:
-            try:
-                if mode == PinRole.OUTPUT:
-                    rgpio.gpio_write(self.master_handle, pin, 0)
-                rgpio.gpio_free(self.master_handle, pin)
-            except Exception as e:
-                print(f"SLAVE GPIO {pin} free error: {e}")
-        self.slave_initialized.clear()
-        rgpio.gpiochip_close(self.slave_handle)
+        if self.slave_initialized:
+            for pin, mode in self.slave_initialized:
+                try:
+                    if mode == PinRole.OUTPUT:
+                        rgpio.gpio_write(self.master_handle, pin, 0)
+                    rgpio.gpio_free(self.master_handle, pin)
+                except Exception as e:
+                    print(f"SLAVE GPIO {pin} free error: {e}")
+            self.slave_initialized.clear()
+        if self.slave_handle != None:
+            rgpio.gpiochip_close(self.slave_handle)
 
         for pin, mode in self.master_initialized:
             try:

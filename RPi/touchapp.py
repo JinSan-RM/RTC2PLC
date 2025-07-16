@@ -1,3 +1,4 @@
+from kivy.core.text import LabelBase
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
 import lgpio
@@ -17,6 +18,9 @@ from ui.screens.timescreen import TimeScreen
 from ui.screens.servoscreen import ServoScreen
 
 from common.config import TCP_HOST, TCP_PORT, USE_TCP_SLAVE, TCP_SLAVE_1, TCP_SLAVE_PORT, load_config, save_config
+
+# 한글 폰트 등록
+LabelBase.register(name="NanumGothic", fn_regular="/usr/share/fonts/truetype/nanum/NanumGothic.ttf")
 
 class TouchApp(App):
     def __init__(self, **kwargs):
