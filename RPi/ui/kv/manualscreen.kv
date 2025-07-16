@@ -90,18 +90,21 @@
 
             RunBox:
                 title: "내륜 모터"
-                on_start: root.on_start_manual("motor", 0)
-                on_stop: root.on_stop_manual("motor", 0)
+                parent_page: root
+                type: "motor"
+                num: 1
 
             RunBox:
                 title: "외륜 모터"
-                on_start: root.on_start_manual("motor", 1)
-                on_stop: root.on_stop_manual("motor", 1)
+                parent_page: root
+                type: "motor"
+                num: 2
             
             RunBox:
                 title: "브로워 SOL"
-                on_start: root.on_start_manual("blower_sol", 0)
-                on_stop: root.on_stop_manual("blower_sol", 0)
+                parent_page: root
+                type: "blower_sol"
+                num: 1
 
         GridLayout:
             cols: 2
@@ -156,55 +159,55 @@
 
             RunBox:
                 title: "취출#1 콘베어"
-                controller: root
+                parent_page: root
                 type: "convayor"
                 num: 1
 
             RunBox:
                 title: "취출#2 콘베어"
-                controller: root
+                parent_page: root
                 type: "convayor"
                 num: 2
 
             RunBox:
                 title: "취출#3 콘베어"
-                controller: root
+                parent_page: root
                 type: "convayor"
                 num: 3
 
             RunBox:
                 title: "취출#4 콘베어"
-                controller: root
+                parent_page: root
                 type: "convayor"
                 num: 4
 
             RunBox:
                 title: "취출#5 콘베어"
-                controller: root
+                parent_page: root
                 type: "convayor"
                 num: 5
 
             RunBox:
                 title: "취출#6 콘베어"
-                controller: root
+                parent_page: root
                 type: "convayor"
                 num: 6
 
             RunBox:
                 title: "취출#1 SOL"
-                controller: root
+                parent_page: root
                 type: "sol"
                 num: 1
 
             RunBox:
                 title: "취출#2 SOL"
-                controller: root
+                parent_page: root
                 type: "sol"
                 num: 2
 
             RunBox:
                 title: "취출#3 SOL"
-                controller: root
+                parent_page: root
                 type: "sol"
                 num: 3
 

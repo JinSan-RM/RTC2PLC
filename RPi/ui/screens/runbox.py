@@ -2,7 +2,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import ObjectProperty
 
 class RunBox(BoxLayout):
-    controller = ObjectProperty(None)
+    parent_page = ObjectProperty(None)
     
     def on_start(self):
         if self.controller:

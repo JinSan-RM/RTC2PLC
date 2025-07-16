@@ -35,6 +35,13 @@ PIN_MAPPING = {
         5 : (DeviceRole.SLAVE, 8), # 취출#5 콘베어
         6 : (DeviceRole.SLAVE, 9)  # 취출#6 콘베어
     },
+    "motor" : {
+        1 : (DeviceRole.MASTER, 4),
+        2 : (DeviceRole.MASTER, 5)
+    },
+    "blower_sol" : {
+        1 : (DeviceRole.MASTER, 6),
+    }
 }
 
 # 변경 후 json 저장할 설정값

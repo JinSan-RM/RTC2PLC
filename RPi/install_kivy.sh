@@ -1,16 +1,6 @@
 #!/bin/bash
 
-echo "update system packages and install basic requirements..."
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y \
-    build-essential \
-    git \
-    python3-dev \
-    python3-pip
-
-echo "upgrade pip for Python..."
-python3 -m pip install --upgrade pip
-
+# 시스템 의존성 먼저 설치
 echo "install kivy dependency..."
 sudo apt install -y \
     libsdl2-dev \
@@ -25,6 +15,7 @@ sudo apt install -y \
     libgl1-mesa-dev \
     libgles2-mesa-dev
 
+# 패키지 설치
 echo "install Python packages..."
 pip3 install \
     kivy \

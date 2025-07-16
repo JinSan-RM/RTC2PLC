@@ -66,18 +66,19 @@ class GPIOController:
                 raise ValueError("GPIO target must be MASTER or SLAVE")
 
     def write_pin(self, target: DeviceRole, pin, value):
-        self.setup_pin(target, pin, PinRole.OUTPUT)
-        handle, _ = self._get_gpio(target)
-        ret = 0
-        if target == DeviceRole.MASTER:
-            ret = lgpio.gpio_write(handle, pin, value)
-        elif target == DeviceRole.SLAVE:
-            ret = rgpio.gpio_write(handle, pin, value)
-        else:
-            raise ValueError("GPIO target must be MASTER or SLAVE")
+        print(f"{target.name} GPIO {pin} write {value}")
+        # self.setup_pin(target, pin, PinRole.OUTPUT)
+        # handle, _ = self._get_gpio(target)
+        # ret = 0
+        # if target == DeviceRole.MASTER:
+        #     ret = lgpio.gpio_write(handle, pin, value)
+        # elif target == DeviceRole.SLAVE:
+        #     ret = rgpio.gpio_write(handle, pin, value)
+        # else:
+        #     raise ValueError("GPIO target must be MASTER or SLAVE")
         
-        if ret < 0:
-            raise RuntimeError(f"{target.name} GPIO {pin} write error. errorcode: {ret}")
+        # if ret < 0:
+        #     raise RuntimeError(f"{target.name} GPIO {pin} write error. errorcode: {ret}")
 
     def read_pin(self, target: DeviceRole, pin):
         self.setup_pin(target, pin, PinRole.INPUT)
