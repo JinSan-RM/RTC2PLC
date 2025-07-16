@@ -31,8 +31,8 @@ cd "$CLONE_DIR" || exit 1
 echo "run make..."
 make clean && make
 
-echo "run sudo make install..."
-sudo make install
+echo "install library..."
+python3 -m pip install .
 
 # lgpio 모듈 위치 확인
 LGPIO_SO=$(find /usr/local/lib -name "lgpio*.so" | head -n 1)
