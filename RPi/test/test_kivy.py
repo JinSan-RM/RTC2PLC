@@ -1,7 +1,7 @@
 def test_kivy():
     try:
         import kivy
-        print(f"import kivy succeeded - ver {kivy.version}")
+        print(f"import kivy succeeded - ver {kivy.__version__}")
 
         from kivy.app import App
         from kivy.uix.label import Label

@@ -8,22 +8,8 @@ sudo apt install -y \
     python3-dev \
     python3-pip
 
-echo "remove existing lg directory..."
-rm -rf ~/lg
-
-echo "clone lg library from GitHub..."
-git clone https://github.com/joan2937/lg.git ~/lg
-cd ~/lg
-
-echo "build and install library..."
-make
-sudo make install
-
 echo "upgrade pip for Python..."
 python3 -m pip install --upgrade pip
-
-echo "check installation of Python modules..."
-python3 -c "import lgpio, rgpio; print('lgpio, rgpio import succeeded')"
 
 echo "install kivy dependency..."
 sudo apt install -y \
@@ -48,7 +34,4 @@ pip3 install \
     docutils \
     pygments
 
-echo "set user permission..."
-sudo usermod -a -G gpio $USER
-
-echo "install completed. please reboot the system..."
+echo "install completed..."
