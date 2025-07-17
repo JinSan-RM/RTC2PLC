@@ -5,9 +5,9 @@ class RunBox(BoxLayout):
     parent_page = ObjectProperty(None)
     
     def on_start(self):
-        if self.controller:
-            self.controller.on_start_manual(self.type, self.num)
+        if self.parent_page:
+            self.parent_page.on_start_manual(self.type, self.num)
 
     def on_stop(self):
-        if self.controller:
-            self.controller.on_stop_manual(self.type, self.num)
+        if self.parent_page:
+            self.parent_page.on_stop_manual(self.type, self.num)

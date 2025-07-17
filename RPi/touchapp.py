@@ -23,7 +23,7 @@ from ui.screens.manualscreen import ManualScreen
 from ui.screens.timescreen import TimeScreen
 from ui.screens.servoscreen import ServoScreen
 
-from common.config import TCP_HOST, TCP_PORT, USE_TCP_SLAVE, TCP_SLAVE_1, TCP_SLAVE_PORT, load_config, save_config
+from common.config import TCP_HOST, TCP_PORT, USE_TCP_SLAVE, TCP_SLAVE_1, TCP_SLAVE_PORT, load_config, update_config, save_config
 
 # 한글 폰트 등록
 LabelBase.register(name="NanumGothic", fn_regular="/usr/share/fonts/truetype/nanum/NanumGothic.ttf")
@@ -65,18 +65,7 @@ class TouchApp(App):
         return self.cmd_handler.handle(cmd)
     
     def update_config(self, option_name, option_value):
-        names = option_name.split(" ")
-        changed = False
-        if len(names) == 1:
-            if self.config_data[option_name]:
-                self.config_data[option_name] = option_value
-                changed = True
-        elif len(names) == 2:
-            if self.config_data[names[0]][names[1]]:
-                self.config_data[names[0]][names[1]] = option_value
-                changed = True
-        if changed:
-            save_config(self.config_data)
+        self.config_data = update_config(option_name, option_value)
         
     def on_stop(self):
         self.gpio_controller.cleanup()

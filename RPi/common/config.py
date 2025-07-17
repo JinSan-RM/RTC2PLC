@@ -46,26 +46,41 @@ PIN_MAPPING = {
 
 # 변경 후 json 저장할 설정값
 TIME_CONFIG = {
-    "LOC_1" : { "start" : 0, "stop" : 999 }, # PUSHER 위치 1 동작/정지 시간
-    "LOC_2" : { "start" : 0, "stop" : 999 }, # PUSHER 위치 2 동작/정지 시간
-    "LOC_3" : { "start" : 0, "stop" : 999 }, # PUSHER 위치 3 동작/정지 시간
-    "LOC_4" : { "start" : 0, "stop" : 999 }, # PUSHER 위치 4 동작/정지 시간
-    "CHANGE_SIZE_TIME" : 10, # 사이즈 변경 시간
-    "RETURN_SIZE_TIME" : 15, # 사이즈 복귀 시간
-    "BLOWER_1" : { "duration" : 0.5, "delay" : 4.3 }, # 취출#1 SOL 동작/적용 시간
-    "BLOWER_2" : { "duration" : 0.6, "delay" : 5.3 }, # 취출#2 SOL 동작/적용 시간
-    "BLOWER_3" : { "duration" : 0.5, "delay" : 5.8 }  # 취출#3 SOL 동작/적용 시간
+    "LOC_1" : { "option1" : 0, "option2" : 999 }, # PUSHER 위치 1 동작/정지 시간
+    "LOC_2" : { "option1" : 0, "option2" : 999 }, # PUSHER 위치 2 동작/정지 시간
+    "LOC_3" : { "option1" : 0, "option2" : 999 }, # PUSHER 위치 3 동작/정지 시간
+    "LOC_4" : { "option1" : 0, "option2" : 999 }, # PUSHER 위치 4 동작/정지 시간
+    "SIZE_TIME" : { "option1" : 10, "option2" : 15 }, # 사이즈 변경/복귀 시간
+    "BLOWER_1" : { "option1" : 0.5, "option2" : 4.3 }, # 취출#1 SOL 동작/적용 시간
+    "BLOWER_2" : { "option1" : 0.6, "option2" : 5.3 }, # 취출#2 SOL 동작/적용 시간
+    "BLOWER_3" : { "option1" : 0.5, "option2" : 5.8 }  # 취출#3 SOL 동작/적용 시간
 }
 
 def load_config():
+    global TIME_CONFIG
     if not os.path.exists(CONFIG_PATH):
         save_config(TIME_CONFIG)
         return TIME_CONFIG
     try:
         with open(CONFIG_PATH, "r") as f:
-            return json.load(f)
+            TIME_CONFIG = json.load(f)
+            return TIME_CONFIG
     except Exception:
         return TIME_CONFIG
+    
+def update_config(option_name, option_value):
+    global TIME_CONFIG
+    names = option_name.split(" ")
+    changed = False
+    if len(names) == 2:
+        exist_value = TIME_CONFIG[names[0]][names[1]]
+        if exist_value and exist_value != option_value:
+            TIME_CONFIG[names[0]][names[1]] = option_value
+            changed = True
+    if changed:
+        save_config(TIME_CONFIG)
+
+    return TIME_CONFIG
 
 def save_config(config_data):
     with open(CONFIG_PATH, "w") as f:
