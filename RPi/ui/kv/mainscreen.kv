@@ -14,6 +14,19 @@
             padding: 5
             spacing: 5
 
+            # GPIO 테스트용 버튼 하나 추가
+            AnchorLayout:
+                anchor_x: 'center'
+                anchor_y: 'center'
+
+                Button:
+                    text: "테스트"
+                    font_name: 'NanumGothic'
+                    size_hint: 0.1, 0.1
+                    color: 0, 0, 1, 1
+                    bold: True
+                    on_press: root.gpio_test()
+
         # 화면 전환
         StackLayout:
             orientation: 'bt-rl'

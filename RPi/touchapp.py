@@ -1,14 +1,19 @@
+from kivy.config import Config
+
+Config.set("graphics", "fullscreen", "1")
+Config.set("graphics", "borderless", "1")
+
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, NoTransition
-# import lgpio
-# import rgpio
+import lgpio
+import rgpio
 import threading
 import time
 
 # 내부 모듈
-# from gpio.controller import GPIOController
+from gpio.controller import GPIOController
 from tcpserver.tcp_server import TCPServer
 from tcpserver.commandhandler import CommandHandler
 
@@ -29,15 +34,15 @@ class TouchApp(App):
         self.config_data = load_config() # 시작 시 설정 불러오기
 
     def build(self):
-        # # GPIO 컨트롤러 설정
-        # if USE_TCP_SLAVE:
-        #     self.gpio_controller = GPIOController(slave_ip = TCP_SLAVE_1, slave_port = TCP_SLAVE_PORT)
-        # else:
-        #     self.gpio_controller = GPIOController()
+        # GPIO 컨트롤러 설정
+        if USE_TCP_SLAVE:
+            self.gpio_controller = GPIOController(slave_ip = TCP_SLAVE_1, slave_port = TCP_SLAVE_PORT)
+        else:
+            self.gpio_controller = GPIOController()
 
-        # self.cmd_handler = CommandHandler(self.gpio_controller, self.config_data)
+        self.cmd_handler = CommandHandler(self.gpio_controller, self.config_data)
 
-        # # TCP 서버 설정
+        # TCP 서버 설정
         # self.tcp_server = TCPServer(
         #     host = TCP_HOST,
         #     port = TCP_PORT,
@@ -74,7 +79,7 @@ class TouchApp(App):
             save_config(self.config_data)
         
     def on_stop(self):
-        # self.gpio_controller.cleanup()
+        self.gpio_controller.cleanup()
         save_config(self.config_data) # 종료 시 설정 저장
 
 if __name__ == '__main__':

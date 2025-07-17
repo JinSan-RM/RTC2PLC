@@ -11,13 +11,11 @@
         BoxLayout:
             orientation: 'vertical'
             size_hint_x: 0.9
-            spacing: 5
-            padding: 5
 
             # 헤드라인
             BoxLayout:
                 orientation: 'horizontal'
-                size_hint_y: 0.1
+                size_hint_y: 0.05
 
                 Label:
                     text: "ST01 LOADING"
@@ -39,7 +37,7 @@
             # 운전 관련
             BoxLayout:
                 orientation: 'horizontal'
-                size_hint_y: 0.2
+                size_hint_y: 0.1
 
                 BoxLayout:
                     orientation: 'vertical'
@@ -48,11 +46,13 @@
                     Label:
                         text: "운전 모드"
                         font_name: 'NanumGothic'
+                        size_hint_y: 0.4
                         bold: True
 
                     BoxLayout:
                         orientation: 'vertical'
                         padding: 5
+                        spacing: 5
 
                         Button:
                             text: "수동운전"
@@ -66,6 +66,7 @@
                     Label:
                         text: "운전조작"
                         font_name: 'NanumGothic'
+                        size_hint_y: 0.4
                         bold: True
                         halign: "center"
                         valign: "middle"
@@ -74,6 +75,7 @@
                     GridLayout:
                         cols: 4
                         padding: 5
+                        spacing: 5
 
                         Button:
                             text: "시작"
@@ -102,14 +104,14 @@
             # FEEDER PART
             StackLayout:
                 orientation: 'lr-tb'
-                size_hint_y: 0.3
+                size_hint_y: 0.25
 
                 Label:
                     text: "FEEDER PART"
                     font_name: 'NanumGothic'
                     bold: True
                     size_hint_x: 1
-                    size_hint_y: 0.14
+                    size_hint_y: 0.1
                     halign: "center"
                     valign: "middle"
                     text_size: self.size
@@ -145,6 +147,9 @@
                 StackLayout:
                     orientation: 'lr-tb'
                     size_hint_x: 0.5
+                    size_hint_y: 0.33
+                    padding: 5
+                    spacing: 5
 
                     Label:
                         text: "PUSHER"
@@ -160,7 +165,6 @@
 
                     GridLayout:
                         cols: 4
-                        padding: 5
                         spacing: 5
 
                         Button:
@@ -190,7 +194,7 @@
             # CONVEYOR PART
             BoxLayout:
                 orientation: 'vertical'
-                size_hint_y: 0.4
+                size_hint_y: 0.35
 
                 Label:
                     text: "컨베어 PART"
