@@ -117,21 +117,21 @@
                     orientation: 'lr-tb'
 
                     RunBox:
-                        size_hit_x: 0.25
+                        size_hint_x: 0.25
                         title: "내륜 모터"
                         parent_page: root
                         type: "motor"
                         num: 1
 
                     RunBox:
-                        size_hit_x: 0.25
+                        size_hint_x: 0.25
                         title: "외륜 모터"
                         parent_page: root
                         type: "motor"
                         num: 2
                     
                     RunBox:
-                        size_hit_x: 0.25
+                        size_hint_x: 0.25
                         title: "브로워 SOL"
                         parent_page: root
                         type: "blower_sol"
@@ -267,12 +267,16 @@
             Button:
                 text: "서보화면"
                 font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
                 bold: True
                 on_press: root.manager.current = 'servo'
 
             Button: 
                 text: "시간설정"
                 font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
                 bold: True
                 on_press: root.manager.current = 'time'
 
@@ -292,5 +296,7 @@
             Button:
                 text: "메인화면"
                 font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
                 bold: True
                 on_press: root.manager.current = 'main'

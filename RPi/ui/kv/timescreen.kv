@@ -54,6 +54,7 @@
 
                 BoxLayout:
                     orientation: 'vertical'
+                    size_hint_y: 0.5
                     
                     BoxLayout:
                         orientation: 'horizontal'
@@ -147,7 +148,6 @@
 # 시간 설정용 템플릿
 <LocationBox@BoxLayout>:
     orientation: 'vertical'
-    spacing: 5
     title: "위치"
     text1: "브로워 동작 시간"
     text2: "브로워 정지 시간"
@@ -157,6 +157,7 @@
     Label:
         text: root.title
         font_name: 'NanumGothic'
+        size_hint_y: 0.3
         bold: True
         color: 1, 1, 1, 1
         canvas.before:
@@ -168,6 +169,8 @@
 
     GridLayout:
         cols: 2
+        padding: 5
+        spacing: 5
 
         Label:
             text: root.text1
