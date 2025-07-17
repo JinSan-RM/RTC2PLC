@@ -2,22 +2,22 @@
 <ManualScreen>:
     name: 'manual'
 
+    # 페이지 메인 레이아웃
     StackLayout:
         orientation: 'lr-tb'
         size_hint: 1, 1
-        spacing: 10
-        padding: 5
 
+        # 페이지 내용 레이아웃
         BoxLayout:
             orientation: 'vertical'
-            size_hint: 1, 1
-            spacing: 10
-            padding: 10
+            size_hint_x: 0.9
+            spacing: 5
+            padding: 5
 
             # 헤드라인
             BoxLayout:
                 orientation: 'horizontal'
-                size_hint_y: 0.05
+                size_hint_y: 0.1
 
                 Label:
                     text: "ST01 LOADING"
@@ -39,7 +39,7 @@
             # 운전 관련
             BoxLayout:
                 orientation: 'horizontal'
-                size_hint_y: 0.15
+                size_hint_y: 0.2
 
                 BoxLayout:
                     orientation: 'vertical'
@@ -50,11 +50,15 @@
                         font_name: 'NanumGothic'
                         bold: True
 
-                    Button:
-                        text: "수동운전"
-                        font_name: 'NanumGothic'
-                        bold: True
-                        on_press: root.change_mode()
+                    BoxLayout:
+                        orientation: 'vertical'
+                        padding: 5
+
+                        Button:
+                            text: "수동운전"
+                            font_name: 'NanumGothic'
+                            bold: True
+                            on_press: root.change_mode()
 
                 BoxLayout:
                     orientation: 'vertical'
@@ -69,22 +73,26 @@
 
                     GridLayout:
                         cols: 4
+                        padding: 5
 
                         Button:
                             text: "시작"
                             font_name: 'NanumGothic'
                             bold: True
                             on_press: root.start_process()
+
                         Button:
                             text: "정지"
                             font_name: 'NanumGothic'
                             bold: True
                             on_press: root.stop_process()
+
                         Button:
                             text: "원점"
                             font_name: 'NanumGothic'
                             bold: True
                             on_press: root.go_to_zeropoint()
+
                         Button:
                             text: "고장없음"
                             font_name: 'NanumGothic'
@@ -94,6 +102,7 @@
             # FEEDER PART
             BoxLayout:
                 orientation: 'vertical'
+                size_hint_y: 0.3
 
                 Label:
                     text: "FEEDER PART"
@@ -104,32 +113,35 @@
                     valign: "middle"
                     text_size: self.size
 
-                GridLayout:
-                    cols: 4
+                StackLayout:
+                    orientation: 'lr-tb'
 
                     RunBox:
+                        size_hit_x: 0.25
                         title: "내륜 모터"
                         parent_page: root
                         type: "motor"
                         num: 1
 
                     RunBox:
+                        size_hit_x: 0.25
                         title: "외륜 모터"
                         parent_page: root
                         type: "motor"
                         num: 2
                     
                     RunBox:
+                        size_hit_x: 0.25
                         title: "브로워 SOL"
                         parent_page: root
                         type: "blower_sol"
                         num: 1
 
-                GridLayout:
-                    cols: 2
+                StackLayout:
+                    orientation: 'lr-tb'
 
-                    BoxLayout:
-                        orientation: 'vertical'
+                    StackLayout:
+                        orientation: 'lr-tb'
                         size_hint_x: 0.5
 
                         Label:
@@ -137,9 +149,16 @@
                             font_name: 'NanumGothic'
                             bold: True
                             size_hint_y: 0.4
+                            canvas.before:
+                                Color:
+                                    rgba: 0, 0, 1, 1
+                                Rectangle:
+                                    pos: self.pos
+                                    size: self.size
 
                         GridLayout:
                             cols: 4
+                            padding: 5
 
                             Button:
                                 text: "위치(1)"
@@ -181,6 +200,8 @@
                 GridLayout:
                     cols: 4
                     rows: 3
+                    spacing: 5
+                    padding: 5
 
                     RunBox:
                         title: "취출#1 콘베어"
@@ -240,7 +261,7 @@
         StackLayout:
             orientation: 'bt-rl'
             size_hint_x: 0.1
-            padding: 10
+            padding: 5
             spacing: 5
 
             Button:
@@ -254,6 +275,19 @@
                 font_name: 'NanumGothic'
                 bold: True
                 on_press: root.manager.current = 'time'
+
+            Label:
+                text: "수동화면"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                canvas.before:
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
 
             Button:
                 text: "메인화면"

@@ -38,7 +38,9 @@
 
         GridLayout:
             cols: 3
-            spacing: 10
+            size_hint_x: 0.75
+            padding: 5
+            spacing: 5
 
             Button:
                 text: '1'
@@ -100,20 +102,21 @@
                 font_name: 'NanumGothic'
                 on_press: root.backspace()
 
-        GridLayout:
-            cols: 3
-            spacing: 10
+        StackLayout:
+            orientation: 'bt-rl'
+            padding: 5
+            spacing: 5
 
             Button:
-                size_hint_y: 0.5
-                text: '확인'
-                font_name: 'NanumGothic'
-                bold: True
-                on_press: root.confirm_time()
-
-            Button:
-                size_hint_y: 0.5
+                size_hint_y: 0.25
                 text: '취소'
                 font_name: 'NanumGothic'
                 bold: True
                 on_press: root.dismiss()
+
+            Button:
+                size_hint_y: 0.25
+                text: '확인'
+                font_name: 'NanumGothic'
+                bold: True
+                on_press: root.confirm_time()

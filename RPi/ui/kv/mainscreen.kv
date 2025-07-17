@@ -6,21 +6,19 @@
     StackLayout:
         orientation: 'lr-tb'
         size_hint: 1, 1
-        spacing: 10
-        padding: 5
 
-        # 페이지 메인 구성 레이아웃
+        # 페이지 내용 레이아웃
         BoxLayout:
             orientation: 'vertical'
             size_hint_x: 0.9
-            padding: 10
+            padding: 5
             spacing: 5
 
         # 화면 전환
         StackLayout:
             orientation: 'bt-rl'
             size_hint_x: 0.1
-            padding: 10
+            padding: 5
             spacing: 5
 
             Button:
@@ -46,3 +44,16 @@
                 color: 0, 0, 1, 1
                 bold: True
                 on_press: root.manager.current = 'manual'
+
+            Label:
+                text: "메인화면"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                canvas.before:
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size

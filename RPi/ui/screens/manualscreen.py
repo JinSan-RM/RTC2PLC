@@ -17,22 +17,27 @@ class ManualScreen(Screen):
 
     # 운전 모드 조작
     def change_mode(self):
+        print("change mode pressed.")
         return
     
     # 운전 시작
     def start_process(self):
+        print("start_process pressed")
         return
     
     # 운전 정지
     def stop_process(self):
+        print("stop_process pressed")
         return
     
     # 원점
     def go_to_zeropoint(self):
+        print("go_to_zeropoint pressed")
         return
     
     # 고장없음
     def check_breakdown(self):
+        print("check_breakdown pressed")
         return
     
     # 각 파트 운전

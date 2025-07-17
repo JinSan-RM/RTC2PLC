@@ -6,20 +6,19 @@
     StackLayout:
         orientation: 'lr-tb'
         size_hint: 1, 1
-        spacing: 10
-        padding: 5
 
-        # 페이지 메인 구성 레이아웃
+        # 페이지 내용 레이아웃
         BoxLayout:
             orientation:'horizontal'
-            size_hint: 1, 1
-            padding: 10
+            size_hint_x: 0.9
+            padding: 5
             spacing: 5
 
             # 왼쪽: 위치 박스들
             GridLayout:
                 cols: 1
-                spacing: 10
+                padding: 5
+                spacing: 5
 
                 LocationBox:
                     title: "#1 위치"
@@ -42,11 +41,13 @@
                     option_name_2: "LOC_4 stop"
 
             # 오른쪽: 사이즈 이동, 동작시간, 버튼들
-            BoxLayout:
-                orientation: 'vertical'
-                spacing: 10
+            StackLayout:
+                orientation: 'tb-lr'
+                padding: 5
+                spacing: 5
 
                 LocationBox:
+                    size_hint_y: 0.25
                     title: "사이즈 위치 이동"
                     text1: "사이즈 변경 시간"
                     text2: "사이즈 복귀 시간"
@@ -103,16 +104,29 @@
         StackLayout:
             orientation: 'bt-rl'
             size_hint_x: 0.1
-            padding: 10
+            padding: 5
             spacing: 5
 
             Button:
-                text: "메인화면"
+                text: "서보화면"
                 font_name: 'NanumGothic'
                 size_hint_y: 0.1
                 color: 0, 0, 1, 1
                 bold: True
-                on_press: root.manager.current = 'main'
+                on_press: root.manager.current = 'servo'
+
+            Label:
+                text: "시간설정"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                canvas.before:
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
 
             Button:
                 text: "수동화면"
@@ -123,12 +137,12 @@
                 on_press: root.manager.current = 'manual'
 
             Button:
-                text: "서보화면"
+                text: "메인화면"
                 font_name: 'NanumGothic'
                 size_hint_y: 0.1
                 color: 0, 0, 1, 1
                 bold: True
-                on_press: root.manager.current = 'servo'
+                on_press: root.manager.current = 'main'
 
 # 시간 설정용 템플릿
 <LocationBox@BoxLayout>:
