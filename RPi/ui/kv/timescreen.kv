@@ -2,125 +2,133 @@
 <TimeScreen>:
     name: 'time'
 
-    BoxLayout:
-        orientation:'horizontal'
+    # 페이지 메인 레이아웃
+    StackLayout:
+        orientation: 'lr-tb'
         size_hint: 1, 1
-        padding: 10
         spacing: 10
+        padding: 5
 
-        # 왼쪽: 위치 박스들
-        GridLayout:
-            cols: 1
-            spacing: 10
-            size_hint_x: 0.45
-            size_hint_y: 1
-
-            LocationBox:
-                title: "#1 위치"
-                option_name_1: "LOC_1 start"
-                option_name_2: "LOC_1 stop"
-        
-            LocationBox:
-                title: "#2 위치"
-                option_name_1: "LOC_2 start"
-                option_name_2: "LOC_2 stop"
-
-            LocationBox:
-                title: "#3 위치"
-                option_name_1: "LOC_3 start"
-                option_name_2: "LOC_3 stop"
-
-            LocationBox:
-                title: "#4 위치"
-                option_name_1: "LOC_4 start"
-                option_name_2: "LOC_4 stop"
-
-        # 오른쪽: 사이즈 이동, 동작시간, 버튼들
+        # 페이지 메인 구성 레이아웃
         BoxLayout:
-            orientation: 'vertical'
-            spacing: 10
-            size_hint_x: 0.45
-            size_hint_y: 1
+            orientation:'horizontal'
+            size_hint: 1, 1
+            padding: 10
+            spacing: 5
 
-            LocationBox:
-                title: "사이즈 위치 이동"
-                text1: "사이즈 변경 시간"
-                text2: "사이즈 복귀 시간"
+            # 왼쪽: 위치 박스들
+            GridLayout:
+                cols: 1
+                spacing: 10
 
+                LocationBox:
+                    title: "#1 위치"
+                    option_name_1: "LOC_1 start"
+                    option_name_2: "LOC_1 stop"
+            
+                LocationBox:
+                    title: "#2 위치"
+                    option_name_1: "LOC_2 start"
+                    option_name_2: "LOC_2 stop"
+
+                LocationBox:
+                    title: "#3 위치"
+                    option_name_1: "LOC_3 start"
+                    option_name_2: "LOC_3 stop"
+
+                LocationBox:
+                    title: "#4 위치"
+                    option_name_1: "LOC_4 start"
+                    option_name_2: "LOC_4 stop"
+
+            # 오른쪽: 사이즈 이동, 동작시간, 버튼들
             BoxLayout:
                 orientation: 'vertical'
-                
+                spacing: 10
+
+                LocationBox:
+                    title: "사이즈 위치 이동"
+                    text1: "사이즈 변경 시간"
+                    text2: "사이즈 복귀 시간"
+
                 BoxLayout:
-                    orientation: 'horizontal'
-                    size_hint_y: 0.1
+                    orientation: 'vertical'
+                    
+                    BoxLayout:
+                        orientation: 'horizontal'
+                        size_hint_y: 0.1
 
-                    Label:
-                        text: ""
-                        font_name: 'NanumGothic'
-                        canvas.before:
-                            Color:
-                                rgba: 0, 0, 1, 1
-                            Rectangle:
-                                pos: self.pos
-                                size: self.size
+                        Label:
+                            text: ""
+                            font_name: 'NanumGothic'
+                            canvas.before:
+                                Color:
+                                    rgba: 0, 0, 1, 1
+                                Rectangle:
+                                    pos: self.pos
+                                    size: self.size
 
-                    Label:
-                        text: "동작시간"
-                        font_name: 'NanumGothic'
-                        color: 1, 1, 1, 1
-                        canvas.before:
-                            Color:
-                                rgba: 0, 0, 1, 1
-                            Rectangle:
-                                pos: self.pos
-                                size: self.size
+                        Label:
+                            text: "동작시간"
+                            font_name: 'NanumGothic'
+                            color: 1, 1, 1, 1
+                            canvas.before:
+                                Color:
+                                    rgba: 0, 0, 1, 1
+                                Rectangle:
+                                    pos: self.pos
+                                    size: self.size
 
-                    Label:
-                        text: "적용시간"
-                        font_name: 'NanumGothic'
-                        color: 1, 1, 1, 1
-                        canvas.before:
-                            Color:
-                                rgba: 0, 0, 1, 1
-                            Rectangle:
-                                pos: self.pos
-                                size: self.size
+                        Label:
+                            text: "적용시간"
+                            font_name: 'NanumGothic'
+                            color: 1, 1, 1, 1
+                            canvas.before:
+                                Color:
+                                    rgba: 0, 0, 1, 1
+                                Rectangle:
+                                    pos: self.pos
+                                    size: self.size
 
-                TimeBox:
-                    title: "취출#1 SOL"
-                
-                TimeBox:
-                    title: "취출#2 SOL"
+                    TimeBox:
+                        title: "취출#1 SOL"
+                    
+                    TimeBox:
+                        title: "취출#2 SOL"
 
-                TimeBox:
-                    title: "취출#3 SOL"
+                    TimeBox:
+                        title: "취출#3 SOL"
 
+        # 화면 전환
         StackLayout:
             orientation: 'bt-rl'
             size_hint_x: 0.1
+            padding: 10
+            spacing: 5
 
-            BoxLayout:
-                orientation: 'vertical'
-                size_hint_y: 0.4
-                spacing: 5
+            Button:
+                text: "메인화면"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                on_press: root.manager.current = 'main'
 
-                Button:
-                    text: "메인화면"
-                    font_name: 'NanumGothic'
-                    color: 0, 0, 1, 1
-                    on_press: root.manager.current = 'main'
+            Button:
+                text: "수동화면"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                on_press: root.manager.current = 'manual'
 
-                Button:
-                    text: "수동화면"
-                    font_name: 'NanumGothic'
-                    color: 0, 0, 1, 1
-                    on_press: root.manager.current = 'manual'
-
-                Button:
-                    text: "서보화면"
-                    font_name: 'NanumGothic'
-                    color: 0, 0, 1, 1
-                    on_press: root.manager.current = 'servo'
+            Button:
+                text: "서보화면"
+                font_name: 'NanumGothic'
+                size_hint_y: 0.1
+                color: 0, 0, 1, 1
+                bold: True
+                on_press: root.manager.current = 'servo'
 
 # 시간 설정용 템플릿
 <LocationBox@BoxLayout>:

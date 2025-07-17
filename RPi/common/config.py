@@ -12,7 +12,7 @@ class PinRole(Enum):
     OUTPUT = auto()
 
 # 상수값
-CONFIG_PATH = "config.json"
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 TCP_HOST = "0.0.0.0"
 TCP_PORT = 8999
 USE_TCP_SLAVE = False
