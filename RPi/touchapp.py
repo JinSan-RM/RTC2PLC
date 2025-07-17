@@ -49,7 +49,7 @@ class TouchApp(App):
         #     handler_func = self.handle_tcp_command
         # )
         # threading.Thread(target = self.tcp_server.run_server, daemon = True).start()
-        self.gpio_controller = None
+
         self.sm = ScreenManager()
         self.sm.transition = NoTransition()
         self.sm.add_widget(MainScreen(name='main', gpio = self.gpio_controller))

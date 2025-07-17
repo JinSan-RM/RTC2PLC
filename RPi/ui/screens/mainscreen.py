@@ -15,4 +15,4 @@ class MainScreen(Screen):
     # 17번 핀을 통한 점멸 테스트용
     def gpio_test(self):
         if self.gpio != None:
-            self.gpio.pulse(DeviceRole, 17, delay = 3, duration = 3)
+            self.gpio.pulse(DeviceRole.MASTER, 17, delay = 3, duration = 3)
