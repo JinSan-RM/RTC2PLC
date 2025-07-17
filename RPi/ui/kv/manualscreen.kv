@@ -100,14 +100,15 @@
                             on_press: root.check_breakdown()
 
             # FEEDER PART
-            BoxLayout:
-                orientation: 'vertical'
+            StackLayout:
+                orientation: 'lr-tb'
                 size_hint_y: 0.3
 
                 Label:
                     text: "FEEDER PART"
                     font_name: 'NanumGothic'
                     bold: True
+                    size_hint_x: 1
                     size_hint_y: 0.14
                     halign: "center"
                     valign: "middle"
@@ -115,6 +116,10 @@
 
                 StackLayout:
                     orientation: 'lr-tb'
+                    size_hint_x: 1
+                    size_hint_y: 0.43
+                    padding: 5
+                    spacing: 5
 
                     RunBox:
                         size_hint_x: 0.25
@@ -139,50 +144,48 @@
 
                 StackLayout:
                     orientation: 'lr-tb'
+                    size_hint_x: 0.5
 
-                    StackLayout:
-                        orientation: 'lr-tb'
-                        size_hint_x: 0.5
+                    Label:
+                        text: "PUSHER"
+                        font_name: 'NanumGothic'
+                        bold: True
+                        size_hint_y: 0.4
+                        canvas.before:
+                            Color:
+                                rgba: 0, 0, 1, 1
+                            Rectangle:
+                                pos: self.pos
+                                size: self.size
 
-                        Label:
-                            text: "PUSHER"
+                    GridLayout:
+                        cols: 4
+                        padding: 5
+                        spacing: 5
+
+                        Button:
+                            text: "위치(1)"
                             font_name: 'NanumGothic'
                             bold: True
-                            size_hint_y: 0.4
-                            canvas.before:
-                                Color:
-                                    rgba: 0, 0, 1, 1
-                                Rectangle:
-                                    pos: self.pos
-                                    size: self.size
+                            on_press: root.on_first_size()
 
-                        GridLayout:
-                            cols: 4
-                            padding: 5
+                        Button:
+                            text: "위치(2)"
+                            font_name: 'NanumGothic'
+                            bold: True
+                            on_press: root.on_second_size()
 
-                            Button:
-                                text: "위치(1)"
-                                font_name: 'NanumGothic'
-                                bold: True
-                                on_press: root.on_first_size()
+                        Button:
+                            text: "위치(3)"
+                            font_name: 'NanumGothic'
+                            bold: True
+                            on_press: root.on_third_size()
 
-                            Button:
-                                text: "위치(2)"
-                                font_name: 'NanumGothic'
-                                bold: True
-                                on_press: root.on_second_size()
-
-                            Button:
-                                text: "위치(3)"
-                                font_name: 'NanumGothic'
-                                bold: True
-                                on_press: root.on_third_size()
-
-                            Button:
-                                text: "위치(4)"
-                                font_name: 'NanumGothic'
-                                bold: True
-                                on_press: root.on_fourth_size()
+                        Button:
+                            text: "위치(4)"
+                            font_name: 'NanumGothic'
+                            bold: True
+                            on_press: root.on_fourth_size()
 
             # CONVEYOR PART
             BoxLayout:
