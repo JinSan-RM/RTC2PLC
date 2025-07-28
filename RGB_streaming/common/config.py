@@ -1,8 +1,13 @@
 import json
 import os
 
+capture_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "capture\\")
+
 APP_NAME = "RGB 카메라 뷰어"
-WINDOW_SIZE = "1600x900"
+WINDOW_WIDTH = 1600
+WINDOW_HEIGHT = 900
+THUMBNAIL_WIDTH = 400
+THUMBNAIL_HEIGHT = 300
 FPS_VALUE = 60
 
 IMG_FORMAT = {
@@ -11,7 +16,7 @@ IMG_FORMAT = {
 }
 
 JSON_CONFIG = {
-    "SAVE_PATH": os.path.join(os.path.dirname(__file__), "../"),
+    "SAVE_PATH": capture_dir,
     "SAVE_FORMAT": "png"
 }
 

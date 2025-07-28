@@ -2,7 +2,6 @@ import tkinter as tk
 
 from ui.mainui import MainUI
 from cammanager.cammanager import CamManager
-
 from common.config import load_config, save_config
 
 class App():

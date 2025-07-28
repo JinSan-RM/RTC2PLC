@@ -1,5 +1,8 @@
 import cv2
-from datetime import datetime
+
+import os
+
+from common.utils import generate_next_filename
 
 class CamManager:
     is_error = False
@@ -15,20 +18,28 @@ class CamManager:
     def read_cam(self):
         ret, frame = self.cam.read()
         if ret:
-            return frame
+            frame2 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            return frame, frame2
         
-        return None
+        return None, None
     
     def capture_img(self, img, img_format):
         save_path = self.app.config_data["SAVE_PATH"]
-        if save_path[-1] != "/":
-            save_path += "/"
+        if save_path[-1] != "\\":
+            save_path += "\\"
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_name = f"RGB_capture_{timestamp}.{img_format}"
+        os.makedirs(save_path, exist_ok=True)
+
+        # 폴더명_000000.확장자명 으로 파일 생성할 것
+        base_name = os.path.basename(os.path.normpath(save_path))
+        file_name = generate_next_filename(save_path, f"{base_name}_", f".{img_format}")
         save_path += file_name
 
-        cv2.imwrite(save_path, img)
+        try:
+            cv2.imwrite(save_path, img)
+            return True, file_name
+        except Exception as e:
+            return False, e
     
     def quit(self):
         self.cam.release()
