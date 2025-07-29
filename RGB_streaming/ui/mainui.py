@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog, font
 from PIL import Image, ImageTk
 
 import os
+from pathlib import Path
 from typing import Optional
 
 from cammanager.cammanager import CamManager
@@ -52,6 +53,8 @@ class MainUI:
         self.thumbnail_id = None
         mgmt_frame = ttk.Frame(main_frame)
         mgmt_frame.place(relx=0.75, relwidth=0.25, relheight=0.85)
+        self.canvas_thumbnail = tk.Canvas(mgmt_frame)
+        self.canvas_thumbnail.pack(fill=tk.BOTH, expand=True)
         listbox_frame = ttk.Frame(mgmt_frame)
         listbox_frame.pack(fill=tk.BOTH, expand=True)
         scrollbar = ttk.Scrollbar(listbox_frame)
@@ -60,11 +63,13 @@ class MainUI:
         self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.listbox.bind("<<ListboxSelect>>", self.show_thumbnail)
         scrollbar.config(command=self.listbox.yview)
-        self.canvas_thumbnail = tk.Canvas(mgmt_frame)
-        self.canvas_thumbnail.pack(fill=tk.BOTH, expand=True)
         btn_delete = ttk.Button(mgmt_frame, text="삭제", style="Btn.TButton", command=self.delete_selected)
         btn_delete.pack(pady=5)
         self.update_file_list()
+
+        self.listbox.selection_set(tk.END)
+        self.listbox.see(tk.END)
+        self.show_thumbnail(None)
 
         self.btn_frame = ttk.Frame(main_frame)
         self.btn_frame.pack(side=tk.BOTTOM, fill=tk.X)
@@ -179,7 +184,7 @@ class MainUI:
         selection = self.listbox.curselection()
         if selection:
             filename = self.listbox.get(selection[0])
-            filepath = os.path.join(self.app.config_data["SAVE_PATH"], filename)
+            filepath = Path(self.app.config_data["SAVE_PATH"]).joinpath(filename)
             try:
                 if self.thumbnail_id:
                     self.canvas_thumbnail.delete(self.thumbnail_id)
@@ -201,17 +206,20 @@ class MainUI:
                 self.thumbnail_id = self.canvas_thumbnail.create_image(x, y, image=self.photo_thumbnail, anchor=tk.NW)
             except Exception as e:
                 messagebox.showerror("Error", f"이미지를 불러올 수 없습니다: [{e}]")
+        else:
+            self.canvas_thumbnail.create_rectangle(2, 2, THUMBNAIL_WIDTH - 8, THUMBNAIL_HEIGHT - 3, outline="black", width=1)
 
     def delete_selected(self):
         selection = self.listbox.curselection()
         if selection:
             filename = self.listbox.get(selection[0])
-            filepath = os.path.join(self.app.config_data["SAVE_PATH"], filename)
+            filepath = Path(self.app.config_data["SAVE_PATH"]).joinpath(filename)
             if messagebox.askyesno("Confirm", f"[{filename}] 파일을 삭제하시겠습니까?"):
                 try:
                     os.remove(filepath)
                     self.update_file_list()
                     self.canvas_thumbnail.delete(self.thumbnail_id)
+                    self.show_thumbnail(None)
                     messagebox.showinfo("Success", f"[{filename}] 파일을 삭제했습니다.")
                 except Exception as e:
                     messagebox.showerror("Error", f"파일을 삭제할 수 없습니다: [{e}]")

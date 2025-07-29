@@ -2,7 +2,7 @@ import cv2
 
 import os
 
-from common.utils import generate_next_filename
+from common.utils import generate_next_filename, get_basename
 
 class CamManager:
     is_error = False
@@ -31,7 +31,7 @@ class CamManager:
         os.makedirs(save_path, exist_ok=True)
 
         # 폴더명_000000.확장자명 으로 파일 생성할 것
-        base_name = os.path.basename(os.path.normpath(save_path))
+        base_name = get_basename(save_path)
         file_name = generate_next_filename(save_path, f"{base_name}_", f".{img_format}")
         save_path += file_name
 

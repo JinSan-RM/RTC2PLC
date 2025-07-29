@@ -1,24 +1,29 @@
 import os
 import re
+from pathlib import Path
 
 from PIL import Image
 
 """
     경로를 스마트하게 줄여서 표시
+    우선순위: 드라이브 + ... + 중요한 폴더들 + 현재 폴더
 
     Parameters:
         path_text (str): 변환할 경로 텍스트
         max_chars (int): 이 길이를 넘으면 변환
 
-    우선순위: 드라이브 + ... + 중요한 폴더들 + 현재 폴더
+    Returns:
+        str: 축약된 경로 텍스트
 """
 def smart_path_display(path_text, max_chars = 40):
     if len(path_text) <= max_chars:
         return path_text
 
     # 경로를 분할
-    drive, path_without_drive = os.path.splitdrive(path_text)
-    parts = path_without_drive.strip(os.sep).split(os.sep)
+    path = Path(path_text)
+    parts = path.parts
+    drive = parts[0]
+    parts = parts[1:]
 
     if len(parts) <= 2:
         return path_text
@@ -93,7 +98,6 @@ def get_highest_file_number(folder_path, file_prefix="file_", file_extension=".t
         str: 다음 파일 이름 (예: file_003.txt)
 """
 def generate_next_filename(folder_path, file_prefix="file_", file_extension=".txt"):
-    
     highest_number = get_highest_file_number(folder_path, file_prefix, file_extension)
     next_number = highest_number + 1
     return f"{file_prefix}{next_number:06d}{file_extension}"
@@ -119,3 +123,21 @@ def resize_image_proportional(image, max_width, max_height):
 
     # resize 사용 (원본 보존)
     return image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+"""
+    최하위 폴더명을 반환
+
+    Parameters:
+        image (Image): Pillow Image
+        max_width (int): 변경할 최대 너비
+        max_height (int): 변경할 최대 높이
+
+    Returns:
+        str: 최하위 폴더명
+"""
+def get_basename(path_text):
+    path = Path(path_text)
+    if path.is_file():
+        return path.parent
+    else:
+        return path.name
