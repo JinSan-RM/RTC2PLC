@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 
 from ui.mainui import MainUI
 from cammanager.cammanager import CamManager
@@ -9,6 +10,12 @@ class App():
         self.config_data = load_config()
         self.root = tk.Tk()
         self.cammanager = CamManager(self)
+
+        if self.cammanager.is_error:
+            messagebox.showerror("Camera Error", "Failed to initialize Basler camera. Check IP and network settings.")
+            self.root.quit()
+            return
+
         self.ui = MainUI(self, self.root, self.cammanager)
 
     def run(self):
