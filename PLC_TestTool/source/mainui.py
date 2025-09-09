@@ -19,7 +19,7 @@ class MainUI:
 
     def setup_ui(self):
         self.root.title("PLC 동작 테스터")
-        self.root.geometry("1000x250")
+        self.root.geometry("1000x350")
 
         frame_bg = tk.Frame(self.root, padx=20, pady=20)
         frame_bg.pack(fill=tk.BOTH, expand=True)
