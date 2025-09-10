@@ -52,16 +52,22 @@ TIME_CONFIG = {
 
 MODBUS_RTU_CONFIG = {
     "slave_ids": {
-        "inverter_001": 1,
-        "inverter_002": 2,
-        "inverter_003": 3,
-        "inverter_004": 4,
-        "inverter_005": 5,
-        "inverter_006": 6,
-        "inverter_007": 7,
-        "inverter_008": 8,
-        "inverter_009": 9,
-        "inverter_010": 10
+        "inverter_001": 4,
+        "inverter_002": 17,
+        "inverter_003": 22,
+        "inverter_004": 5,
+        "inverter_005": 6,
+        "inverter_006": 13,
+        "inverter_007": 19,
+        "inverter_008": 21,
+        "inverter_009": 20,
+        "inverter_010": 16,
+        "inverter_011": 12,
+        "inverter_012": 24,
+        "inverter_013": 23,
+        "inverter_014": 18,
+        "inverter_015": 15,
+        "inverter_016": 14,
     },
     "port": "dev/ttyAMA0",
     "baudrate": 9600,
@@ -107,6 +113,10 @@ ETHERNET_IP_CONFIG = {
     "loop_interval": 0.1,
     "input_instance": 111,
     "output_instance": 101
+}
+
+EHTERCAT_CONFIG = {
+    "if_name": "input network adapters ID here",
 }
 
 def load_config():

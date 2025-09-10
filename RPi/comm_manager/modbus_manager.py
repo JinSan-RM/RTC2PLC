@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Callable
 
 from .comm_manager_base import CommManagerBase
 
-from common.consts import CommType, COMM_MODE
+from common.consts import MODBUS_TYPE
 from common.utils import Message, IOResult, EventManager
 
 class ModbusManager(CommManagerBase):
@@ -25,50 +25,45 @@ class ModbusManager(CommManagerBase):
 
     async def _connect_impl(self) -> bool:
         try:
-            match COMM_MODE:
-                case CommType.MODBUS_RTU:
-                    self.client = ModbusSerialClient(
-                        method = self.config['mode'],
+            if MODBUS_TYPE == "RTU":
+                self.client = ModbusSerialClient(
+                    method = self.config['mode'],
+                    port = self.config['port'],
+                    baudrate = self.config['baudrate'],
+                    bytesize = self.config['bytesize'],
+                    parity = self.config['parity'],
+                    stopbits = self.config['stopbits'],
+                    timeout = self.config['timeout']
+                )
+
+                self.slave_ids = {}
+                for name, id in self.config['slave_ids'].items():
+                    self.slave_ids[name] = id
+
+            elif MODBUS_TYPE == "TCP":
+                self.clients: Dict[str, ModbusTcpClient] = {}
+                for name, ip in self.config['hosts'].items():
+                    self.clients[name] = ModbusTcpClient(
+                        host = ip,
                         port = self.config['port'],
-                        baudrate = self.config['baudrate'],
-                        bytesize = self.config['bytesize'],
-                        parity = self.config['parity'],
-                        stopbits = self.config['stopbits'],
                         timeout = self.config['timeout']
                     )
-
-                    self.slave_ids = {}
-                    for name, id in self.config['slave_ids'].items():
-                        self.slave_ids[name] = id
-
-                case CommType.MODBUS_TCP:
-                    self.clients: Dict[str, ModbusTcpClient] = {}
-                    for name, ip in self.config['hosts'].items():
-                        self.clients[name] = ModbusTcpClient(
-                            host = ip,
-                            port = self.config['port'],
-                            timeout = self.config['timeout']
-                        )
-
-                case _:
-                    raise ValueError(f"[{COMM_MODE.name}] is not Modbus Communication")
         except Exception as e:
             self.logger.error(f"Modbus connection error: {e}")
             return False
 
     async def _disconnect_impl(self) -> bool:
         try:
-            match COMM_MODE:
-                case CommType.MODBUS_RTU:
-                    self.client.close()
-                    self.client = None
-                case CommType.MODBUS_TCP:
-                    for _, client in self.clients.items():
-                        client.close()
-                    self.clients.clear()
+            if MODBUS_TYPE == "RTU":
+                self.client.close()
+                self.client = None
+            elif MODBUS_TYPE == "TCP":
+                for _, client in self.clients.items():
+                    client.close()
+                self.clients.clear()
             return True
         except Exception as e:
-            self.logger.error(f"Modbus diconnection error: {e}")
+            self.logger.error(f"Modbus disconnection error: {e}")
             return False
 
     async def _read_impl(self, target_info: Any, **kwargs) -> IOResult:
@@ -93,11 +88,11 @@ class ModbusManager(CommManagerBase):
             kwargs: task_func에 전달할 키워드 변수
     """
     def reserve_task(self, host_name: str, task_func: Callable[..., Any], *args: Any, **kwargs: Any) -> bool:
-        if COMM_MODE is CommType.MODBUS_RTU:
+        if MODBUS_TYPE == "RTU":
             if host_name not in self.slave_ids:
                 self.logger.error(f"can't find slave: {host_name}")
                 return False
-        elif COMM_MODE is CommType.MODBUS_TCP:
+        elif MODBUS_TYPE == "TCP":
             if host_name not in self.clients:
                 self.logger.error(f"can't find host: {host_name}")
                 return False
@@ -128,7 +123,7 @@ class ModbusManager(CommManagerBase):
     """
     def read_holding_register(self, host_name: str, register_address: int) -> Optional[float]:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return False
@@ -136,7 +131,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.read_holding_registers(register_address, count=1, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return False
@@ -169,7 +164,7 @@ class ModbusManager(CommManagerBase):
     """
     def write_holding_register(self, host_name: str, register_address: int, value: int) -> bool:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return False
@@ -177,7 +172,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.write_register(register_address, value, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return False
@@ -208,7 +203,7 @@ class ModbusManager(CommManagerBase):
     """
     def read_multiple_registers(self, host_name: str, start_address: int, count: int) -> Optional[List[int]]:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return None
@@ -216,7 +211,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.read_holding_registers(start_address, count=count, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return None
@@ -249,7 +244,7 @@ class ModbusManager(CommManagerBase):
     """
     def write_multiple_registers(self, host_name: str, start_address: int, values: List[int]) -> bool:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return False
@@ -257,7 +252,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.write_registers(start_address, values, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return False
@@ -287,7 +282,7 @@ class ModbusManager(CommManagerBase):
     """
     def read_bit(self, host_name: str, register_address: int) -> Optional[int]:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return False
@@ -295,7 +290,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.read_coils(register_address, count=1, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return False
@@ -328,7 +323,7 @@ class ModbusManager(CommManagerBase):
     """
     def write_coil(self, host_name: str, register_address: int, value: bool) -> bool:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return False
@@ -336,7 +331,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.write_coil(register_address, value, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return False
@@ -367,7 +362,7 @@ class ModbusManager(CommManagerBase):
     """
     def read_multiple_bits(self, host_name: str, start_address: int, count: int) -> Optional[List[int]]:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return False
@@ -375,7 +370,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.read_coils(start_address, count=count, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return False
@@ -408,7 +403,7 @@ class ModbusManager(CommManagerBase):
     """
     def write_multiple_coils(self, host_name: str, start_address: int, values: List[bool]) -> bool:
         try:
-            if COMM_MODE is CommType.MODBUS_RTU:
+            if MODBUS_TYPE == "RTU":
                 if host_name not in self.slave_ids:
                     self.logger.error(f"can't find slave: {host_name}")
                     return False
@@ -416,7 +411,7 @@ class ModbusManager(CommManagerBase):
                 slave_id = self.slave_ids[host_name]
                 ret = self.client.write_coils(start_address, values, device_id=slave_id)
 
-            elif COMM_MODE is CommType.MODBUS_TCP:
+            elif MODBUS_TYPE == "TCP":
                 if host_name not in self.clients:
                     self.logger.error(f"can't find host: {host_name}")
                     return False

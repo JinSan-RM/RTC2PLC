@@ -16,16 +16,19 @@ class MessageType(Enum):
     COMM_OUTPUT = "comm_output"
     EMERGENCY_STOP = "emergency_stop"
 
-class CommType(Enum):
-    MODBUS_RTU = auto()
-    MODBUS_TCP = auto()
-    ETHERNET_IP = auto()
-
 class ConnectionStatus(Enum):
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     CONNECTED = "connected"
     ERROR = "error"
+
+class LSDataType(Enum):
+    BIT = 0x00      # X
+    BYTE = 0x01     # B
+    WORD = 0x02     # W
+    DWORD = 0x03    # D
+    LWORD = 0x04    # L
+    BLOCK = 0x14
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 USE_SLAVE = False
@@ -35,8 +38,11 @@ TCP_HOST = "0.0.0.0"
 TCP_PORT = 8999
 SLAVE_IP = "192.168.0.21" # slave rpi의 ip주소. 이거 별도의 설정 파일에서 조정 가능하던지 아니면 다른 방법을 강구해야 한다.
 
-COMM_MODE = CommType.MODBUS_RTU
+USE_MODBUS = True
+MODBUS_TYPE = "RTU"
+MODBUS_DEF = {}
 
+USE_ETHERNET_IP = False
 ETHERNET_IP_DEF = {
     'Implicit': {
         'Input': [
@@ -618,4 +624,9 @@ ETHERNET_IP_DEF = {
         'Cooling fan fault': 0x7000,
         'External fault/Instant cut off': 0x9000
     }
+}
+
+USE_ETHERCAT = True
+ETHERCAT_DEF = {
+    
 }

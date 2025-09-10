@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .comm_manager_base import CommManagerBase
 
 from common.consts import ETHERNET_IP_DEF
-from common.utils import Message, IOResult, EventManager, read_bit_mask, read_little_endian, find_dict
+from common.utils import Message, IOResult, EventManager, read_bit_mask_binary, read_little_endian, find_dict
 
 class EthernetIPManager(CommManagerBase):
     def __init__(self, event_manager: EventManager, config: Dict):
@@ -42,7 +42,7 @@ class EthernetIPManager(CommManagerBase):
             self.clients.clear()
             return True
         except Exception as e:
-            self.logger.error(f"EtherNet/IP diconnection error: {e}")
+            self.logger.error(f"EtherNet/IP disconnection error: {e}")
             return False
 
     async def _read_impl(self, target_info: Any, **kwargs) -> IOResult:
@@ -136,7 +136,7 @@ class EthernetIPManager(CommManagerBase):
             ind = i * 2 + 8 # EEIPClient API에 따르면 인덱스 8부터 input 데이터 첫 바이트가 시작됨
             if d == "Mask":
                 mask = self.implicit_input_def["Mask"]
-                status_dict = read_bit_mask(client.t_o_iodata[ind], mask)
+                status_dict = read_bit_mask_binary(client.t_o_iodata[ind], mask)
                 ret["Status"] = status_dict
             elif isinstance(d, str):
                 int_val = read_little_endian(client.t_o_iodata[ind:ind + 1])

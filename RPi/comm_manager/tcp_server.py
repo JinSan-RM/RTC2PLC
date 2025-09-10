@@ -6,6 +6,8 @@ import time
 import logging
 from typing import Optional, Callable
 
+from common.utils import parse_FEnet_packet
+
 class TCPServer(threading.Thread):
     _instance = None
     _lock = threading.Lock()
@@ -121,7 +123,7 @@ class TCPServer(threading.Thread):
         except socket.timeout:
             pass # 정상적인 타임아웃
 
-    # 메시지 전송 (스레드 안전)
+    # 메시지 전송
     def send_message(self, message: bytes) -> bool:
         if not self._connected:
             return False
