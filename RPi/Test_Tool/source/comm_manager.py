@@ -49,6 +49,23 @@ class CommManager:
                 timeout=0.5
             )
             self.modbus_client.connect()
+
+    def stop(self):
+        for pin, mode in self.pin_initialized:
+            try:
+                if mode == PinRole.OUTPUT:
+                    lgpio.gpio_write(self.gpio_handle, pin, 0)
+                lgpio.gpio_free(self.gpio_handle, pin)
+            except Exception as e:
+                self.logger.error(f"GPIO {pin} free error: {e}")
+
+        self.pin_initialized.clear()
+        lgpio.gpiochip_close(self.gpio_handle)
+
+        # self.ethercat_master.close()
+
+        self.modbus_client.close()
+        self.modbus_client = None
     
     # ============= GPIO =============
     def _get_gpio(self):

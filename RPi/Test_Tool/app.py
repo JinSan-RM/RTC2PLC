@@ -8,8 +8,6 @@ class App():
     def __init__(self):
         self.root = tk.Tk()
         self.comm_manager = CommManager(self)
-        self.comm_manager.start()
-
         self.ui = MainUI(self, self.root, self.comm_manager)
 
     def run(self):
