@@ -2,10 +2,10 @@ import socket
 import threading
 import time
 from queue import Queue, Empty
-from typing import Dict, Callable
+from typing import Dict, Callable, Optional
 
 from .consts import LSDataType
-from .utils import get_variable_name, create_write_packet
+from .utils import get_variable_name, create_write_packet, create_bit_packet
 
 class CommManager:
     _instance = None
@@ -85,13 +85,15 @@ class CommManager:
         self._connected = False
         print("PLC 연결이 종료되었습니다.")
 
-    def send_command_async(self, num: int, callback: Callable):
+    def send_command_async(self, address: int, var_type: LSDataType, value: Optional[int], callback: Callable):
         if not self._connected:
             return None
 
         req_data = {
-            'num': num,
-            'callback': callback,
+            'address': address,
+            'type': var_type,
+            'value': value,
+            'callback': callback
         }
 
         self.send_queue.put(req_data)
@@ -99,17 +101,25 @@ class CommManager:
     def _handle_sending(self):
         try:
             req_data = self.send_queue.get_nowait()
-            num = req_data['num']
+            address = req_data['address']
+            var_type = req_data['type']
+            value: Optional[int] = req_data['value']
             callback = req_data['callback']
 
-            data_dict = {}
-            var_name = get_variable_name("P", LSDataType.WORD, num)
-            data_dict[var_name] = b'\x01\x00'
+            if var_type == LSDataType.BIT:
+                packet = create_bit_packet(address, value)
+            else:
+                data_dict = {}
+                var_name = get_variable_name("P", var_type, address)
+                if value is not None:
+                    data_dict[var_name] = value.to_bytes(2, byteorder='little')
+                packet = create_write_packet(data_dict, var_type)
 
-            packet = create_write_packet(data_dict, LSDataType.WORD)
             ret, response = self.send_write_packet(packet)
             if ret and callback:
                 callback(ret)
+            else:
+                print(f"패킷 오류: {response}")
         except Empty:
             pass
         except Exception as e:
