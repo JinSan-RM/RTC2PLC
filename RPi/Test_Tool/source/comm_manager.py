@@ -103,14 +103,14 @@ class CommManager:
         threading.Thread(target=_task, daemon=True).start()
 
     # ============= EtherCAT =============
-    def write_CoE(self, index, sub_index, value):
-        device = self.ethercat_slaves[0]
-        device.sdo_write(index, sub_index, value)
+    # def write_CoE(self, index, sub_index, value):
+    #     device = self.ethercat_slaves[0]
+    #     device.sdo_write(index, sub_index, value)
 
 
-    def ethercat_test(self):
-        for device in self.ethercat_slaves:
-            print(device.name)
+    # def ethercat_test(self):
+    #     for device in self.ethercat_slaves:
+    #         print(device.name)
 
     # ============= Modbus =============
     def write_holding_register(self, register_address: int, value: int) -> bool:
