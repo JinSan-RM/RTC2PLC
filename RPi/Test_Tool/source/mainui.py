@@ -57,7 +57,8 @@ class MainUI:
         self.comm_manager.gpio_test()
 
     def ethercat_clicked(self):
-        self.comm_manager.ethercat_test()
+        # self.comm_manager.ethercat_test()
+        pass
 
     def modbus_clicked(self):
         self.comm_manager.modbus_test()

@@ -1,15 +1,11 @@
-import asyncio
 import time
 import threading
-from collections import deque
-from queue import Queue, Empty
-from typing import Dict, Callable
 
 import lgpio
 import pysoem
-from pymodbus.client import ModbusSerialClient, ModbusTcpClient
+from pymodbus.client import ModbusSerialClient
 
-from .consts import Priority, PinRole
+from .consts import PinRole
 
 class CommManager:
     _instance = None
@@ -35,6 +31,16 @@ class CommManager:
             # self.ethercat_master = pysoem.Master()
             # self.ethercat_master.open("eth1")
             # if self.ethercat_master.config_init() > 0:
+            #     self.ethercat_master.config_map()
+
+            #     self.ethercat_master.state = pysoem.SAFEOP_STATE
+            #     self.ethercat_master.write_state()
+            #     self.ethercat_master.state_check(pysoem.SAFEOP_STATE)
+
+            #     self.ethercat_master.state = pysoem.OP_STATE
+            #     self.ethercat_master.write_state()
+            #     self.ethercat_master.state_check(pysoem.OP_STATE)
+
             #     self.ethercat_slaves = []
             #     for slave in self.master.slaves:
             #         self.ethercat_slaves.append(slave)
@@ -103,14 +109,14 @@ class CommManager:
         threading.Thread(target=_task, daemon=True).start()
 
     # ============= EtherCAT =============
-    def write_CoE(self, index, sub_index, value):
-        device = self.ethercat_slaves[0]
-        device.sdo_write(index, sub_index, value)
+    # def write_CoE(self, index, sub_index, value):
+    #     device = self.ethercat_slaves[0]
+    #     device.sdo_write(index, sub_index, value)
 
 
-    def ethercat_test(self):
-        for device in self.ethercat_slaves:
-            print(device.name)
+    # def ethercat_test(self):
+    #     for device in self.ethercat_slaves:
+    #         print(device.name)
 
     # ============= Modbus =============
     def write_holding_register(self, register_address: int, value: int) -> bool:
