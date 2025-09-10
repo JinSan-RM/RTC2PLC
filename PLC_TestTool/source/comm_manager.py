@@ -1,7 +1,6 @@
 import socket
 import threading
 import time
-import uuid
 from queue import Queue, Empty
 from typing import Dict, Callable
 
@@ -90,17 +89,12 @@ class CommManager:
         if not self._connected:
             return None
 
-        req_id = str(uuid.uuid4())
         req_data = {
-            'id': req_id,
             'num': num,
             'callback': callback,
-            'timestamp': time.time()
         }
 
         self.send_queue.put(req_data)
-
-        return req_id
 
     def _handle_sending(self):
         try:
@@ -110,7 +104,7 @@ class CommManager:
 
             data_dict = {}
             var_name = get_variable_name("P", LSDataType.WORD, num)
-            data_dict[var_name] = 1
+            data_dict[var_name] = b'\x01\x00'
 
             packet = create_write_packet(data_dict, LSDataType.WORD)
             ret, response = self.send_write_packet(packet)
@@ -119,7 +113,7 @@ class CommManager:
         except Empty:
             pass
         except Exception as e:
-            print(f"❌ 통신 오류: {e}")
+            print(f"❌ 통신 오류 1: {e}")
             raise
 
     def send_write_packet(self, packet: bytearray):
@@ -142,6 +136,6 @@ class CommManager:
                 print("❌ 응답이 충분하지 않음")
                 return False, response
         except Exception as e:
-            print(f"❌ 통신 오류: {e}")
+            print(f"❌ 통신 오류 2: {e}")
             self._connected = False
             return False, None

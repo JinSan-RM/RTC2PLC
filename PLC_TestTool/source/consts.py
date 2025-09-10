@@ -8,5 +8,13 @@ class LSDataType(Enum):
     LWORD = 0x04    # L
     BLOCK = 0x14
 
-HOST_IP = "0.0.0.0"
+DATA_TYPE_INITIAL = {
+    LSDataType.BIT: "X",
+    LSDataType.BYTE: "B",
+    LSDataType.WORD: "W",
+    LSDataType.DWORD: "D",
+    LSDataType.LWORD: "L",
+}
+
+HOST_IP = "192.168.250.120"
 TCP_PORT = 2004

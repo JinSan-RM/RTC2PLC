@@ -9,7 +9,7 @@ class App():
     def __init__(self):
         self.root = tk.Tk()
         self.comm_manager = CommManager(self, HOST_IP, TCP_PORT)
-        # self.comm_manager.start()
+        self.comm_manager.start()
 
         self.ui = MainUI(self, self.root, self.comm_manager)
 

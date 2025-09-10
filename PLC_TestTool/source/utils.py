@@ -1,23 +1,23 @@
 import struct
 from typing import Dict
 
-from .consts import LSDataType
+from .consts import LSDataType, DATA_TYPE_INITIAL
 
 def get_variable_name(device_type: str, data_type: LSDataType, index: int):
-    return f"%{device_type}{data_type}{index:X}"
+    return f"%{device_type}{DATA_TYPE_INITIAL[data_type]}{index:X}".encode('ascii')
 
 def _get_packet_body_size(data_dict: Dict[str, bytes], data_type: LSDataType):
     count = len(data_dict)      # 변수 개수
-    if data_type is LSDataType.BLOCK:   # 데이터 타입이 Block인 경우 연속 쓰기이며, 이 때엔 변수 개수를 0x0001로만 사용 가능
+    if data_type == LSDataType.BLOCK:   # 데이터 타입이 Block인 경우 연속 쓰기이며, 이 때엔 변수 개수를 0x0001로만 사용 가능
         count = 1
 
-    if data_type is LSDataType.BIT or data_type is LSDataType.BYTE:
+    if data_type == LSDataType.BIT or data_type == LSDataType.BYTE:
         data_size = 1
-    elif data_type is LSDataType.WORD or data_type is LSDataType.BLOCK:
+    elif data_type == LSDataType.WORD or data_type == LSDataType.BLOCK:
         data_size = 2
-    elif data_type is LSDataType.DWORD:
+    elif data_type == LSDataType.DWORD:
         data_size = 4
-    elif data_type is LSDataType.LWORD:
+    elif data_type == LSDataType.LWORD:
         data_size = 8
 
     body_size = ((data_size + 2) * count) + 8
@@ -50,12 +50,12 @@ def create_write_packet(data_dict: Dict[str, bytes], data_type: LSDataType):
     packet.extend(struct.pack('<H', count))
 
     for var_name in data_dict:  # 변수 이름 길이 + 변수 이름 쌍
-        packet.extend(struct.pack('<H', len(var_name)))
+        packet.extend(bytes([len(var_name), 0x00]))
         packet.extend(var_name)
 
     for data_bytes in data_dict.values():   # 변수 타입별 사이즈 + 실제 변수 값 쌍
-        packet.extend(struct.pack('<H', data_size))
+        packet.extend(bytes([data_size, 0x00]))
         packet.extend(data_bytes)
     """ 바디 끝 """
-    
+
     return packet
