@@ -32,22 +32,21 @@ class CommManager:
             self.pin_initialized = set()
 
             # EtherCAT
-            self.ethercat_master = pysoem.Master()
-            self.ethercat_master.open("eth1")
-            if self.ethercat_master.config_init() > 0:
-                self.ethercat_slaves = []
-                for slave in self.master.slaves:
-                    self.ethercat_slaves.append(slave)
+            # self.ethercat_master = pysoem.Master()
+            # self.ethercat_master.open("eth1")
+            # if self.ethercat_master.config_init() > 0:
+            #     self.ethercat_slaves = []
+            #     for slave in self.master.slaves:
+            #         self.ethercat_slaves.append(slave)
 
             # Modbus-RTU
             self.modbus_client = ModbusSerialClient(
-                method = 'rtu',
-                port = 'dev/ttyAMA0',
-                baudrate = 9600,
-                bytesize = 8,
-                parity = 'N',
-                stopbits = 1,
-                timeout = 0.5
+                port='/dev/ttyUSB0',
+                baudrate=19200,
+                bytesize=8,
+                parity='N',
+                stopbits=1,
+                timeout=0.5
             )
             self.modbus_client.connect()
     

@@ -33,6 +33,7 @@ class MainUI:
                              width=12, height=2,
                              font=("Arial", 10),
                              command=self.gpio_clicked())
+        btn_gpio.pack(fill=tk.X)
         
         frame_ethercat = tk.Frame(frame_bg)
         frame_ethercat.pack(expand=True)
@@ -41,6 +42,7 @@ class MainUI:
                                  width=12, height=2,
                                  font=("Arial", 10),
                                  command=self.ethercat_clicked())
+        btn_ethercat.pack(fill=tk.X)
         
         frame_modbus = tk.Frame(frame_bg)
         frame_modbus.pack(expand=True)
@@ -49,9 +51,13 @@ class MainUI:
                                width=12, height=2,
                                font=("Arial", 10),
                                command=self.modbus_clicked())
-
-        self.label_status = tk.Label(frame_bg, text="테스트 대기 중...", font=("Arial", 12))
-        self.label_status.pack(pady=(20, 0))
+        btn_modbus.pack(fill=tk.X)
 
     def gpio_clicked(self):
         self.comm_manager.gpio_test()
+
+    def ethercat_clicked(self):
+        self.comm_manager.ethercat_test()
+
+    def modbus_clicked(self):
+        self.comm_manager.modbus_test()
