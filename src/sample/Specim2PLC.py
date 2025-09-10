@@ -121,7 +121,6 @@ def listen_for_events(plc_controller):
         5: "PC",
         6: "Background"
     }
-    
     # 플라스틱 타입 매핑
     PLASTIC_MAPPING = {
         "PET Bottle": "PET",

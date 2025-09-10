@@ -5,10 +5,10 @@ import logging
 import threading
 import struct
 
-from src.plc.PLCController import XGTController
-from src.rtc.CAMController import CAMController
-from src.rtc.breeze import BreezeController
-from src.config import conf
+from plc.PLCController import XGTController
+from rtc.CAMController import CAMController
+from rtc.breeze import BreezeController
+from config import conf
 
 logging.basicConfig(level=logging.INFO)
 
