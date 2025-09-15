@@ -4,7 +4,7 @@ from typing import Dict, Optional
 from .consts import LSDataType, DATA_TYPE_INITIAL
 
 def get_variable_name(device_type: str, data_type: LSDataType, address: int):
-    return f"%{device_type}{DATA_TYPE_INITIAL[data_type]}{address:X}".encode('ascii')
+    return f"%{device_type}{DATA_TYPE_INITIAL[data_type]}{address:d}".encode('ascii')
 
 def _get_packet_body_size(data_dict: Dict[str, bytes], data_type: LSDataType):
     count = len(data_dict)      # 변수 개수

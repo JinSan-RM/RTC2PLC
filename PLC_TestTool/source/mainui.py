@@ -1,9 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, font
-from PIL import Image, ImageTk
+from tkinter import scrolledtext
 
-import os
-from pathlib import Path
 from typing import Optional
 
 from .comm_manager import CommManager
@@ -53,8 +50,17 @@ class MainUI:
 
         self.label_status = tk.Label(frame_bg, text="테스트 대기 중...", font=("Arial", 12))
         self.label_status.pack(pady=(20, 0))
+        self.log_text = scrolledtext.ScrolledText(
+            frame_bg,
+            wrap=tk.WORD,
+            state='disabled',
+            height=30,
+            font=('Consolas', 9)
+        )
+        self.log_text.pack(fill=tk.BOTH, expand=True)
 
     def btn_clicked(self, name: str, address: int, var_type: LSDataType, val: Optional[int]):
+        self.add_log(f"{name} clicked")
         self.comm_manager.send_command_async(address, var_type, val, lambda ret, name=name: self.on_plc_response(name, ret))
 
     def on_plc_response(self, name: str, ret):
@@ -63,5 +69,15 @@ class MainUI:
     def _update_after_response(self, name: str, ret):
         if ret:
             self.label_status.config(text=f"{name} 성공")
+            self.add_log(f"{name} 성공")
         else:
             self.label_status.config(text=f"{name} 실패")
+            self.add_log(f"{name} 실패")
+
+    def add_log(self, txt: str):
+        def _append():
+            self.log_text.config(state='normal')
+            self.log_text.insert(tk.END, txt + '\n')
+            self.log_text.see(tk.END)
+            self.log_text.config(state='disabled')
+        self.root.after(0, _append)

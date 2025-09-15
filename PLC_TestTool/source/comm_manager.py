@@ -56,10 +56,10 @@ class CommManager:
             self.sock.settimeout(self.timeout)
             self.sock.connect((self.ip, self.port))
             self._connected = True
-            print(f"✅ PLC {self.ip}:{self.port}에 연결되었습니다.")
+            self.app.ui.add_log(f"✅ PLC {self.ip}:{self.port}에 연결되었습니다.")
             return True
         except Exception as e:
-            print(f"❌ PLC 연결 실패: {str(e)}")
+            self.app.ui.add_log(f"❌ PLC 연결 실패: {str(e)}")
             self._connected = False
             return False
         
@@ -74,7 +74,7 @@ class CommManager:
                 self._handle_sending()
                 time.sleep(0.01)
             except Exception as e:
-                print(f"통신 오류: {e}")
+                self.app.ui.add_log(f"통신 오류: {e}")
                 self.disconnect()
                 time.sleep(1)
 
@@ -83,11 +83,12 @@ class CommManager:
             self.sock.close()
             self.sock = None
         self._connected = False
-        print("PLC 연결이 종료되었습니다.")
+        self.app.ui.add_log("PLC 연결이 종료되었습니다.")
 
     def send_command_async(self, address: int, var_type: LSDataType, value: Optional[int], callback: Callable):
         if not self._connected:
-            return None
+            self.app.ui.add_log("PLC에 연결이 되어 있지 않습니다.")
+            return
 
         req_data = {
             'address': address,
@@ -119,11 +120,11 @@ class CommManager:
             if ret and callback:
                 callback(ret)
             else:
-                print(f"패킷 오류: {response}")
+                self.app.ui.add_log(f"패킷 오류: {response}")
         except Empty:
             pass
         except Exception as e:
-            print(f"❌ 통신 오류 1: {e}")
+            self.app.ui.add_log(f"❌ 통신 오류 1: {e}")
             raise
 
     def send_write_packet(self, packet: bytearray):
@@ -143,9 +144,9 @@ class CommManager:
                 else:
                     return False, response
             else:
-                print("❌ 응답이 충분하지 않음")
+                self.app.ui.add_log("❌ 응답이 충분하지 않음")
                 return False, response
         except Exception as e:
-            print(f"❌ 통신 오류 2: {e}")
+            self.app.ui.add_log(f"❌ 통신 오류 2: {e}")
             self._connected = False
             return False, None
