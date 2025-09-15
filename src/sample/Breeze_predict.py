@@ -134,33 +134,45 @@ def listen_for_events(XGT, size_event=False):
 
                             shape = inner_message.get('Shape', {})
                             center, border = shape.get('Center', []), shape.get('Border', [])
-                            pos = calculate_shape_metrics(border)
-                            logging.info(f'pos data {pos}')
-                            # Event 가 발생하고 Noise를 잡기 위해서
-                            if plc_value is not None and (pos['width'] > 20 and pos['width'] < 800 ) and (pos['height'] > 20 and pos['height'] < 2000):
-                                try:
-                                    if size_event:
-                                        if pos['size_category'] == "small":
-                                            plc_value = 1  # 1번 블로우
-                                            success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
+                            
+                            # 신규 PLC 위한 부분
+                            try:
+                                sucess = XGT.write_bit_packet(address=plc_value, onoff=1)
+                                if sucess:
+                                    XGT.onoff_check(address=plc_value)
+                                    logging.info(f"PLC action successful for address P{plc_value:3X}({classification})")
+                                else:
+                                    logging.error(f"PLC action failed for address P{plc_value:3X}({classification})")
+                            except Exception as e:
+                                logging.error(f"PLC write exception: {e}")
+
+                            # pos = calculate_shape_metrics(border)
+                            # logging.info(f'pos data {pos}')
+                            # # Event 가 발생하고 Noise를 잡기 위해서
+                            # if plc_value is not None and (pos['width'] > 20 and pos['width'] < 800 ) and (pos['height'] > 20 and pos['height'] < 2000):
+                            #     try:
+                            #         if size_event:
+                            #             if pos['size_category'] == "small":
+                            #                 plc_value = 1  # 1번 블로우
+                            #                 success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
                                             
-                                        elif pos['size_category'] == "medium":
-                                            plc_value = 2  # 1번 블로우
-                                            success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
-                                        else:
-                                            plc_value = 3  # 1번 블로우
-                                            success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 2번 블로우
-                                    else:
-                                        success = XGT.XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
+                            #             elif pos['size_category'] == "medium":
+                            #                 plc_value = 2  # 1번 블로우
+                            #                 success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
+                            #             else:
+                            #                 plc_value = 3  # 1번 블로우
+                            #                 success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 2번 블로우
+                            #         else:
+                            #             success = XGT.XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
                                     
-                                    if success:
-                                        logging.info(f"PLC action successful for value {plc_value}")
-                                    else:
-                                        logging.error(f"PLC action failed for value {plc_value}")
-                                except Exception as e:
-                                    logging.error(f"PLC write exception: {e}")
-                            else:
-                                logging.info(f"Skipping PLC action for classification: {classification}")
+                            #         if success:
+                            #             logging.info(f"PLC action successful for value {plc_value}")
+                            #         else:
+                            #             logging.error(f"PLC action failed for value {plc_value}")
+                            #     except Exception as e:
+                            #         logging.error(f"PLC write exception: {e}")
+                            # else:
+                            #     logging.info(f"Skipping PLC action for classification: {classification}")
                         else:
                             logging.debug(f"event:{event} message:{inner_message}")
                     except json.JSONDecodeError:

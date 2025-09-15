@@ -235,11 +235,9 @@ class XGTTester:
         else:
             # print(f"D00000에 값 쓰기 실패!")
             return False
-    def create_bit_packet(self, address: int, onoff):
-        def _get_bit_variable_name(address: int):
-            return f"%PX{address:d}".encode('ascii')
-        
-        var_name = _get_bit_variable_name(address)
+
+    def create_bit_packet(self, address: int, onoff: Optional[bool]) -> bytearray:
+        var_name = f"%PX{address:d}".encode('ascii')
         if onoff is None:
             body_size = 10 + len(var_name)
         else:
@@ -277,3 +275,21 @@ class XGTTester:
             packet.append(onoff)
 
         return packet
+    
+    def read_bit_packet(self, address: int) -> Optional[int]:
+        packet = self.create_bit_packet(address, None)
+        ret, response = self.send_packet_to_plc(packet)
+        if ret and len(response) >= 30:
+            bit_value = response[29]
+            return bit_value
+        return None
+
+    def write_bit_packet(self, address: int, onoff) -> bool:
+        packet = self.create_bit_packet(address, onoff)
+        ret, response = self.send_packet_to_plc(packet)
+        return ret
+    
+    def onoff_check(self, address: int):
+        bit_val = self.read_bit_packet(address)
+        if bit_val == 1:
+            self.write_bit_packet(address, 0)
