@@ -82,12 +82,12 @@ def listen_for_events(XGT, size_event=False):
         6: "PET"
     }
     PLASTIC_VALUE_MAPPING = {
-        "HDPE": 1,
-        "PS": 1,
-        "PP": 2,
-        "LDPE": 2,
-        "ABS": 3,
-        "PET": 3
+        "HDPE": 0x88,
+        "PS": 0x89,
+        "PP": 0x8A,
+        "LDPE": 0x8B,
+        "ABS": 0x8C,
+        "PET": 0x8D
     }
 
     logging.info(f"Connecting to camera event port at {HOST}:{EVENT_PORT}")
@@ -120,8 +120,11 @@ def listen_for_events(XGT, size_event=False):
                     message, message_buffer = message_buffer.split('\r\n', 1)
                     try:
                         message_json = json.loads(message)
+                        print(f"message_json received: {message_json}")
                         event = message_json.get('Event', '')
+                        print(f"Event received: {event}")
                         inner_message = json.loads(message_json.get('Message', '{}'))
+                        print(f"inner_message received: {inner_message}")
                         if event == "PredictionObject":
                             descriptors = inner_message.get('Descriptors', [])
                             descriptor_value = int(descriptors[0]) if descriptors else 0
@@ -139,15 +142,16 @@ def listen_for_events(XGT, size_event=False):
                                     if size_event:
                                         if pos['size_category'] == "small":
                                             plc_value = 1  # 1번 블로우
-                                            success = XGT.write_d_and_set_m300(plc_value)  # 1번 블로우
+                                            success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
+                                            
                                         elif pos['size_category'] == "medium":
                                             plc_value = 2  # 1번 블로우
-                                            success = XGT.write_d_and_set_m300(plc_value)  # 1번 블로우
+                                            success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
                                         else:
                                             plc_value = 3  # 1번 블로우
-                                            success = XGT.write_d_and_set_m300(plc_value)  # 2번 블로우
+                                            success = XGT.create_bit_packet(address=plc_value, onoff=1)  # 2번 블로우
                                     else:
-                                        success = XGT.write_d_and_set_m300(plc_value)
+                                        success = XGT.XGT.create_bit_packet(address=plc_value, onoff=1)  # 1번 블로우
                                     
                                     if success:
                                         logging.info(f"PLC action successful for value {plc_value}")

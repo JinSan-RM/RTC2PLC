@@ -1,6 +1,8 @@
 import socket
 import time
 import struct
+from typing import Optional
+from enum import Enum
 
 class XGTTester:
     def __init__(self, ip="192.168.250.120", port=2004):
@@ -233,3 +235,45 @@ class XGTTester:
         else:
             # print(f"D00000에 값 쓰기 실패!")
             return False
+    def create_bit_packet(self, address: int, onoff):
+        def _get_bit_variable_name(address: int):
+            return f"%PX{address:d}".encode('ascii')
+        
+        var_name = _get_bit_variable_name(address)
+        if onoff is None:
+            body_size = 10 + len(var_name)
+        else:
+            body_size = 13 + len(var_name)
+
+        """ 헤더 """
+        packet = bytearray()
+        packet.extend(b'LSIS-XGT')  # 고정
+        packet.extend(b'\x00\x00')  # Reserved (무시)
+        packet.extend(b'\x00\x00')  # PLC Info (무시)
+        packet.append(0xB0)         # CPU Info
+        packet.append(0x33)         # Source of Frame (PC to PLC: 0x33, PLC to PC: 0x11)
+        packet.extend(b'\x00\x00')  # Invoke ID (무시?)
+        packet.extend(struct.pack('<H', body_size))  # 바디 부분 바이트 크기
+        packet.append(0x00)         # FEnet Position (무시)
+        packet.append(0x00)         # Reserved2 (무시)
+        """ 헤더 끝 """
+
+        """ 바디 시작 """
+        if onoff is None:
+            packet.extend(b'\x54\x00')
+        else:
+            packet.extend(b'\x58\x00')  # 명령어 (Write: 0x58, Read: 0x54)
+        packet.extend(struct.pack('<H', 0x00))   # Data Type
+        packet.extend(b'\x00\x00')  # Reserved (무시)
+        packet.extend(b'\x01\x00')  # 개수 1개
+
+        # 변수 이름 길이 + 변수 이름 쌍
+        packet.extend(bytes([len(var_name), 0x00]))
+        packet.extend(var_name)
+
+        # 변수 타입별 사이즈 + 실제 변수 값 쌍
+        if onoff is not None:
+            packet.extend(b'\x01\x00')
+            packet.append(onoff)
+
+        return packet
