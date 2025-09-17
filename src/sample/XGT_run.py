@@ -302,7 +302,12 @@ class XGTTester:
         remaining = []
         for execute_time, address in self.pending_tasks:
             if current_time >= execute_time:
-                self.write_bit_packet(address, 0)
+                try:
+                    success = self.write_bit_packet(address, 0)
+                    if not success:
+                        remaining.append((execute_time, address))
+                except Exception as e:
+                    remaining.append((execute_time, address))
             else:
                 remaining.append((execute_time, address)) # 아직 시간 안됨
 
