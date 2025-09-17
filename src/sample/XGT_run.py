@@ -282,11 +282,17 @@ class XGTTester:
         if ret and len(response) >= 30:
             bit_value = response[29]
             return bit_value
+        elif not response:
+            print("PLC에서 연결을 종료했습니다.")
+            self.disconnect()
         return None
 
     def write_bit_packet(self, address: int, onoff) -> bool:
         packet = self.create_bit_packet(address, onoff)
         ret, response = self.send_packet_to_plc(packet)
+        if not response:
+            print("PLC에서 연결을 종료했습니다.")
+            self.disconnect()
         return ret
     
     pending_tasks = []
