@@ -220,7 +220,7 @@ class XGTTester:
             print("M300 비트 설정 실패!")
             return False
         
-    def write_set_d_value(self, d_address=None, value):
+    def write_set_d_value(self, d_address=None, value=0):
         """D00000에 값 쓰기 (첫 번째 코드 블록 참조)"""
         d_address = b'\x25\x44\x42\x30'  # %DB0 형식 사용
         data_bytes = struct.pack('<H', value)  # 리틀 엔디안 형식으로 변환
