@@ -289,7 +289,21 @@ class XGTTester:
         ret, response = self.send_packet_to_plc(packet)
         return ret
     
-    def onoff_check(self, address: int):
-        bit_val = self.read_bit_packet(address)
-        if bit_val == 1:
-            self.write_bit_packet(address, 0)
+    pending_tasks = []
+    def schedule_bit_off(self, address: int, delay: float = 0.1):
+        execute_time = time.perf_counter() + delay
+        self.pending_tasks.append((execute_time, address))
+
+    def process_bit_off(self):
+        if not self.pending_tasks:
+            return
+
+        current_time = time.perf_counter()
+        remaining = []
+        for execute_time, address in self.pending_tasks:
+            if current_time >= execute_time:
+                self.write_bit_packet(address, 0)
+            else:
+                remaining.append((execute_time, address)) # 아직 시간 안됨
+
+        self.pending_tasks = remaining

@@ -136,10 +136,11 @@ def listen_for_events(XGT, size_event=False):
                             center, border = shape.get('Center', []), shape.get('Border', [])
                             
                             # 신규 PLC 위한 부분
+                            XGT.process_bit_off() # on비트들을 off시키는 부분
                             try:
                                 sucess = XGT.write_bit_packet(address=plc_value, onoff=1)
                                 if sucess:
-                                    XGT.onoff_check(address=plc_value)
+                                    XGT.schedule_bit_off(address=plc_value, delay=0.1)
                                     logging.info(f"PLC action successful for address P{plc_value:3X}({classification})")
                                 else:
                                     logging.error(f"PLC action failed for address P{plc_value:3X}({classification})")
