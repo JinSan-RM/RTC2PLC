@@ -153,31 +153,13 @@ def listen_for_events(XGT, size_event=False):
                             shape = inner_message.get('Shape', {})
                             center, border = shape.get('Center', []), shape.get('Border', [])
                             
-                            # 가이드라인 기준으로 체크했을 때에 좌표값 계산해서 소형부분 대형부분 체크해서 PLC 값 매핑
-                            if len(center) >= 2:
-                                object_x = center[0]  # x 좌표
-                                
-                                if object_x < guideline_x:  # 소형 쪽
-                                    plc_value = PLASTIC_VALUE_MAPPING_SMALL.get(classification)
-                                    size_type = "소형"
-                                else:  # 대형 쪽
-                                    plc_value = PLASTIC_VALUE_MAPPING_LARGE.get(classification)
-                                    size_type = "대형"
-                                    
-                                logging.info(f'Object position: x={object_x}, guideline: {guideline_x}, size: {size_type}')
-                                logging.info(f'Descriptors {descriptors} descriptor_value {descriptor_value}\n classification {classification}')
-                                
-                                # PLC 제어
-                                if plc_value is not None:
-                                    try:
-                                        success = XGT.write_bit_packet(address=plc_value, onoff=1)
-                                        if success:
-                                            XGT.onoff_check(address=plc_value)
-                                            logging.info(f"PLC action successful for address P{plc_value:3X}({classification}-{size_type})")
-                                        else:
-                                            logging.error(f"PLC action failed for address P{plc_value:3X}({classification}-{size_type})")
-                                    except Exception as e:
-                                        logging.error(f"PLC write exception: {e}")
+                            # 신규 PLC 위한 부분
+                            XGT.process_bit_off() # on비트들을 off시키는 부분
+                            try:
+                                sucess = XGT.write_bit_packet(address=plc_value, onoff=1)
+                                if sucess:
+                                    XGT.schedule_bit_off(address=plc_value, delay=0.1)
+                                    logging.info(f"PLC action successful for address P{plc_value:3X}({classification})")
                                 else:
                                     logging.warning(f"No PLC address found for classification: {classification}")
                                     

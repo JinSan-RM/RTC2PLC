@@ -220,7 +220,7 @@ class XGTTester:
             print("M300 비트 설정 실패!")
             return False
         
-    def write_set_d_value(self, d_address=None, value):
+    def write_set_d_value(self, d_address=None, value=0):
         """D00000에 값 쓰기 (첫 번째 코드 블록 참조)"""
         d_address = b'\x25\x44\x42\x30'  # %DB0 형식 사용
         data_bytes = struct.pack('<H', value)  # 리틀 엔디안 형식으로 변환
@@ -282,14 +282,39 @@ class XGTTester:
         if ret and len(response) >= 30:
             bit_value = response[29]
             return bit_value
+        elif not response:
+            print("PLC에서 연결을 종료했습니다.")
+            self.disconnect()
         return None
 
     def write_bit_packet(self, address: int, onoff) -> bool:
         packet = self.create_bit_packet(address, onoff)
         ret, response = self.send_packet_to_plc(packet)
+        if not response:
+            print("PLC에서 연결을 종료했습니다.")
+            self.disconnect()
         return ret
     
-    def onoff_check(self, address: int):
-        bit_val = self.read_bit_packet(address)
-        if bit_val == 1:
-            self.write_bit_packet(address, 0)
+    pending_tasks = []
+    def schedule_bit_off(self, address: int, delay: float = 0.1):
+        execute_time = time.perf_counter() + delay
+        self.pending_tasks.append((execute_time, address))
+
+    def process_bit_off(self):
+        if not self.pending_tasks:
+            return
+
+        current_time = time.perf_counter()
+        remaining = []
+        for execute_time, address in self.pending_tasks:
+            if current_time >= execute_time:
+                try:
+                    success = self.write_bit_packet(address, 0)
+                    if not success:
+                        remaining.append((execute_time, address))
+                except Exception as e:
+                    remaining.append((execute_time, address))
+            else:
+                remaining.append((execute_time, address)) # 아직 시간 안됨
+
+        self.pending_tasks = remaining
