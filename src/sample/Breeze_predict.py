@@ -81,7 +81,9 @@ def listen_for_events(XGT, size_event=False):
         5: "ABS",
         6: "PET"
     }
-    PLASTIC_VALUE_MAPPING = {
+    
+    # 대형용 (0x88 ~ 0x8F)
+    PLASTIC_VALUE_MAPPING_LARGE = {
         "HDPE": 0x88,
         "PS": 0x89,
         "PP": 0x8A,
@@ -89,7 +91,23 @@ def listen_for_events(XGT, size_event=False):
         "ABS": 0x8C,
         "PET": 0x8D
     }
-
+    
+    # 소형용 (0x90 ~ 0x97)
+    PLASTIC_VALUE_MAPPING_SMALL = {
+        "HDPE": 0x90,
+        "PS": 0x91,
+        "PP": 0x92,
+        "LDPE": 0x93,
+        "ABS": 0x94,
+        "PET": 0x95
+    }
+    
+    # 중앙값 설정은 화면 보면서 실제로 적용해야함 09.15 김진산
+    
+    guideline_x = None  # 중앙값, 필요시 설정
+    if guideline_x is None:
+        guideline_x = 640  # 또는 적절한 중앙값
+    
     logging.info(f"Connecting to camera event port at {HOST}:{EVENT_PORT}")
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as event_socket:
         event_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -129,22 +147,50 @@ def listen_for_events(XGT, size_event=False):
                             descriptors = inner_message.get('Descriptors', [])
                             descriptor_value = int(descriptors[0]) if descriptors else 0
                             classification = CLASS_MAPPING.get(descriptor_value, "Unknown")
-                            plc_value = PLASTIC_VALUE_MAPPING.get(classification)
+                            plc_value = CLASS_MAPPING.get(classification)
                             logging.info(f'Descriptors {descriptors}  descriptor_value {descriptor_value}\n classfication {classification}')
 
                             shape = inner_message.get('Shape', {})
                             center, border = shape.get('Center', []), shape.get('Border', [])
                             
-                            # 신규 PLC 위한 부분
-                            try:
-                                sucess = XGT.write_bit_packet(address=plc_value, onoff=1)
-                                if sucess:
-                                    XGT.onoff_check(address=plc_value)
-                                    logging.info(f"PLC action successful for address P{plc_value:3X}({classification})")
+                            # 가이드라인 기준으로 체크했을 때에 좌표값 계산해서 소형부분 대형부분 체크해서 PLC 값 매핑
+                            if len(center) >= 2:
+                                object_x = center[0]  # x 좌표
+                                
+                                if object_x < guideline_x:  # 소형 쪽
+                                    plc_value = PLASTIC_VALUE_MAPPING_SMALL.get(classification)
+                                    size_type = "소형"
+                                else:  # 대형 쪽
+                                    plc_value = PLASTIC_VALUE_MAPPING_LARGE.get(classification)
+                                    size_type = "대형"
+                                    
+                                logging.info(f'Object position: x={object_x}, guideline: {guideline_x}, size: {size_type}')
+                                logging.info(f'Descriptors {descriptors} descriptor_value {descriptor_value}\n classification {classification}')
+                                
+                                # PLC 제어
+                                if plc_value is not None:
+                                    try:
+                                        success = XGT.write_bit_packet(address=plc_value, onoff=1)
+                                        if success:
+                                            XGT.onoff_check(address=plc_value)
+                                            logging.info(f"PLC action successful for address P{plc_value:3X}({classification}-{size_type})")
+                                        else:
+                                            logging.error(f"PLC action failed for address P{plc_value:3X}({classification}-{size_type})")
+                                    except Exception as e:
+                                        logging.error(f"PLC write exception: {e}")
                                 else:
-                                    logging.error(f"PLC action failed for address P{plc_value:3X}({classification})")
-                            except Exception as e:
-                                logging.error(f"PLC write exception: {e}")
+                                    logging.warning(f"No PLC address found for classification: {classification}")
+                                    
+                            # # 신규 PLC 위한 부분
+                            # try:
+                            #     sucess = XGT.write_bit_packet(address=plc_value, onoff=1)
+                            #     if sucess:
+                            #         XGT.onoff_check(address=plc_value)
+                            #         logging.info(f"PLC action successful for address P{plc_value:3X}({classification})")
+                            #     else:
+                            #         logging.error(f"PLC action failed for address P{plc_value:3X}({classification})")
+                            # except Exception as e:
+                            #     logging.error(f"PLC write exception: {e}")
 
                             # pos = calculate_shape_metrics(border)
                             # logging.info(f'pos data {pos}')
@@ -171,8 +217,8 @@ def listen_for_events(XGT, size_event=False):
                             #             logging.error(f"PLC action failed for value {plc_value}")
                             #     except Exception as e:
                             #         logging.error(f"PLC write exception: {e}")
-                            # else:
-                            #     logging.info(f"Skipping PLC action for classification: {classification}")
+                            else:
+                                logging.info(f"Skipping PLC action for classification: {classification}")
                         else:
                             logging.debug(f"event:{event} message:{inner_message}")
                     except json.JSONDecodeError:
