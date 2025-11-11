@@ -80,3 +80,8 @@ def calc_delay(y_position):
 
 def convert_ticks_to_datetime(ticks):
         return (datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)).replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+
+def get_border_coords(border):
+    x_coords = [p[0] for p in border]
+    y_coords = [p[1] for p in border]
+    return min(x_coords), max(x_coords), min(y_coords), max(y_coords)

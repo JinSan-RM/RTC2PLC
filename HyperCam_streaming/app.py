@@ -11,13 +11,18 @@ class App():
         self.manager = CommManager(self)
         self.manager.start()
 
+    def on_btn_clicked(self, pixel_format):
+        self.manager.change_pixel_format(pixel_format)
 
-    # def on_btn_clicked(self, pixel_format):
-    #     self.manager.change_pixel_format(pixel_format)
+    def on_blend_btn_clicked(self, onoff):
+        self.manager.set_visualization_blend(onoff)
 
-    def on_pixel_line_data(self, data_body):
+    def on_pixel_line_data(self, info):
         """데이터를 UI로 전달 (메인 스레드에서 처리)"""
-        self.root.after(0, self.ui.process_line, data_body)
+        self.root.after(0, self.ui.process_line, info)
+    
+    def on_obj_detected(self, info):
+        self.ui.overlay_info.append(info)
 
     def run(self):
         self.root.protocol("WM_DELETE_WINDOW", self.quit)

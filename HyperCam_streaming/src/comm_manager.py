@@ -9,7 +9,7 @@ from collections import deque
 from datetime import datetime, timedelta
 
 from .config_util import *
-from .calc import classify_object_size, calc_delay
+from .calc import classify_object_size, calc_delay, get_border_coords
 
 # 로깅 설정
 logging.basicConfig(
@@ -46,20 +46,28 @@ class CommManager(threading.Thread):
 
         self.tracked_objects = {}
         self.object_counter = 0
-        
+        tracking_lock = threading.Lock()
+        # USE_MIN_INTERVAL = True일 때 사용할 부분
+        timestamp_queue = deque()
+        timestamp_lock = threading.Lock()
+        # 분석 완료 대기 큐
+        analysis_queue = deque(maxlen=100)
+        queue_lock = threading.Lock()
 
-    # def start_command_client(self):
-    #     logging.info(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
-    #     try:
-    #         soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #         soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    #         soc.connect((HOST, COMMAND_PORT))
-    #         soc.settimeout(10)
-    #         logging.info("Camera connection successful")
-    #         return soc
-    #     except Exception as e:
-    #         logging.error(f"Camera connection failed: {e}")
-    #         raise
+        # self.xgt = X
+
+    def start_command_client(self):
+        logging.info(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
+        try:
+            soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            soc.connect((HOST, COMMAND_PORT))
+            soc.settimeout(120)
+            logging.info("Camera connection successful")
+            return soc
+        except Exception as e:
+            logging.error(f"Camera connection failed: {e}")
+            raise
 
     def send_command(self, command_socket, command):
         command_id = uuid.uuid4().hex[:8]
@@ -133,6 +141,71 @@ class CommManager(threading.Thread):
             self.timestamp_queue.append((address, current_time))
             return True
 
+    # ==================== 라인 스캔용 타이밍 제어 ====================
+    # def schedule_plc_signal_delay(self, obj_id, classification, plc_value, size, size_addr, y_position, delay):
+    #     """
+    #     10ms 펄스로 신호 전송 (PLC에서 상승엣지 감지)
+    #     """
+    #     MIN_PULSE_WIDTH = 0.01  # 10ms - PLC 스캔 사이클 고려
+        
+    #     def send_signal(_id=obj_id, _class=classification, _plc=plc_value, _size=size, _size_addr=size_addr, _y=y_position):
+    #         try:
+    #             with self.tracking_lock:
+    #                 if _id in self.tracked_objects:
+    #                     obj_data = self.tracked_objects[_id]
+    #                     if obj_data['analysis_complete']:
+    #                         # 재질 신호 직후 사이즈 신호
+    #                         success1 = self.xgt.write_bit_packet(address=_plc, onoff=1)
+    #                         success2 = self.xgt.write_bit_packet(address=_size_addr, onoff=1)
+    #                         if success1 and success2:
+    #                             # 재질 on-off 사이에 사이즈 on-off 가 들어갈 수 있도록 처리
+    #                             XGT.schedule_bit_off(address=_size_addr, delay=MIN_PULSE_WIDTH)
+    #                             XGT.schedule_bit_off(address=_plc, delay=MIN_PULSE_WIDTH)
+    #                             logging.info(f"✓ [PLC펄스] ID={_id}, Y={_y}, 재질={_class}, size={_size}, 주소=P{_plc:3X}/P{_size_addr:3X}")
+    #                         else:
+    #                             logging.warning(f"✗ [PLC펄스] ID={_id} - 전송 실패")
+                            
+    #                         obj_data['status'] = 'completed'
+    #                         threading.Timer(1.0, lambda: cleanup_object(_id)).start()
+    #                     else:
+    #                         logging.warning(f"⚠ [PLC펄스] ID={_id} - 분석 미완료")
+    #                         obj_data['status'] = 'timeout'
+    #                 else:
+    #                     logging.error(f"✗ [PLC펄스] ID={_id} - 객체 없음")
+                        
+    #         except Exception as e:
+    #             logging.error(f"PLC 신호 전송 오류: {e}")
+        
+    #     # 고정 지연 시간 후 신호 전송
+    #     timer = threading.Timer(delay, send_signal)
+    #     timer.daemon = True
+    #     timer.start()
+        
+    #     # logging.info(f"→ [신호예약] ID={obj_id}, Y={y_position}, 재질={classification}, {delay:.2f}초 후 전송")
+
+    # def cleanup_object(obj_id):
+    #     """객체 정리"""
+    #     with tracking_lock:
+    #         if obj_id in tracked_objects:
+    #             del tracked_objects[obj_id]
+    #             logging.debug(f"객체 제거: ID={obj_id}")
+
+    # def cleanup_old_objects():
+    #     """오래된 객체 자동 정리"""
+    #     while not stop_event.is_set():
+    #         time.sleep(5)
+    #         current_time = time.time()
+            
+    #         with tracking_lock:
+    #             to_remove = []
+    #             for obj_id, obj_data in tracked_objects.items():
+    #                 age = current_time - obj_data['detect_time']
+    #                 if age > 10:  # 10초 이상
+    #                     to_remove.append(obj_id)
+    #                     logging.debug(f"타임아웃: ID={obj_id} (상태={obj_data['status']})")
+                
+    #             for obj_id in to_remove:
+    #                 del tracked_objects[obj_id]
     # ================================================================
 
     def listen_for_events(self, size_event=False):
@@ -150,6 +223,11 @@ class CommManager(threading.Thread):
         message_buffer = ""
 
         while not self.stop_event.is_set():
+            # 0.5초 이내 들어오는 데이터들을 하나로 객체 묶음
+            """
+            USE_MIN_INTERVAL = True    # default
+            동작 유무 판단 시 320줄, 380줄 주석 처리 필요
+            """
             if USE_MIN_INTERVAL:
                 self._process_interval()
 
@@ -175,6 +253,80 @@ class CommManager(threading.Thread):
                         if event == "PredictionObject":
                             descriptors = inner_message.get('Descriptors', [])
                             descriptor_value = int(descriptors[0]) if descriptors else 0
+                            classification = CLASS_MAPPING.get(descriptor_value, "Unknown")
+
+                            shape = inner_message.get('Shape', {})
+                            center = shape.get('Center', [])
+                            if not center:
+                                logging.warning("No center position in shape data")
+                                continue
+
+                            # ==================== 라인 스캔 처리 ====================
+                            # 라인 스캔이므로 X 좌표는 무의미, Y 좌표로 객체 구분
+                            y_position = center[1] if len(center) > 1 else center[0]
+                            delay = calc_delay(y_position)
+                            if y_position >= 4800:
+                                continue
+
+                            # 일단 감지했으므로 감지 신호 보냄
+                            size = classify_object_size(center[0])
+                            if size is None:
+                                logging.debug(f"⊗ [가이드라인] 무시")
+                                continue  # ← 다음 객체로 스킵!
+                            elif size == "large":
+                                plc_value = PLASTIC_VALUE_MAPPING_LARGE.get(classification)
+                            elif size == "small":
+                                plc_value = PLASTIC_VALUE_MAPPING_SMALL.get(classification)
+                            
+                            size_addr = PLASTIC_SIZE_MAPPING[size]
+                            if not plc_value or not size_addr:
+                                continue
+
+                            detection_time = time.time()
+                            
+                            # with tracking_lock:
+                            #     obj_id = object_counter
+                            #     object_counter += 1
+                                
+                            #     # 객체 정보 저장
+                            #     tracked_objects[obj_id] = {
+                            #         'id': obj_id,
+                            #         'detect_time': detection_time,
+                            #         'y_position': y_position,
+                            #         'classification': classification,
+                            #         'plc_value': plc_value,
+                            #         'size': size,
+                            #         'size_address': size_addr,
+                            #         'analysis_complete': True,  # 분석 즉시 완료
+                            #         'status': 'scheduled'
+                            #     }
+
+                            border = shape.get("Border", [])
+                            x0, x1, y0, y1 = get_border_coords(border)
+                            start_frame = inner_message.get("StartLine", 0)
+                            end_frame = inner_message.get("EndLine", 0)
+                            info = {
+                                "x0": x0,
+                                "x1": x1,
+                                "y0": y0,
+                                "y1": y1,
+                                "start_frame": start_frame,
+                                "end_frame": end_frame
+                            }
+                            self.app.on_obj_detected(info)
+                            logging.info(f"★ [감지완료] Y={y_position}, 재질={classification}, border={border}, start={start_frame}, end={end_frame}")
+
+                            # 고정 지연 시간 후 PLC 신호 예약
+                            # self.schedule_plc_signal_delay(
+                            #     XGT,
+                            #     obj_id,
+                            #     classification,
+                            #     plc_value,
+                            #     size,
+                            #     size_addr,
+                            #     y_position,
+                            #     delay
+                            # )
 
                         else:
                             logging.debug(f"event:{event}")
@@ -222,7 +374,10 @@ class CommManager(threading.Thread):
                     logging.warning("Incomplete header received")
                     continue
 
-                stream_type = header[0]
+                stream_type = STREAM_TYPE[header[0]]
+                if not stream_type or stream_type == "None":
+                    continue
+
                 frame_number = int.from_bytes(header[1:9], byteorder='little', signed=True)
                 timestamp = int.from_bytes(header[9:17], byteorder='little', signed=False)
                 metadata_size = int.from_bytes(header[17:21], byteorder='little', signed=False)
@@ -244,10 +399,16 @@ class CommManager(threading.Thread):
                         break
                     data_body += chunk
 
-                print(f"header : {header} \n metadata : {metadata} \n data_body : {data_body}")
+                # if stream_type != "Raw":
+                #     # print(f"header : {header} \n metadata : {metadata} \n data_body : {data_body}")
+                # print(f"stream_type: {stream_type}\ndata_body; {data_body}")
                 # 완전한 데이터를 받은 후에 한 번만 호출
                 if len(data_body) == data_body_size:
-                    self.app.on_pixel_line_data(data_body)
+                    info = {
+                        "frame_number": frame_number,
+                        "data_body": data_body
+                    }
+                    self.app.on_pixel_line_data(info)
 
                 current_time = time.time()
                 if current_time - last_processed_time >= throttle_interval:
@@ -263,25 +424,19 @@ class CommManager(threading.Thread):
 
     def change_pixel_format(self, pixel_format):
         logging.info(f"Set Visualize Select to {pixel_format}")
-        self.handle_response(self.send_command({
+        self.handle_response(self.send_command(self.command_socket, {
             "Command": "SetProperty",  # GetProperty가 아닌 SetProperty 사용
             "Property": "VisualizationVariable", 
-            "Value": "Raw"  # 또는 "Reflectance", "Absorbance", "Descriptor names" 중 선택
+            "Value": pixel_format # "Raw", "Reflectance", "Absorbance" 또는 "기타 Descriptor 이름" 중 선택
         }))
 
-    def start_command_client(self):
-        logging.info(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
-        try:
-            soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            soc.connect((HOST, COMMAND_PORT))
-            soc.settimeout(120)
-            logging.info("Camera connection successful")
-            return soc
-        except Exception as e:
-            logging.error(f"Camera connection failed: {e}")
-            raise
-
+    def set_visualization_blend(self, onoff: bool):
+        logging.info(f"Set Visualize Blend {onoff}")
+        self.handle_response(self.send_command(self.command_socket, {
+            "Command": "SetProperty",  # GetProperty가 아닌 SetProperty 사용
+            "Property": "VisualizationBlend", 
+            "Value": onoff # "Raw", "Reflectance", "Absorbance" 또는 "기타 Descriptor 이름" 중 선택
+        }))
 
     def run(self):
         """스레드의 메인 함수 - 여기서 카메라 초기화 및 실행"""
@@ -301,8 +456,9 @@ class CommManager(threading.Thread):
 
         try:
             # ✓ 수정: with 문 없이 소켓을 인스턴스 변수에 저장
-            # self.command_socket = self.start_command_client()
-            with self.start_command_client() as command_socket:
+            self.command_socket = self.start_command_client()
+            with self.command_socket as command_socket:
+            # with self.start_command_client() as command_socket:
             
                 logging.info("Sending InitializeCamera command")
                 self.handle_response(self.send_command(command_socket, {"Command": "InitializeCamera"}))
@@ -310,13 +466,25 @@ class CommManager(threading.Thread):
                 logging.info("Sending GetProperty command")
                 ws = self.handle_response(self.send_command(command_socket, {"Command": "GetProperty", "Property": "WorkspacePath"}))
 
-                workflow_path = f"C:/Users/USER/Breeze/Data/Runtime/1029_test.xml"
+
+                workflow_path = f"C:/Users/USER/Breeze/Data/Runtime/251111.xml"
                 logging.info(f"Loading workflow: {workflow_path}")
                 self.handle_response(self.send_command(command_socket, {"Command": "LoadWorkflow", "FilePath": workflow_path}))
 
+                logging.info(f"Visualization Variable setting")
+                self.handle_response(self.send_command(command_socket, {
+                    "Command": "GetProperty",  # GetProperty가 아닌 SetProperty 사용
+                    "Property": "VisualizationVariable", 
+                    "Value": "plastic classification"  # 또는 "Reflectance", "Absorbance", "Descriptor names" 중 선택
+                }))
+                logging.info(f"blend pixel setting")
+                self.handle_response(self.send_command(command_socket, {
+                    "Command": "GetProperty",
+                    "Property": "VisualizationBlend",
+                    "Value": True  # 또는 "False"
+                }))
                 logging.info("Starting prediction")
                 self.handle_response(self.send_command(command_socket, {"Command": "StartPredict", "IncludeObjectShape": True}))
-
                 # 스레드 시작
                 self.event_listener_thread = threading.Thread(target=self.listen_for_events, daemon=True)
                 self.data_stream_listener_thread = threading.Thread(target=self.listen_for_data_stream, daemon=True)
