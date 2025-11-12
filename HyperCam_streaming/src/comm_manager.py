@@ -313,8 +313,8 @@ class CommManager(threading.Thread):
                                 "start_frame": start_frame,
                                 "end_frame": end_frame
                             }
-                            self.app.on_obj_detected(info)
-                            logging.info(f"★ [감지완료] Y={y_position}, 재질={classification}, border={border}, start={start_frame}, end={end_frame}")
+                            self.app.on_obj_detected(info, classification)
+                            # logging.info(f"★ [감지완료] Y={y_position}, 재질={classification}, border={border}, start={start_frame}, end={end_frame}")
 
                             # 고정 지연 시간 후 PLC 신호 예약
                             # self.schedule_plc_signal_delay(
@@ -423,12 +423,19 @@ class CommManager(threading.Thread):
                 continue
 
     def change_pixel_format(self, pixel_format):
-        logging.info(f"Set Visualize Select to {pixel_format}")
-        self.handle_response(self.send_command(self.command_socket, {
-            "Command": "SetProperty",  # GetProperty가 아닌 SetProperty 사용
-            "Property": "VisualizationVariable", 
-            "Value": pixel_format # "Raw", "Reflectance", "Absorbance" 또는 "기타 Descriptor 이름" 중 선택
+        # logging.info(f"Set Visualize Select to {pixel_format}")
+        # self.handle_response(self.send_command(self.command_socket, {
+        #     "Command": "SetProperty",  # GetProperty가 아닌 SetProperty 사용
+        #     "Property": "VisualizationVariable", 
+        #     "Value": pixel_format # "Raw", "Reflectance", "Absorbance" 또는 "기타 Descriptor 이름" 중 선택
+        # }))
+        res = self.handle_response(self.send_command(self.command_socket, {
+            "Command": "GetProperty",
+            "Property": "Fields",
+            "NodeID": "7200e406"
         }))
+        logging.info(f"Fields: {res}")
+
 
     def set_visualization_blend(self, onoff: bool):
         logging.info(f"Set Visualize Blend {onoff}")
@@ -466,23 +473,28 @@ class CommManager(threading.Thread):
                 logging.info("Sending GetProperty command")
                 ws = self.handle_response(self.send_command(command_socket, {"Command": "GetProperty", "Property": "WorkspacePath"}))
 
-
                 workflow_path = f"C:/Users/USER/Breeze/Data/Runtime/251111.xml"
                 logging.info(f"Loading workflow: {workflow_path}")
-                self.handle_response(self.send_command(command_socket, {"Command": "LoadWorkflow", "FilePath": workflow_path}))
+                workflow_json = self.handle_response(self.send_command(command_socket, {"Command": "LoadWorkflow", "FilePath": workflow_path}))
+                logging.info(f"workflow: {workflow_json}")
+                workflow_info = json.loads(workflow_json)
+                obj_format = workflow_info.get("ObjectFormat", '')
+                desc_info = obj_format.get("Descriptors", [])[0]
+                legend_info_list = desc_info.get("Classes", [])
+                self.app.on_legend_info(legend_info_list)
 
-                logging.info(f"Visualization Variable setting")
-                self.handle_response(self.send_command(command_socket, {
-                    "Command": "GetProperty",  # GetProperty가 아닌 SetProperty 사용
-                    "Property": "VisualizationVariable", 
-                    "Value": "plastic classification"  # 또는 "Reflectance", "Absorbance", "Descriptor names" 중 선택
-                }))
-                logging.info(f"blend pixel setting")
-                self.handle_response(self.send_command(command_socket, {
-                    "Command": "GetProperty",
-                    "Property": "VisualizationBlend",
-                    "Value": True  # 또는 "False"
-                }))
+                # logging.info(f"Visualization Variable setting")
+                # self.handle_response(self.send_command(command_socket, {
+                #     "Command": "GetProperty",  # GetProperty가 아닌 SetProperty 사용
+                #     "Property": "VisualizationVariable", 
+                #     "Value": "plastic classification"  # 또는 "Reflectance", "Absorbance", "Descriptor names" 중 선택
+                # }))
+                # logging.info(f"blend pixel setting")
+                # self.handle_response(self.send_command(command_socket, {
+                #     "Command": "GetProperty",
+                #     "Property": "VisualizationBlend",
+                #     "Value": True  # 또는 "False"
+                # }))
                 logging.info("Starting prediction")
                 self.handle_response(self.send_command(command_socket, {"Command": "StartPredict", "IncludeObjectShape": True}))
                 # 스레드 시작
