@@ -267,6 +267,7 @@ class CommManager(threading.Thread):
                             delay = calc_delay(y_position)
                             if y_position >= 4800:
                                 continue
+                            
 
                             # 일단 감지했으므로 감지 신호 보냄
                             size = classify_object_size(center[0])
