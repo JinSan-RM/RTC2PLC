@@ -474,7 +474,7 @@ class CommManager(threading.Thread):
                 logging.info("Sending GetProperty command")
                 ws = self.handle_response(self.send_command(command_socket, {"Command": "GetProperty", "Property": "WorkspacePath"}))
 
-                workflow_path = f"C:/Users/USER/Breeze/Data/Runtime/251118_1.xml"
+                workflow_path = f"C:/Users/USER/Breeze/Data/Runtime/251111.xml"
                 logging.info(f"Loading workflow: {workflow_path}")
                 workflow_json = self.handle_response(self.send_command(command_socket, {"Command": "LoadWorkflow", "FilePath": workflow_path}))
                 logging.info(f"workflow: {workflow_json}")

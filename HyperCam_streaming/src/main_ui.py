@@ -264,5 +264,3 @@ class MainUI:
     def update_legend_count(self, name):
         self.count_dict[name] += 1
         self.label_dict[name].config(text=str(self.count_dict[name]))
-
-        self.log(self.count_dict)
