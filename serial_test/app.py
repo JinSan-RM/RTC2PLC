@@ -10,8 +10,29 @@ class App():
         self.manager = ModbusManager(self)
         self.manager.connect()
 
-    def on_btn_clicked(self):
-        self.manager.check_inverter_model()
+    def on_update_monitor(self, _list):
+        self.root.after(0, self.ui.update_monitor, _list)
+
+    def on_set_freq(self, value):
+        self.manager.set_freq(value)
+
+    def on_set_acc(self, value):
+        self.manager.set_acc(value)
+
+    def on_set_dec(self, value):
+        self.manager.set_dec(value)
+
+    def on_start_clicked(self):
+        self.manager.motor_start()
+
+    def on_stop_clicked(self):
+        self.manager.motor_stop()
+
+    def custom_check(self, addr):
+        self.manager.custom_check(addr)
+    
+    def custom_write(self, addr, value):
+        self.manager.custom_write(addr, value)
 
     def on_log(self, msg):
         self.ui.log(msg)
