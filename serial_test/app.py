@@ -7,7 +7,7 @@ import sys
 
 from src.ui.main_window import MainWindow
 from src.main_ui import MainUI
-from src.comm_manager import ModbusManager
+from serial_test.src.function.comm_manager import ModbusManager
 
 class App():
     def __init__(self):

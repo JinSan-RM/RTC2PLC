@@ -4,7 +4,7 @@ import queue
 import threading
 import time
 
-from .config_util import *
+from ..config_util import *
 
 class ModbusManager():
     _lock = threading.Lock()
