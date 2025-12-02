@@ -18,6 +18,10 @@ class ModbusManager():
             self.stop_event = threading.Event()
 
             self.tasks: queue.Queue[Dict] = queue.Queue()
+            
+            self.slave_ids = self.config['slave_ids']
+            self.client = None
+            
             self._initialized = True
 
     def connect(self):
@@ -33,9 +37,9 @@ class ModbusManager():
 
             self.client.connect()
 
-            self.slave_ids = {}
-            for name, id in self.config['slave_ids'].items():
-                self.slave_ids[name] = id
+            # self.slave_ids = {}
+            # for name, id in self.config['slave_ids'].items():
+            #     self.slave_ids[name] = id
 
             self.run()
         except Exception as e:
@@ -203,28 +207,44 @@ class ModbusManager():
 
             self.app.on_update_monitor(ret)
 
+    # 주파수 설정 함수
     def set_freq(self, value):
+        """ 주파수 설정 """
         ret = self.write_holding_register("inverter_001", 0x0005 - 1, int(value * 100))
         if ret:
             self.app.on_log(f"set Frequency to {value:.2f} Hz success")
-
+    # 가속 시간 설정 함수
     def set_acc(self, value):
+        """ 가속 시간 설정 """
         ret = self.write_holding_register("inverter_001", 0x0007 - 1, int(value * 10))
         if ret:
             self.app.on_log(f"set acceleration time to {value:.1f} sec success")
 
+    # 감속 시간 설정 함수
     def set_dec(self, value):
+        """ 감속 시간 설정 """
         ret = self.write_holding_register("inverter_001", 0x0008 - 1, int(value * 10))
         if ret:
             self.app.on_log(f"set Frequency to {value:.1f} sec success")
-
-    def motor_start(self):
-        ret = self.write_holding_register("inverter_001", 0x0382 - 1, 0x0003)
+    
+    # 모터 동작 함수
+    def motor_start(self, motor_id: str):
+        """ 모터 운전 시작 """
+        
+        self.app.on_log(f"motor_start called: {motor_id}")
+        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0003)
+        
+        if motor_id not in self.slave_ids:
+            self.app.on_log(f"Unknown motor_id: {motor_id}")
+            return
+        
         if not ret:
             self.app.on_log("motor start failed")
 
-    def motor_stop(self):
-        ret = self.write_holding_register("inverter_001", 0x0382 - 1, 0x0000)
+    # 모터 정지 함수
+    def motor_stop(self, motor_id: str):
+        """ 모터 운전 정지 """
+        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0000)
         if not ret:
             self.app.on_log("motor stop failed")
 

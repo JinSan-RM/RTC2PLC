@@ -7,7 +7,7 @@ import sys
 
 from src.ui.main_window import MainWindow
 from src.main_ui import MainUI
-from serial_test.src.function.comm_manager import ModbusManager
+from src.function.comm_manager import ModbusManager
 
 class App():
     def __init__(self):
@@ -44,12 +44,12 @@ class App():
     def on_set_dec(self, value):
         self.manager.set_dec(value)
 
-    def on_start_clicked(self):
-        self.manager.motor_start()
+    def motor_start(self, motor_id):
+        self.manager.motor_start(motor_id)
 
-    def on_stop_clicked(self):
-        self.manager.motor_stop()
-
+    def motor_stop(self, motor_id):
+        self.manager.motor_stop(motor_id)
+        
     def custom_check(self, addr):
         self.manager.custom_check(addr)
     
@@ -57,7 +57,7 @@ class App():
         self.manager.custom_write(addr, value)
 
     def on_log(self, msg):
-        self.ui_old.log(msg)
+        self.ui.log(msg)
 
     def run(self):
         """애플리케이션 실행"""

@@ -10,6 +10,7 @@ from src.ui.page.monitoring_page import MonitoringPage
 from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
 
+from datetime import datetime
 
 class MainWindow(QMainWindow):
     
@@ -292,6 +293,20 @@ class MainWindow(QMainWindow):
                 padding: 8px 20px;
             }
         """)
+    
+    def log(self, message):
+        """로그 메시지 추가"""
+        now = QDateTime.currentDateTime()
+        timestamp = now.toString("HH:mm:ss.zzz")
+        
+        self.log_text.setReadOnly(False)
+        self.log_text.append(f"[{timestamp}] {message}")
+        self.log_text.setReadOnly(True)
+        
+        # 스크롤을 맨 아래로
+        cursor = self.log_text.textCursor()
+        cursor.movePosition(cursor.End)
+        self.log_text.setTextCursor(cursor)
 
 
 if __name__ == "__main__":

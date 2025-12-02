@@ -1,6 +1,7 @@
 MODBUS_RTU_CONFIG = {
     "slave_ids": {
-        "inverter_001": 1
+        "inverter_001": 1,
+        "inverter_002": 2
     },
     "port": "COM7",
     "baudrate": 9600,

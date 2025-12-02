@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QGroupBox, QLineEdit, QFrame
 )
 from PyQt5.QtCore import Qt
-
+from src.function.comm_manager import ModbusManager
 
 class FeederTab(QWidget):
     """피더 제어 탭"""
@@ -24,10 +24,10 @@ class FeederTab(QWidget):
         main_layout.setContentsMargins(20, 20, 20, 20)
         
         # 내륜 모터
-        self.create_motor_section(main_layout, "내륜 모터", "inner")
+        self.create_motor_section(main_layout, "내륜 모터", "inverter_001")
         
         # 외륜 모터
-        self.create_motor_section(main_layout, "외륜 모터", "outer")
+        self.create_motor_section(main_layout, "외륜 모터", "inverter_002")
         
         # 배출물 사이즈 조절
         self.create_size_control(main_layout)
@@ -128,16 +128,17 @@ class FeederTab(QWidget):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
         
+        
         start_btn = QPushButton("운전")
         start_btn.setObjectName("control_btn_start")
         start_btn.setMinimumHeight(50)
-        start_btn.clicked.connect(lambda: self.on_motor_start(motor_id))
+        start_btn.clicked.connect(lambda m=motor_id: self.app.motor_start(m))
         btn_layout.addWidget(start_btn)
         
         stop_btn = QPushButton("정지")
         stop_btn.setObjectName("control_btn_stop")
         stop_btn.setMinimumHeight(50)
-        stop_btn.clicked.connect(lambda: self.on_motor_stop(motor_id))
+        stop_btn.clicked.connect(lambda m=motor_id: self.app.motor_stop(m))
         btn_layout.addWidget(stop_btn)
         
         motor_main_layout.addLayout(btn_layout)
