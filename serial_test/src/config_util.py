@@ -1,16 +1,99 @@
+# region Modbus
 MODBUS_RTU_CONFIG = {
     "slave_ids": {
         "inverter_001": 1,
         "inverter_002": 2
     },
-    "port": "COM5",
+    "port": "COM7",
     "baudrate": 9600,
     "bytesize": 8,
     "parity": "N",
     "stopbits": 1,
     "timeout": 1
 }
+# endregion
 
+# ============================================================
+# region EtherCAT
+# ============================================================
+IF_NAME = '\\Device\\NPF_{82D71BA4-0710-4E4A-9ED2-4FD7DA4F0FD3}' # 네트워크 인터페이스 이름
+
+ETHERCAT_DELAY = 0.01
+
+SERVO_RX_MAP = [
+    0x1601,
+] # master -> slave
+
+SERVO_TX_MAP = [
+    0x1A01,
+] # slave -> master
+
+SERVO_RX = [
+    0x60400010, # 컨트롤 워드
+    0x60600008, # 운전 모드
+    0x607A0020, # 목표 위치
+    0x60FF0020, # 목표 속도(int32)
+]
+
+SERVO_TX = [
+    0x60410010, # 스테이터스 워드
+    0x60410008, # 운전 모드 표시
+    0x60640020, # 현재 위치
+    0x606C0020, # 현재 속도
+    0x26140010, # 경고 코드
+]
+
+IO_RX_MAP = [
+
+]
+
+IO_TX_MAP = [
+
+]
+
+IO_RX = [
+
+]
+
+IO_TX = [
+
+]
+
+def check_mask(s, m):
+    low_bit = s & 0x00FF
+    return (low_bit & m) == m
+
+def get_servo_modified_value(value):
+    gear_ratio = 524288 / 10000
+    return int(value * gear_ratio)
+
+from enum import IntEnum
+
+class STATUS_MASK(IntEnum):
+    STATUS_NOT_READY_TO_SWITCH_ON = 0x0000
+    STATUS_SWITCH_ON_DISABLED = 0x0040
+    STATUS_READY_TO_SWITCH_ON = 0x0021
+    STATUS_OPERATION_ENABLED = 0x0027
+    STATUS_QUICK_STOP_ACTIVE = 0x0007
+    STATUS_FAULT_REACTION_ACTIVE = 0x000F
+    STATUS_FAULT = 0x0008
+    STATUS_WARNING = 0x8000
+
+from dataclasses import dataclass
+from typing import Callable
+
+@dataclass
+class EtherCATDevice:
+    name: str
+    vendor_id: int
+    product_code: int
+    config_func: Callable
+
+# ============================================================
+# endregion
+# ============================================================
+
+# region Others
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -141,3 +224,4 @@ class DigitInput(tk.Toplevel):
             self.destroy()
         else:
             messagebox.showwarning("입력 오류", "값을 입력해주세요.", parent=self)
+# endregion

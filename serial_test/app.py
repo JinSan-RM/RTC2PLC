@@ -4,7 +4,7 @@ from PyQt5.QtGui import QFont
 import sys
 
 from src.ui.main_window import MainWindow
-from src.function.comm_manager import ModbusManager
+from src.function.modbus_manager import ModbusManager
 
 class App():
     def __init__(self):
