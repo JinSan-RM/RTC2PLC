@@ -296,18 +296,11 @@ class MainWindow(QMainWindow):
     
     def log(self, message):
         """로그 메시지 추가"""
-        now = QDateTime.currentDateTime()
-        timestamp = now.toString("HH:mm:ss.zzz")
-        
-        self.log_text.setReadOnly(False)
-        self.log_text.append(f"[{timestamp}] {message}")
-        self.log_text.setReadOnly(True)
-        
-        # 스크롤을 맨 아래로
-        cursor = self.log_text.textCursor()
-        cursor.movePosition(cursor.End)
-        self.log_text.setTextCursor(cursor)
-
+        if hasattr(self, 'logs_page'):
+            self.logs_page.add_log(message)
+        else:
+            # 초기화 전이면 콘솔에만 출력
+            print(f"[LOG] {message}")
 
 if __name__ == "__main__":
     import sys

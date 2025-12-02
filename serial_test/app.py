@@ -1,12 +1,9 @@
-import tkinter as tk
-
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QFont
 import sys
 
 from src.ui.main_window import MainWindow
-from src.main_ui import MainUI
 from src.function.comm_manager import ModbusManager
 
 class App():
@@ -18,8 +15,6 @@ class App():
         font = QFont("맑은 고딕", 10)
         self.qt_app.setFont(font)
         
-        self.root = tk.Tk()
-        self.ui_old = MainUI(self)
         self.ui = MainWindow(self)
         self.manager = ModbusManager(self)
         self.manager.connect()
@@ -33,7 +28,8 @@ class App():
         self.ui.update_time()
     
     def on_update_monitor(self, _list):
-        self.root.after(0, self.ui_old.update_monitor, _list)
+        if hasattr(self.ui, 'monitoring_page'):
+            self.ui.monitoring_page.update_values(_list)
 
     def on_set_freq(self, value):
         self.manager.set_freq(value)

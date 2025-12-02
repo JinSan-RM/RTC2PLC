@@ -229,23 +229,32 @@ class ModbusManager():
     
     # 모터 동작 함수
     def motor_start(self, motor_id: str):
-        """ 모터 운전 시작 """
-        
+        """모터 운전 시작"""
         self.app.on_log(f"motor_start called: {motor_id}")
-        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0003)
         
         if motor_id not in self.slave_ids:
             self.app.on_log(f"Unknown motor_id: {motor_id}")
             return
         
-        if not ret:
+        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0003)
+        if ret:
+            self.app.on_log(f"{motor_id} started")
+        else:
             self.app.on_log("motor start failed")
 
     # 모터 정지 함수
     def motor_stop(self, motor_id: str):
-        """ 모터 운전 정지 """
+        """모터 운전 정지"""
+        self.app.on_log(f"motor_stop called: {motor_id}")
+        
+        if motor_id not in self.slave_ids:
+            self.app.on_log(f"Unknown motor_id: {motor_id}")
+            return
+        
         ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0000)
-        if not ret:
+        if ret:
+            self.app.on_log(f"{motor_id} stopped")
+        else:
             self.app.on_log("motor stop failed")
 
     def custom_check(self, addr):
