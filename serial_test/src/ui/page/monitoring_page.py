@@ -307,32 +307,32 @@ class MonitoringPage(QWidget):
     
     def update_values(self, values):
         """모니터링 값 업데이트"""
-        if len(values) >= 8:
-            # 인버터 상태 업데이트
-            self.freq_value.setText(f"{values[3]:.2f}")
-            self.current_value.setText(f"{values[2]:.1f}")
-            self.voltage_value.setText(f"{values[4]}")
-            self.power_value.setText(f"{values[6]:.1f}")
+        # if len(values) >= 8:
+        #     # 인버터 상태 업데이트
+        #     self.freq_value.setText(f"{values[3]:.2f}")
+        #     self.current_value.setText(f"{values[2]:.1f}")
+        #     self.voltage_value.setText(f"{values[4]}")
+        #     self.power_value.setText(f"{values[6]:.1f}")
             
-            # 운전상태 업데이트
-            status = values[7]
-            if status & (1 << 0):
-                status_text, color = "정지", "#6e7681"
-            elif status & (1 << 1):
-                status_text, color = "정방향", "#3fb950"
-            elif status & (1 << 2):
-                status_text, color = "역방향", "#58a6ff"
-            elif status & (1 << 3):
-                status_text, color = "Fault", "#f85149"
-            elif status & (1 << 4):
-                status_text, color = "가속중", "#d29922"
-            elif status & (1 << 5):
-                status_text, color = "감속중", "#d29922"
-            else:
-                status_text, color = "알 수 없음", "#6e7681"
+        #     # 운전상태 업데이트
+        #     status = values[7]
+        #     if status & (1 << 0):
+        #         status_text, color = "정지", "#6e7681"
+        #     elif status & (1 << 1):
+        #         status_text, color = "정방향", "#3fb950"
+        #     elif status & (1 << 2):
+        #         status_text, color = "역방향", "#58a6ff"
+        #     elif status & (1 << 3):
+        #         status_text, color = "Fault", "#f85149"
+        #     elif status & (1 << 4):
+        #         status_text, color = "가속중", "#d29922"
+        #     elif status & (1 << 5):
+        #         status_text, color = "감속중", "#d29922"
+        #     else:
+        #         status_text, color = "알 수 없음", "#6e7681"
             
-            self.status_value.setText(status_text)
-            self.status_value.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
+        #     self.status_value.setText(status_text)
+        #     self.status_value.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
     
     def apply_styles(self):
         """스타일시트 적용"""

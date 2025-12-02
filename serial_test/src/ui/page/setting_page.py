@@ -23,11 +23,19 @@ class SettingsPage(QWidget):
     def init_ui(self):
         """UI 초기화"""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setContentsMargins(20, 20, 25, 28)
         
         # 탭 위젯
         self.tabs = QTabWidget()
         self.tabs.setObjectName("settings_tabs")
+        
+        self.tabs.setStyleSheet("""
+            QTabBar::tab {
+                min-width: 120px;  /* 최소 너비 설정 */
+                padding: 8px 15px;  /* 패딩 증가 */
+                font-size: 14px;
+            }
+        """)
         
         # 각 탭 추가
         self.servo_tab = ServoTab(self.app)

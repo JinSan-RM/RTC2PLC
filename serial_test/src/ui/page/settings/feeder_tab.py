@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QGroupBox, QLineEdit, QFrame
 )
 from PyQt5.QtCore import Qt
-from src.function.comm_manager import ModbusManager
 
 class FeederTab(QWidget):
     """피더 제어 탭"""
@@ -52,7 +51,10 @@ class FeederTab(QWidget):
         status_frame_layout = QVBoxLayout(status_frame)
         status_frame_layout.setAlignment(Qt.AlignCenter)
         
-        QLabel("운전 상태").setParent(status_frame)
+        status_title = QLabel("운전 상태")
+        status_title.setStyleSheet("color: #8b949e; font-size: 12px;")
+        status_frame_layout.addWidget(status_title)
+        
         status_label = QLabel("⚫ 정지")
         status_label.setObjectName(f"{motor_id}_status")
         status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e;")
@@ -89,7 +91,7 @@ class FeederTab(QWidget):
         
         freq_set_btn = QPushButton("설정")
         freq_set_btn.setObjectName("setting_btn")
-        freq_set_btn.clicked.connect(lambda: self.on_set_freq(motor_id))
+        freq_set_btn.clicked.connect(lambda _: self.on_set_freq(motor_id))
         control_layout.addWidget(freq_set_btn, row, 3)
         row += 1
         
@@ -103,7 +105,7 @@ class FeederTab(QWidget):
         
         acc_set_btn = QPushButton("설정")
         acc_set_btn.setObjectName("setting_btn")
-        acc_set_btn.clicked.connect(lambda: self.on_set_acc(motor_id))
+        acc_set_btn.clicked.connect(lambda _: self.on_set_acc(motor_id))
         control_layout.addWidget(acc_set_btn, row, 3)
         row += 1
         
@@ -117,7 +119,7 @@ class FeederTab(QWidget):
         
         dec_set_btn = QPushButton("설정")
         dec_set_btn.setObjectName("setting_btn")
-        dec_set_btn.clicked.connect(lambda: self.on_set_dec(motor_id))
+        dec_set_btn.clicked.connect(lambda _: self.on_set_dec(motor_id))
         control_layout.addWidget(dec_set_btn, row, 3)
         
         motor_main_layout.addLayout(control_layout)
@@ -132,13 +134,13 @@ class FeederTab(QWidget):
         start_btn = QPushButton("운전")
         start_btn.setObjectName("control_btn_start")
         start_btn.setMinimumHeight(50)
-        start_btn.clicked.connect(lambda m=motor_id: self.app.motor_start(m))
+        start_btn.clicked.connect(lambda _: self.on_motor_start(motor_id))
         btn_layout.addWidget(start_btn)
         
         stop_btn = QPushButton("정지")
         stop_btn.setObjectName("control_btn_stop")
         stop_btn.setMinimumHeight(50)
-        stop_btn.clicked.connect(lambda m=motor_id: self.app.motor_stop(m))
+        stop_btn.clicked.connect(lambda _: self.on_motor_stop(motor_id))
         btn_layout.addWidget(stop_btn)
         
         motor_main_layout.addLayout(btn_layout)
@@ -210,30 +212,71 @@ class FeederTab(QWidget):
     
     # 이벤트 핸들러
     def on_set_freq(self, motor_id):
-        freq = getattr(self, f"{motor_id}_target_freq").text()
-        self.app.on_log(f"{motor_id} 주파수 설정: {freq} Hz")
-        # TODO: 실제 주파수 설정
+        try:
+            freq = float(getattr(self, f"{motor_id}_target_freq").text())
+            self.app.on_set_freq(motor_id, freq)  # motor_id 추가
+            self.app.on_log(f"{motor_id} 주파수 설정: {freq} Hz")
+            
+            # 모니터링 부분에 현재 주파수 표시 업데이트
+            freq_label = self.findChild(QLabel, f"{motor_id}_freq")
+            if freq_label:
+                freq_label.setText(f"{freq:.2f}")
+                    
+        except ValueError:
+            self.app.on_log(f"잘못된 주파수 값")
     
     def on_set_acc(self, motor_id):
-        acc = getattr(self, f"{motor_id}_target_acc").text()
-        self.app.on_log(f"{motor_id} 가속시간 설정: {acc} s")
-        # TODO: 실제 가속시간 설정
-    
+        try:
+            acc = float(getattr(self, f"{motor_id}_target_acc").text())
+            self.app.on_set_acc(motor_id, acc)
+            self.app.on_log(f"{motor_id} 가속시간 설정: {acc} s")
+            
+            # 모니터링 부분 가속 시간 표시 업데이트
+            acc_label = self.findChild(QLabel, f"{motor_id}_acc")
+            if acc_label:
+                acc_label.setText(f"{acc:.1f}")
+                
+        except ValueError:
+            self.app.on_log(f"잘못된 가속시간 값")
+
     def on_set_dec(self, motor_id):
-        dec = getattr(self, f"{motor_id}_target_dec").text()
-        self.app.on_log(f"{motor_id} 감속시간 설정: {dec} s")
-        # TODO: 실제 감속시간 설정
+        try:
+            dec = float(getattr(self, f"{motor_id}_target_dec").text())
+            self.app.on_set_dec(motor_id, dec)
+            self.app.on_log(f"{motor_id} 감속시간 설정: {dec} s")
+            
+            # 모니터링에 감속 시간 표시 업데이트
+            dec_label = self.findChild(QLabel, f"{motor_id}_dec")
+            if dec_label:
+                dec_label.setText(f"{dec:.1f}")
+        except ValueError:
+            self.app.on_log(f"잘못된 감속시간 값")
     
     def on_motor_start(self, motor_id):
+        self.app.motor_start(motor_id)  # 실제 모터 시작
         self.app.on_log(f"{motor_id} 모터 시작")
         # TODO: 실제 모터 시작
+        
+        # 상태 표시 업데이트
+        status_label = self.findChild(QLabel, f"{motor_id}_status")
+        if status_label:
+            status_label.setText("🟢 운전")
+            status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #3fb950;")
+
     
     def on_motor_stop(self, motor_id):
+        self.app.motor_stop(motor_id)  # 실제 모터 정지
         self.app.on_log(f"{motor_id} 모터 정지")
         # TODO: 실제 모터 정지
+        
+        # 상태 표시 업데이트
+        status_label = self.findChild(QLabel, f"{motor_id}_status")
+        if status_label:
+            status_label.setText("⚫ 정지")
+            status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e;")
     
     def on_set_size(self, size):
-        self.app.on_log(f"배출물 크기 설정: {size}")
+        self.app.on_on_log(f"배출물 크기 설정: {size}")
         # TODO: 서보 위치 조정
     
     def apply_styles(self):

@@ -3,7 +3,7 @@ MODBUS_RTU_CONFIG = {
         "inverter_001": 1,
         "inverter_002": 2
     },
-    "port": "COM7",
+    "port": "COM5",
     "baudrate": 9600,
     "bytesize": 8,
     "parity": "N",

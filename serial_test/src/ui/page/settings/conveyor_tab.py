@@ -1,7 +1,3 @@
-"""
-컨베이어 제어 탭
-"""
-
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QGroupBox, QLineEdit, QFrame, QScrollArea
@@ -22,34 +18,59 @@ class ConveyorTab(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 스크롤 영역
+        # 스크롤 영역 설정
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        # 스크롤 영역의 배경을 투명하게 하여 메인 배경 위에 그룹박스가 떠있는 느낌을 줌
+        scroll.setStyleSheet("""
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0d1117;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #30363d;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
         
+        # 스크롤 내부 컨텐츠 위젯
         scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(15)
-        scroll_layout.setContentsMargins(20, 20, 20, 20)
+        scroll_content.setObjectName("scroll_content")
+        # 컨텐츠 위젯도 투명하게 설정해야 그룹박스 배경색이 돋보임
+        scroll_content.setStyleSheet("#scroll_content { background-color: transparent; }")
         
-        # CV01 ~ CV04 컨베이어
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(15)  # 피더 탭과 동일한 간격
+        scroll_layout.setContentsMargins(20, 20, 20, 20)  # 피더 탭과 동일한 여백
+        
+        # CV01 ~ CV04 컨베이어 섹션 생성
         for i in range(1, 5):
-            self.create_conveyor_section(scroll_layout, f"CV0{i}", i)
+            self.create_conveyor_section(scroll_layout, f"0{i}", i)
         
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
         
-        # 스타일 적용
+        # 스타일 시트 적용 (피더 탭과 동일한 스타일)
         self.apply_styles()
     
     def create_conveyor_section(self, parent_layout, conv_id, conv_num):
         """컨베이어 제어 섹션"""
         conv_group = QGroupBox(f"컨베이어 {conv_id}")
-        conv_group.setObjectName("group_box")
+        conv_group.setObjectName("group_box")  # 스타일 적용을 위한 ID
         conv_main_layout = QVBoxLayout(conv_group)
         
-        # 상태 표시
+        # --- 상태 표시 섹션 ---
         status_layout = QHBoxLayout()
         status_layout.setSpacing(30)
         
@@ -59,22 +80,19 @@ class ConveyorTab(QWidget):
         status_frame_layout.setAlignment(Qt.AlignCenter)
         
         status_title = QLabel("운전 상태")
-        status_title.setStyleSheet("color: #8b949e; font-size: 12px;")
+        # 라벨 배경 투명화 (그룹박스 색상 유지)
+        status_title.setStyleSheet("color: #8b949e; font-size: 12px; background-color: transparent; border: none;")
         status_frame_layout.addWidget(status_title)
         
         status_label = QLabel("⚫ 정지")
         status_label.setObjectName(f"{conv_id}_status")
-        status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e;")
+        status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e; background-color: transparent; border: none;")
         status_frame_layout.addWidget(status_label)
         status_layout.addWidget(status_frame)
         
-        # 현재 주파수
+        # 값 표시 (주파수, 시간 등)
         self.add_value_display(status_layout, "현재 주파수", "0.00", "Hz", f"{conv_id}_freq")
-        
-        # 가속 시간
         self.add_value_display(status_layout, "가속 시간", "0.0", "s", f"{conv_id}_acc")
-        
-        # 감속 시간
         self.add_value_display(status_layout, "감속 시간", "0.0", "s", f"{conv_id}_dec")
         
         status_layout.addStretch()
@@ -82,77 +100,85 @@ class ConveyorTab(QWidget):
         
         conv_main_layout.addSpacing(15)
         
-        # 설정 및 제어
+        # --- 설정 및 제어 섹션 ---
         control_layout = QGridLayout()
         control_layout.setSpacing(10)
         
         row = 0
         
         # 목표 주파수
-        control_layout.addWidget(QLabel("목표 주파수:"), row, 0)
+        control_layout.addWidget(self.create_label("목표 주파수:"), row, 0)
         freq_input = QLineEdit("0.00")
         freq_input.setObjectName("input_field")
         setattr(self, f"{conv_id}_target_freq", freq_input)
         control_layout.addWidget(freq_input, row, 1)
-        control_layout.addWidget(QLabel("Hz"), row, 2)
+        control_layout.addWidget(self.create_label("Hz"), row, 2)
         
         freq_set_btn = QPushButton("설정")
         freq_set_btn.setObjectName("setting_btn")
-        freq_set_btn.clicked.connect(lambda: self.on_set_freq(conv_id))
+        freq_set_btn.clicked.connect(lambda _: self.on_set_freq(conv_id))
         control_layout.addWidget(freq_set_btn, row, 3)
         row += 1
         
         # 가속 시간
-        control_layout.addWidget(QLabel("목표 가속 시간:"), row, 0)
+        control_layout.addWidget(self.create_label("목표 가속 시간:"), row, 0)
         acc_input = QLineEdit("0.0")
         acc_input.setObjectName("input_field")
         setattr(self, f"{conv_id}_target_acc", acc_input)
         control_layout.addWidget(acc_input, row, 1)
-        control_layout.addWidget(QLabel("s"), row, 2)
+        control_layout.addWidget(self.create_label("s"), row, 2)
         
         acc_set_btn = QPushButton("설정")
         acc_set_btn.setObjectName("setting_btn")
-        acc_set_btn.clicked.connect(lambda: self.on_set_acc(conv_id))
+        acc_set_btn.clicked.connect(lambda _: self.on_set_acc(conv_id))
         control_layout.addWidget(acc_set_btn, row, 3)
         row += 1
         
         # 감속 시간
-        control_layout.addWidget(QLabel("목표 감속 시간:"), row, 0)
+        control_layout.addWidget(self.create_label("목표 감속 시간:"), row, 0)
         dec_input = QLineEdit("0.0")
         dec_input.setObjectName("input_field")
         setattr(self, f"{conv_id}_target_dec", dec_input)
         control_layout.addWidget(dec_input, row, 1)
-        control_layout.addWidget(QLabel("s"), row, 2)
+        control_layout.addWidget(self.create_label("s"), row, 2)
         
         dec_set_btn = QPushButton("설정")
         dec_set_btn.setObjectName("setting_btn")
-        dec_set_btn.clicked.connect(lambda: self.on_set_dec(conv_id))
+        dec_set_btn.clicked.connect(lambda _: self.on_set_dec(conv_id))
         control_layout.addWidget(dec_set_btn, row, 3)
         
         conv_main_layout.addLayout(control_layout)
         
         conv_main_layout.addSpacing(10)
         
-        # 운전/정지 버튼
+        # --- 운전/정지 버튼 ---
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
         
+        # 운전 버튼
         start_btn = QPushButton("운전")
-        start_btn.setObjectName("control_btn_start")
+        start_btn.setObjectName("control_btn_start") # ID 부여 (스타일시트 연동)
         start_btn.setMinimumHeight(50)
-        start_btn.clicked.connect(lambda: self.on_conveyor_start(conv_id))
+        start_btn.clicked.connect(lambda _: self.on_conveyor_start(conv_id))
         btn_layout.addWidget(start_btn)
         
+        # 정지 버튼
         stop_btn = QPushButton("정지")
-        stop_btn.setObjectName("control_btn_stop")
+        stop_btn.setObjectName("control_btn_stop") # ID 부여 (스타일시트 연동)
         stop_btn.setMinimumHeight(50)
-        stop_btn.clicked.connect(lambda: self.on_conveyor_stop(conv_id))
+        stop_btn.clicked.connect(lambda _: self.on_conveyor_stop(conv_id))
         btn_layout.addWidget(stop_btn)
         
         conv_main_layout.addLayout(btn_layout)
         
         parent_layout.addWidget(conv_group)
     
+    def create_label(self, text):
+        """기본 라벨 생성 헬퍼"""
+        lbl = QLabel(text)
+        lbl.setStyleSheet("background-color: transparent; border: none; color: #c9d1d9;")
+        return lbl
+
     def add_value_display(self, layout, name, value, unit, obj_name):
         """값 표시 위젯 추가"""
         frame = QFrame()
@@ -162,7 +188,7 @@ class ConveyorTab(QWidget):
         
         # 이름
         name_label = QLabel(name)
-        name_label.setStyleSheet("color: #8b949e; font-size: 12px;")
+        name_label.setStyleSheet("color: #8b949e; font-size: 12px; background-color: transparent; border: none;")
         name_label.setAlignment(Qt.AlignCenter)
         frame_layout.addWidget(name_label)
         
@@ -172,45 +198,75 @@ class ConveyorTab(QWidget):
         
         value_label = QLabel(value)
         value_label.setObjectName(obj_name)
-        value_label.setStyleSheet("color: #58a6ff; font-size: 18px; font-weight: bold;")
+        value_label.setStyleSheet("color: #58a6ff; font-size: 18px; font-weight: bold; background-color: transparent; border: none;")
         value_layout.addWidget(value_label)
         
         unit_label = QLabel(unit)
-        unit_label.setStyleSheet("color: #8b949e; font-size: 12px;")
+        unit_label.setStyleSheet("color: #8b949e; font-size: 12px; background-color: transparent; border: none;")
         value_layout.addWidget(unit_label)
         
         frame_layout.addLayout(value_layout)
         layout.addWidget(frame)
     
-    # 이벤트 핸들러
+    # --- 이벤트 핸들러 ---
     def on_set_freq(self, conv_id):
-        freq = getattr(self, f"{conv_id}_target_freq").text()
-        self.app.on_log(f"{conv_id} 주파수 설정: {freq} Hz")
-        # TODO: 실제 주파수 설정
+        try:
+            freq = float(getattr(self, f"{conv_id}_target_freq").text())
+            self.app.on_set_freq(conv_id, freq)
+            self.app.on_log(f"{conv_id} 주파수 설정: {freq} Hz")
+            
+            freq_label = self.findChild(QLabel, f"{conv_id}_freq")
+            if freq_label:
+                freq_label.setText(f"{freq:.2f}")
+        except ValueError:
+            self.app.on_log(f"잘못된 주파수 값")
     
     def on_set_acc(self, conv_id):
-        acc = getattr(self, f"{conv_id}_target_acc").text()
-        self.app.on_log(f"{conv_id} 가속시간 설정: {acc} s")
-        # TODO: 실제 가속시간 설정
+        try:
+            acc = float(getattr(self, f"{conv_id}_target_acc").text())
+            self.app.on_set_acc(conv_id, acc)
+            self.app.on_log(f"{conv_id} 가속시간 설정: {acc} s")
+            
+            acc_label = self.findChild(QLabel, f"{conv_id}_acc")
+            if acc_label:
+                acc_label.setText(f"{acc:.1f}")
+        except ValueError:
+            self.app.on_log(f"잘못된 가속시간 값")
     
     def on_set_dec(self, conv_id):
-        dec = getattr(self, f"{conv_id}_target_dec").text()
-        self.app.on_log(f"{conv_id} 감속시간 설정: {dec} s")
-        # TODO: 실제 감속시간 설정
+        try:
+            dec = float(getattr(self, f"{conv_id}_target_dec").text())
+            self.app.on_set_dec(conv_id, dec)
+            self.app.on_log(f"{conv_id} 감속시간 설정: {dec} s")
+            
+            dec_label = self.findChild(QLabel, f"{conv_id}_dec")
+            if dec_label:
+                dec_label.setText(f"{dec:.1f}")
+        except ValueError:
+            self.app.on_log(f"잘못된 감속시간 값")
     
     def on_conveyor_start(self, conv_id):
-        self.app.on_log(f"{conv_id} 컨베이어 시작")
-        # TODO: 실제 컨베이어 시작
+        self.app.motor_start(conv_id)
+        
+        status_label = self.findChild(QLabel, f"{conv_id}_status")
+        if status_label:
+            status_label.setText("🟢 운전")
+            status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #3fb950; background-color: transparent; border: none;")
     
     def on_conveyor_stop(self, conv_id):
-        self.app.on_log(f"{conv_id} 컨베이어 정지")
-        # TODO: 실제 컨베이어 정지
+        self.app.motor_stop(conv_id)
+        
+        status_label = self.findChild(QLabel, f"{conv_id}_status")
+        if status_label:
+            status_label.setText("⚫ 정지")
+            status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e; background-color: transparent; border: none;")
     
     def apply_styles(self):
-        """스타일시트 적용"""
+        """스타일시트 적용 (FeederTab과 디자인 통일)"""
         self.setStyleSheet("""
+            /* 그룹박스: 피더 탭과 동일한 짙은 배경색(#0d1117) 적용 */
             QGroupBox {
-               background-color: #0d1117;
+                background-color: #0d1117;
                 border: 2px solid #30363d;
                 border-radius: 8px;
                 padding-top: 15px;
@@ -225,6 +281,7 @@ class ConveyorTab(QWidget):
                 subcontrol-position: top left;
                 padding: 3px 10px;
                 color: #58a6ff;
+                background-color: transparent;
             }
             
             QLabel {
@@ -260,6 +317,7 @@ class ConveyorTab(QWidget):
                 border-color: #58a6ff;
             }
             
+            /* 운전 버튼 (꽉 찬 초록색) */
             #control_btn_start {
                 background-color: #238636;
                 color: white;
@@ -273,6 +331,7 @@ class ConveyorTab(QWidget):
                 background-color: #2ea043;
             }
             
+            /* 정지 버튼 (꽉 찬 빨간색) */
             #control_btn_stop {
                 background-color: #da3633;
                 color: white;

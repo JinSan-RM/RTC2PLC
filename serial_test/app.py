@@ -31,19 +31,24 @@ class App():
         if hasattr(self.ui, 'monitoring_page'):
             self.ui.monitoring_page.update_values(_list)
 
-    def on_set_freq(self, value):
-        self.manager.set_freq(value)
+    def on_set_freq(self, motor_id: str, value: float):
+        self.ui.log(f"Setting frequency for {motor_id} to {value} Hz")
+        self.manager.set_freq(motor_id, value)
 
-    def on_set_acc(self, value):
-        self.manager.set_acc(value)
+    def on_set_acc(self, motor_id: str, value: float):
+        self.ui.log(f"Setting acceleration time for {motor_id} to {value} sec")
+        self.manager.set_acc(motor_id, value)
 
-    def on_set_dec(self, value):
-        self.manager.set_dec(value)
+    def on_set_dec(self, motor_id: str, value: float):
+        self.ui.log(f"Setting deceleration time for {motor_id} to {value} sec")
+        self.manager.set_dec(motor_id, value)
 
-    def motor_start(self, motor_id):
+    def motor_start(self, motor_id: str = 'inverter_001'):
+        self.ui.log(f"Starting motor: {motor_id}")
         self.manager.motor_start(motor_id)
 
     def motor_stop(self, motor_id):
+        self.ui.log(f"Stopping motor: {motor_id}")
         self.manager.motor_stop(motor_id)
         
     def custom_check(self, addr):

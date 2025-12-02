@@ -57,11 +57,11 @@ class ModbusManager():
             self.stop_event.set()
             self.process_thread.join(timeout=5)
             if self.process_thread.is_alive():
-                print("comm manager thread did not terminate properly")
+                self.app.on_log("comm manager thread did not terminate properly")
             self.client.close()
             self.client = None
         except Exception as e:
-            print(f"Modbus disconnection error: {e}")
+            self.app.on_log(f"Modbus disconnection error: {e}")
 
     def _process_task(self):
         while not self.stop_event.is_set():
@@ -208,27 +208,28 @@ class ModbusManager():
             self.app.on_update_monitor(ret)
 
     # 주파수 설정 함수
-    def set_freq(self, value):
+    def set_freq(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 주파수 설정 """
-        ret = self.write_holding_register("inverter_001", 0x0005 - 1, int(value * 100))
+        ret = self.write_holding_register(motor_id, 0x0005 - 1, int(value * 100))
         if ret:
             self.app.on_log(f"set Frequency to {value:.2f} Hz success")
+            
     # 가속 시간 설정 함수
-    def set_acc(self, value):
+    def set_acc(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 가속 시간 설정 """
-        ret = self.write_holding_register("inverter_001", 0x0007 - 1, int(value * 10))
+        ret = self.write_holding_register(motor_id, 0x0007 - 1, int(value * 10))
         if ret:
             self.app.on_log(f"set acceleration time to {value:.1f} sec success")
 
     # 감속 시간 설정 함수
-    def set_dec(self, value):
+    def set_dec(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 감속 시간 설정 """
-        ret = self.write_holding_register("inverter_001", 0x0008 - 1, int(value * 10))
+        ret = self.write_holding_register(motor_id, 0x0008 - 1, int(value * 10))
         if ret:
             self.app.on_log(f"set Frequency to {value:.1f} sec success")
     
     # 모터 동작 함수
-    def motor_start(self, motor_id: str):
+    def motor_start(self, motor_id: str = 'inverter_001'):
         """모터 운전 시작"""
         self.app.on_log(f"motor_start called: {motor_id}")
         

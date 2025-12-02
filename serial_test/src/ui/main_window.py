@@ -10,7 +10,7 @@ from src.ui.page.monitoring_page import MonitoringPage
 from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
 
-from datetime import datetime
+import inspect
 
 class MainWindow(QMainWindow):
     
@@ -296,11 +296,21 @@ class MainWindow(QMainWindow):
     
     def log(self, message):
         """로그 메시지 추가"""
+        # 호출한 위치 정보 가져오기
+        frame = inspect.currentframe().f_back
+        filename = frame.f_code.co_filename.split('/')[-1]  # 파일명만
+        lineno = frame.f_lineno
+        funcname = frame.f_code.co_name
+        
+        # 시간
+        timestamp = QDateTime.currentDateTime().toString("HH:mm:ss.zzz")
+        
+        # 포맷팅
+        log_msg = f"[{timestamp}] [{filename}:{lineno} {funcname}()] {message}"
+        print(log_msg)
+        
         if hasattr(self, 'logs_page'):
-            self.logs_page.add_log(message)
-        else:
-            # 초기화 전이면 콘솔에만 출력
-            print(f"[LOG] {message}")
+            self.logs_page.add_log(log_msg)
 
 if __name__ == "__main__":
     import sys
