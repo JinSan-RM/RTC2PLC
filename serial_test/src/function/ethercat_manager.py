@@ -32,12 +32,13 @@ class EtherCATManager():
 
             self.slaves = []
             for slave in self.master.slaves:
-                if slave.man == 30101:
-                    if slave.id == 0x00010001:
+                if slave.man == LS_VENDOR_ID:
+                    # config_func는 마스터의 config_map 함수 실행 시 실행됨 -> PDO 매핑을 반드시 해야 함
+                    if slave.id == L7NH_PRODUCT_CODE:
                         slave.config_func = self.setup_servo_drive
-                    elif slave.id == 0x10010002:
+                    elif slave.id == D232_PRODUCT_CODE:
                         slave.config_func = self.setup_input_module
-                    elif slave.id == 0x10010003:
+                    elif slave.id == TR32K_PRODUCT_CODE:
                         slave.config_func = self.setup_output_module
                     else:
                         self.master.close()
@@ -92,15 +93,30 @@ class EtherCATManager():
 
     def disconnect(self):
         try:
-            self.pd_stop_event.set()
-            self.check_stop_event.set()
+            self.stop_event.set()
 
-            self.check_thread.join()
-            self.pd_thread.join()
+            if hasattr(self, 'task_thread') and self.task_thread.is_alive():
+                print("[INFO] process task thread to terminate...")
+                self.task_thread.join(timeout=5)
+                if self.task_thread.is_alive():
+                    print("[WARNING] process task thread did not terminate properly")
 
+            if hasattr(self, 'check_thread') and self.check_thread.is_alive():
+                print("[INFO] slave check thread to terminate...")
+                self.check_thread.join(timeout=5)
+                if self.check_thread.is_alive():
+                    print("[WARNING] check_thread did not terminate properly")
+
+            if hasattr(self, 'pd_thread') and self.pd_thread.is_alive():
+                print("[INFO] process data thread to terminate...")
+                self.pd_thread.join(timeout=5)
+                if self.pd_thread.is_alive():
+                    print("[WARNING] process data thread did not terminate properly")
+
+            # 종료 시 모든 슬레이브를 INIT STATE로 전환
             self.master.state = pysoem.INIT_STATE
-
             self.master.write_state()
+
             self.master.close()
         except Exception as e:
             self.app.on_log(f"[ERROR] EtherCAT disconnection error: {e}")
@@ -109,7 +125,7 @@ class EtherCATManager():
         while not self.stop_event.is_set():
             self.master.send_processdata()
             self.recv = self.master.receive_processdata(timeout=100_000)
-            if not self.rect == self.master.expect_wkc:
+            if not self.recv == self.master.expect_wkc:
                 self.app.on_log("[WARNING] incorrect wkc")
 
             time.sleep(ETHERCAT_DELAY)
@@ -173,7 +189,7 @@ class EtherCATManager():
                 len(SERVO_RX_MAP),
                 *SERVO_RX_MAP
             )
-            slave.sdo_write(index=0x1C12, subindex=0, data=rx_map_bytes, ca=True)
+            slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
 
             rx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(SERVO_RX))]),
@@ -188,7 +204,7 @@ class EtherCATManager():
                 len(SERVO_TX_MAP),
                 *SERVO_TX_MAP
             )
-            slave.sdo_write(index=0x1C13, subindex=0, data=tx_map_bytes, ca=True)
+            slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
 
             tx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(SERVO_TX))]),
@@ -209,7 +225,7 @@ class EtherCATManager():
                 len(IO_RX_MAP),
                 *IO_RX_MAP
             )
-            slave.sdo_write(index=0x1C12, subindex=0, data=rx_map_bytes, ca=True)
+            slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
 
             rx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(IO_RX))]),
@@ -224,7 +240,7 @@ class EtherCATManager():
                 len(IO_TX_MAP),
                 *IO_TX_MAP
             )
-            slave.sdo_write(index=0x1C13, subindex=0, data=tx_map_bytes, ca=True)
+            slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
 
             tx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(IO_TX))]),
@@ -244,7 +260,7 @@ class EtherCATManager():
                 len(IO_RX_MAP),
                 *IO_RX_MAP
             )
-            slave.sdo_write(index=0x1C12, subindex=0, data=rx_map_bytes, ca=True)
+            slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
 
             rx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(IO_RX))]),
@@ -259,7 +275,7 @@ class EtherCATManager():
                 len(IO_TX_MAP),
                 *IO_TX_MAP
             )
-            slave.sdo_write(index=0x1C13, subindex=0, data=tx_map_bytes, ca=True)
+            slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
 
             tx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(IO_TX))]),
@@ -271,7 +287,7 @@ class EtherCATManager():
         except Exception as e:
             self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
-    # 서보 기능
+# region servo functions
     # RxPDO 설정
     def _set_rx_pdo(self, slave, ctrl: int = 0, mode: int = 0, pos: int = 0, v: int = 0):
         buf = bytearray(11)
@@ -289,14 +305,14 @@ class EtherCATManager():
         except Exception as e:
             self.app.on_log(f"[ERROR] servo on/off failed: {e}")
 
-    # # 위치 지정
-    # def servo_position(self, slave_id: int, pos: float):
-    #     servo = self.slaves[slave_id]
-    #     ...
+    # 위치 지정
+    def servo_position(self, slave_id: int, pos: float):
+        servo = self.slaves[slave_id]
+        ...
 
-    # # 원점 지정
-    # def servo_home(self, slave_id: int):
-    #     self.servo_position(slave_id, 0)
+    # 원점 지정
+    def servo_set_home(self, slave_id: int):
+        self.servo_position(slave_id, 0)
 
     # 원점 복귀
     def servo_homing(self, slave_id: int):
@@ -310,7 +326,7 @@ class EtherCATManager():
     def servo_move_absolute(self, slave_id: int, pos: float):
         try:
             servo = self.slaves[slave_id]
-            cur_state = struct.unpack('<H', servo.input)[0]
+            cur_state = struct.unpack('<H', servo.input[0:2])[0]
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
             
@@ -320,14 +336,23 @@ class EtherCATManager():
 
     # 상대 위치 이동
     def servo_move_relative(self, slave_id: int, dist: float):
-        servo = self.slaves[slave_id]
-        ...
+        try:
+            servo = self.slaves[slave_id]
+            cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
+                raise Exception("servo is not ready to work")
+            
+            cur_pos = struct.unpack('<i', servo.input[4:8])[0]
+            pos = cur_pos + dist
+            self._set_rx_pdo(servo, 0x000F, 8, pos, 0)
+        except Exception as e:
+            self.app.on_log(f"[ERROR] servo CSP move failed: {e}")
 
     # 속도 이동
     def servo_move_velocity(self, slave_id: int, v:float):
         try:
             servo = self.slaves[slave_id]
-            cur_state = struct.unpack('<H', servo.input)[0]
+            cur_state = struct.unpack('<H', servo.input[0:2])[0]
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
 
@@ -340,7 +365,7 @@ class EtherCATManager():
     def servo_halt(self, slave_id: int):
         try:
             servo = self.slaves[slave_id]
-            cur_state = struct.unpack('<H', servo.input)[0]
+            cur_state = struct.unpack('<H', servo.input[0:2])[0]
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
 
@@ -349,6 +374,17 @@ class EtherCATManager():
         except Exception as e:
             self.app.on_log(f"[ERROR] halt failed: {e}")
 
+    def servo_reset(self, slave_id: int):
+        try:
+            servo = self.slaves[slave_id]
+            self._set_rx_pdo(servo, 0x008F)
+
+        except Exception as e:
+            self.app.on_log(f"[ERROR] halt failed: {e}")
+
+# endregion
+
+# region IO functions
     # IO 기능
     # 비트 쓰기
     def io_write_bit(self, slave_id: int, offset: int, bit_offset: int, data: int):
@@ -357,5 +393,4 @@ class EtherCATManager():
 
     # 읽기는 PDO에서 주기적으로 할 것이므로 별도 구현은 필요 없음
     # 사실 쓰기도 PDO로 하면 됨
-
 # endregion

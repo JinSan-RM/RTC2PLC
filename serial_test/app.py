@@ -5,6 +5,7 @@ import sys
 
 from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
+from src.function.ethercat_manager import EtherCATManager
 
 class App():
     def __init__(self):
@@ -16,8 +17,11 @@ class App():
         self.qt_app.setFont(font)
         
         self.ui = MainWindow(self)
-        self.manager = ModbusManager(self)
-        self.manager.connect()
+        self.modbus_manager = ModbusManager(self)
+        self.modbus_manager.connect()
+
+        self.ethercat_manager = EtherCATManager(self)
+        self.ethercat_manager.connect()
         
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.on_periodic_update)
@@ -26,36 +30,64 @@ class App():
     def on_periodic_update(self):
         """주기적 업데이트"""
         self.ui.update_time()
-    
+
+# region inverter control
     def on_update_monitor(self, _list):
         if hasattr(self.ui, 'monitoring_page'):
             self.ui.monitoring_page.update_values(_list)
 
     def on_set_freq(self, motor_id: str, value: float):
         self.ui.log(f"Setting frequency for {motor_id} to {value} Hz")
-        self.manager.set_freq(motor_id, value)
+        self.modbus_manager.set_freq(motor_id, value)
 
     def on_set_acc(self, motor_id: str, value: float):
         self.ui.log(f"Setting acceleration time for {motor_id} to {value} sec")
-        self.manager.set_acc(motor_id, value)
+        self.modbus_manager.set_acc(motor_id, value)
 
     def on_set_dec(self, motor_id: str, value: float):
         self.ui.log(f"Setting deceleration time for {motor_id} to {value} sec")
-        self.manager.set_dec(motor_id, value)
+        self.modbus_manager.set_dec(motor_id, value)
 
     def motor_start(self, motor_id: str = 'inverter_001'):
         self.ui.log(f"Starting motor: {motor_id}")
-        self.manager.motor_start(motor_id)
+        self.modbus_manager.motor_start(motor_id)
 
     def motor_stop(self, motor_id):
         self.ui.log(f"Stopping motor: {motor_id}")
-        self.manager.motor_stop(motor_id)
+        self.modbus_manager.motor_stop(motor_id)
         
     def custom_check(self, addr):
-        self.manager.custom_check(addr)
+        self.modbus_manager.custom_check(addr)
     
     def custom_write(self, addr, value):
-        self.manager.custom_write(addr, value)
+        self.modbus_manager.custom_write(addr, value)
+# endregion
+
+# region servo control
+    def on_servo_on(self, servo_id: int):
+        self.ethercat_manager.servo_onoff(servo_id, True)
+    
+    def on_servo_off(self, servo_id: int):
+        self.ethercat_manager.servo_onoff(servo_id, False)
+
+    def on_servo_reset(self, servo_id: int):
+        self.ethercat_manager.servo_reset(servo_id)
+
+    def on_servo_stop(self, servo_id: int):
+        self.ethercat_manager.servo_halt(servo_id)
+
+    def on_servo_set_origin(self, servo_id: int):
+        self.ethercat_manager.servo_set_home(servo_id)
+
+    def on_servo_move_to_position(self, servo_id: int, pos: int):
+        self.ethercat_manager.servo_move_absolute(servo_id, pos)
+
+    def on_servo_jog_move(self, servo_id: int, v: int):
+        self.ethercat_manager.servo_move_velocity(servo_id, v)
+
+    def on_servo_inching_move(self, servo_id: int, dist: int):
+        self.ethercat_manager.servo_move_relative(servo_id, dist)
+# endregion
 
     def on_log(self, msg):
         self.ui.log(msg)
