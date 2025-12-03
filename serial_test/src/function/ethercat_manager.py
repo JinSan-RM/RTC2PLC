@@ -305,14 +305,30 @@ class EtherCATManager():
         except Exception as e:
             self.app.on_log(f"[ERROR] servo on/off failed: {e}")
 
-    # 위치 지정
-    def servo_position(self, slave_id: int, pos: float):
-        servo = self.slaves[slave_id]
-        ...
-
     # 원점 지정
     def servo_set_home(self, slave_id: int):
-        self.servo_position(slave_id, 0)
+        try:
+            servo = self.slaves[slave_id]
+            cur_pos = struct.unpack('<i', servo.input[4:8])[0]
+            servo.sdo_write(0x607C, 0, struct.pack('<i', cur_pos))
+        except Exception as e:
+            self.app.on_log(f"[ERROR] servo set home failed: {e}")
+
+    # 하한 설정
+    def servo_set_min_limit(self, slave_id: int, pos: int):
+        try:
+            servo = self.slaves[slave_id]
+            servo.sdo_write(0x607D, 1, struct.pack('<i', pos))
+        except Exception as e:
+            self.app.on_log(f"[ERROR] servo set minimum position limit failed: {e}")
+
+    # 상한 설정
+    def servo_set_min_limit(self, slave_id: int, pos: int):
+        try:
+            servo = self.slaves[slave_id]
+            servo.sdo_write(0x607D, 2, struct.pack('<i', pos))
+        except Exception as e:
+            self.app.on_log(f"[ERROR] servo set maximum position limit failed: {e}")
 
     # 원점 복귀
     def servo_homing(self, slave_id: int):

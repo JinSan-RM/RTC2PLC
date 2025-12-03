@@ -96,7 +96,7 @@ class STATUS_MASK(IntEnum):
     STATUS_QUICK_STOP_ACTIVE = 0x0007
     STATUS_FAULT_REACTION_ACTIVE = 0x000F
     STATUS_FAULT = 0x0008
-    STATUS_WARNING = 0x8000
+    STATUS_WARNING = 0x0080
 
 def check_mask(s, m):
     low_bit = s & 0x00FF

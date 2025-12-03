@@ -263,7 +263,9 @@ class ServoTab(QWidget):
         left_btn = QPushButton("◀ 후진")
         left_btn.setObjectName("jog_btn")
         left_btn.setMinimumSize(120, 60)
+        left_btn.pressed.connect(lambda: self.on_jog_move("left"))
         left_btn.clicked.connect(lambda: self.on_jog_move("left"))
+        left_btn.released.connect(lambda: self.on_jog_stop())
         move_layout.addWidget(left_btn)
         
         move_layout.addSpacing(50)
@@ -272,6 +274,8 @@ class ServoTab(QWidget):
         right_btn.setObjectName("jog_btn")
         right_btn.setMinimumSize(120, 60)
         right_btn.clicked.connect(lambda: self.on_jog_move("right"))
+        right_btn.clicked.connect(lambda: self.on_jog_move("right"))
+        right_btn.clicked.connect(lambda: self.on_jog_stop())
         move_layout.addWidget(right_btn)
         
         jog_layout.addLayout(move_layout)
@@ -281,36 +285,55 @@ class ServoTab(QWidget):
     # 이벤트 핸들러
     def on_servo_on(self):
         self.app.on_log("서보 ON")
-        # TODO: 실제 서보 ON 명령
+        self.app.servo_on(0)
     
     def on_servo_off(self):
         self.app.on_log("서보 OFF")
-        # TODO: 실제 서보 OFF 명령
+        self.app.servo_off(0)
     
     def on_reset(self):
         self.app.on_log("서보 리셋")
         self.alarm_indicator.setText("⚫ 정상")
         self.error_code.setText("0x0000")
-        # TODO: 실제 리셋 명령
+        self.servo_reset(0)
     
     def on_stop(self):
         self.app.on_log("서보 정지")
-        # TODO: 실제 정지 명령
+        self.app.servo_stop(0)
     
     def on_set_origin(self):
         self.app.on_log("원점 설정")
-        # TODO: 실제 원점 설정 명령
+        self.app.servo_set_origin(0)
     
     def on_move_to_position(self):
         position = self.target_position.text()
         speed = self.move_speed.text()
         self.app.on_log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
-        # TODO: 실제 이동 명령
+        self.app.on_move_to_position(0, int(position))
     
     def on_jog_move(self, direction):
         mode = "조그" if self.jog_mode.isChecked() else "인칭"
         self.app.on_log(f"{mode} 이동: {direction}")
-        # TODO: 실제 이동 명령
+
+        _dir = 1 if direction == "right" else -1
+        if self.jog_mode.isChecked():
+            v = float(self.jog_speed.text())
+            if v == 0:
+                self.app.on_log("조그 속도를 설정해주세요")
+            else:
+                self.app.servo_jog_move(0, v*_dir)
+        elif self.inch_mode.isChecked():
+            dist = int(self.inch_distance.text())
+            if dist == 0:
+                self.app.on_log(f"인칭 거리를 설정해주세요")
+            else:
+                self.app.servo_inch_move(0, dist*_dir)
+    
+    def on_jog_stop(self):
+        if self.jog_mode.isChecked():
+            self.app.on_log("조그 이동 정지")
+            self.app.servo_stop()
+
     
     def apply_styles(self):
         """스타일시트 적용"""

@@ -18,10 +18,10 @@ class App():
         
         self.ui = MainWindow(self)
         self.modbus_manager = ModbusManager(self)
-        self.modbus_manager.connect()
+        # self.modbus_manager.connect()
 
         self.ethercat_manager = EtherCATManager(self)
-        self.ethercat_manager.connect()
+        # self.ethercat_manager.connect()
         
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.on_periodic_update)
@@ -64,28 +64,28 @@ class App():
 # endregion
 
 # region servo control
-    def on_servo_on(self, servo_id: int):
+    def servo_on(self, servo_id: int):
         self.ethercat_manager.servo_onoff(servo_id, True)
     
-    def on_servo_off(self, servo_id: int):
+    def servo_off(self, servo_id: int):
         self.ethercat_manager.servo_onoff(servo_id, False)
 
-    def on_servo_reset(self, servo_id: int):
+    def servo_reset(self, servo_id: int):
         self.ethercat_manager.servo_reset(servo_id)
 
-    def on_servo_stop(self, servo_id: int):
+    def servo_stop(self, servo_id: int):
         self.ethercat_manager.servo_halt(servo_id)
 
-    def on_servo_set_origin(self, servo_id: int):
+    def servo_set_origin(self, servo_id: int):
         self.ethercat_manager.servo_set_home(servo_id)
 
-    def on_servo_move_to_position(self, servo_id: int, pos: int):
+    def servo_move_to_position(self, servo_id: int, pos: int):
         self.ethercat_manager.servo_move_absolute(servo_id, pos)
 
-    def on_servo_jog_move(self, servo_id: int, v: int):
+    def servo_jog_move(self, servo_id: int, v: int):
         self.ethercat_manager.servo_move_velocity(servo_id, v)
 
-    def on_servo_inching_move(self, servo_id: int, dist: int):
+    def servo_inch_move(self, servo_id: int, dist: int):
         self.ethercat_manager.servo_move_relative(servo_id, dist)
 # endregion
 
