@@ -198,6 +198,10 @@ class MainWindow(QMainWindow):
         # TODO: 로그 페이지에 추가
         # if hasattr(self, 'logs_page'):
         #     self.logs_page.add_log(message)
+    
+    def closeEvent(self, a0):
+        self.app.quit()
+        # return super().closeEvent(a0)
         
     def apply_styles(self):
         """스타일시트 적용"""

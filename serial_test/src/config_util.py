@@ -59,10 +59,10 @@ SERVO_RX = [
 
 SERVO_TX = [
     0x60410010, # 스테이터스 워드(unsigned short)
-    0x60410008, # 운전 모드 표시(signed char)
+    0x60610008, # 운전 모드 표시(signed char)
     0x60640020, # 현재 위치(int)
     0x606C0020, # 현재 속도(int)
-    0x26140010, # 경고 코드(unsigned short)
+    0x603F0010, # 에러 코드(unsigned short)
 ]
 
 IO_RX_MAP = [
@@ -81,10 +81,17 @@ IO_TX = [
 
 ]
 
-# 앱 자체적으로 전자 기어비 적용을 위한 함수
-def get_servo_modified_value(value):
-    gear_ratio = 524288 / 10000
+# 앱 자체적으로 전자 기어비 적용을 위한 부분
+# 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
+# UI에서 입력 시 값 1당 1 μm 를 의미하게 됨
+gear_ratio = 524288 / 10000
+# 서보로 전달할 값
+def get_servo_unmodified_value(value):
     return int(value * gear_ratio)
+
+# UI에 출력할 값
+def get_servo_modified_value(value):
+    return int(value / gear_ratio)
 
 from enum import IntEnum
 # 서보 상태 체크용 bit mask

@@ -263,7 +263,6 @@ class FeederTab(QWidget):
             status_label.setText("🟢 운전")
             status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #3fb950;")
 
-    
     def on_motor_stop(self, motor_id):
         self.app.motor_stop(motor_id)  # 실제 모터 정지
         self.app.on_log(f"{motor_id} 모터 정지")
@@ -274,6 +273,15 @@ class FeederTab(QWidget):
         if status_label:
             status_label.setText("⚫ 정지")
             status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e;")
+
+    def update_values(self, _data):
+        for _id, _list in _data.items():
+            _freq = self.findChild(QLabel, f"{_id}_freq")
+            _acc = self.findChild(QLabel, f"{_id}_acc")
+            _dec = self.findChild(QLabel, f"{_id}_dec")
+            _freq.setText(f"{_list[3]:.2f}")
+            _acc.setText(f"{_list[0]:.1f}")
+            _dec.setText(f"{_list[1]:.1f}")
     
     def on_set_size(self, size):
         self.app.on_on_log(f"배출물 크기 설정: {size}")

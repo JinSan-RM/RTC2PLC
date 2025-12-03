@@ -9,6 +9,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+from src.config_util import get_servo_modified_value
+
 
 class ServoTab(QWidget):
     """서보 제어 탭"""
@@ -49,10 +51,10 @@ class ServoTab(QWidget):
         status_layout.setSpacing(20)
         
         # 현재 위치
-        self.add_status_item(status_layout, "현재 위치", "0", "mm")
+        self.add_status_item(status_layout, "현재 위치", "0.000", "mm")
         
         # 속도
-        self.add_status_item(status_layout, "속도", "0", "mm/s")
+        self.add_status_item(status_layout, "속도", "0.000", "mm/s")
         
         # 경보
         alarm_frame = QFrame()
@@ -264,7 +266,7 @@ class ServoTab(QWidget):
         left_btn.setObjectName("jog_btn")
         left_btn.setMinimumSize(120, 60)
         left_btn.pressed.connect(lambda: self.on_jog_move("left"))
-        left_btn.clicked.connect(lambda: self.on_jog_move("left"))
+        left_btn.clicked.connect(lambda: self.on_inch_move("left"))
         left_btn.released.connect(lambda: self.on_jog_stop())
         move_layout.addWidget(left_btn)
         
@@ -273,9 +275,9 @@ class ServoTab(QWidget):
         right_btn = QPushButton("전진 ▶")
         right_btn.setObjectName("jog_btn")
         right_btn.setMinimumSize(120, 60)
-        right_btn.clicked.connect(lambda: self.on_jog_move("right"))
-        right_btn.clicked.connect(lambda: self.on_jog_move("right"))
-        right_btn.clicked.connect(lambda: self.on_jog_stop())
+        right_btn.pressed.connect(lambda: self.on_jog_move("right"))
+        right_btn.clicked.connect(lambda: self.on_inch_move("right"))
+        right_btn.released.connect(lambda: self.on_jog_stop())
         move_layout.addWidget(right_btn)
         
         jog_layout.addLayout(move_layout)
@@ -293,9 +295,9 @@ class ServoTab(QWidget):
     
     def on_reset(self):
         self.app.on_log("서보 리셋")
-        self.alarm_indicator.setText("⚫ 정상")
-        self.error_code.setText("0x0000")
-        self.servo_reset(0)
+        # self.alarm_indicator.setText("⚫ 정상")
+        # self.error_code.setText("0x0000")
+        self.app.servo_reset(0)
     
     def on_stop(self):
         self.app.on_log("서보 정지")
@@ -309,21 +311,23 @@ class ServoTab(QWidget):
         position = self.target_position.text()
         speed = self.move_speed.text()
         self.app.on_log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
-        self.app.on_move_to_position(0, int(position))
+        self.app.on_move_to_position(0, int(position*(10**3)))
     
     def on_jog_move(self, direction):
-        mode = "조그" if self.jog_mode.isChecked() else "인칭"
-        self.app.on_log(f"{mode} 이동: {direction}")
-
-        _dir = 1 if direction == "right" else -1
         if self.jog_mode.isChecked():
-            v = float(self.jog_speed.text())
+            self.app.on_log(f"조그 이동: {direction}")
+            _dir = 1 if direction == "right" else -1
+            v = float(self.jog_speed.text()) * (10 ** 3)
             if v == 0:
                 self.app.on_log("조그 속도를 설정해주세요")
             else:
                 self.app.servo_jog_move(0, v*_dir)
-        elif self.inch_mode.isChecked():
-            dist = int(self.inch_distance.text())
+    
+    def on_inch_move(self, direction):
+        if self.inch_mode.isChecked():
+            self.app.on_log(f"인칭 이동: {direction}")
+            _dir = 1 if direction == "right" else -1
+            dist = int(self.inch_distance.text()) * (10 ** 3)
             if dist == 0:
                 self.app.on_log(f"인칭 거리를 설정해주세요")
             else:
@@ -332,7 +336,23 @@ class ServoTab(QWidget):
     def on_jog_stop(self):
         if self.jog_mode.isChecked():
             self.app.on_log("조그 이동 정지")
-            self.app.servo_stop()
+            self.app.servo_stop(0)
+    
+    def update_values(self, _data):
+        ret = _data[0]
+        cur_pos = get_servo_modified_value(ret[2]) / (10 ** 3)
+        cur_v = get_servo_modified_value(ret[3]) / (10 ** 3)
+        err_code = ret[4]
+
+        self.status_values["현재 위치"].setText(f"{cur_pos:.03f}")
+        self.status_values["속도"].setText(f"{cur_v:.03f}")
+
+        if err_code != 0:
+            self.alarm_indicator.setText("🔴 오류")
+            self.error_code.setText(f"{err_code:04X}")
+        else:
+            self.alarm_indicator.setText("⚫ 정상")
+            self.error_code.setText("0x0000")
 
     
     def apply_styles(self):

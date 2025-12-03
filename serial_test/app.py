@@ -18,10 +18,10 @@ class App():
         
         self.ui = MainWindow(self)
         self.modbus_manager = ModbusManager(self)
-        # self.modbus_manager.connect()
+        self.modbus_manager.connect()
 
         self.ethercat_manager = EtherCATManager(self)
-        # self.ethercat_manager.connect()
+        self.ethercat_manager.connect()
         
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.on_periodic_update)
@@ -31,10 +31,16 @@ class App():
         """주기적 업데이트"""
         self.ui.update_time()
 
-# region inverter control
     def on_update_monitor(self, _list):
         if hasattr(self.ui, 'monitoring_page'):
             self.ui.monitoring_page.update_values(_list)
+
+# region inverter control
+    def on_update_inverter_status(self, _data):
+        if hasattr(self.ui, 'settings_page') and self.ui.pages.currentIndex() == 2:
+            tab_index = self.ui.settings_page.tabs.currentIndex()
+            if tab_index == 1 or tab_index == 2:
+                self.ui.settings_page.tabs.widget(tab_index).update_values(_data)
 
     def on_set_freq(self, motor_id: str, value: float):
         self.ui.log(f"Setting frequency for {motor_id} to {value} Hz")
@@ -64,6 +70,12 @@ class App():
 # endregion
 
 # region servo control
+    def on_update_servo_status(self, _data):
+        if hasattr(self.ui, 'settings_page') and self.ui.pages.currentIndex() == 2:
+            tab_index = self.ui.settings_page.tabs.currentIndex()
+            if tab_index == 0:
+                self.ui.settings_page.tabs.widget(tab_index).update_values(_data)
+
     def servo_on(self, servo_id: int):
         self.ethercat_manager.servo_onoff(servo_id, True)
     
@@ -101,8 +113,9 @@ class App():
 
     def quit(self):
         """애플리케이션 종료"""
-        self.manager.disconnect()
-        self.qt_app.quit()
+        self.modbus_manager.disconnect()
+        self.ethercat_manager.disconnect()
+        # self.qt_app.quit()
         # self.manager.disconnect()
         # self.root.destroy()
 
