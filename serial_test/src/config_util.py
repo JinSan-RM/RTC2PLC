@@ -65,21 +65,17 @@ SERVO_TX = [
     0x603F0010, # 에러 코드(unsigned short)
 ]
 
-IO_RX_MAP = [
+# OUTPUT_RX_MAP = [
+# ]
 
-]
+# INPUT_TX_MAP = [
+# ]
 
-IO_TX_MAP = [
+# OUTPUT_RX = [
+# ]
 
-]
-
-IO_RX = [
-
-]
-
-IO_TX = [
-
-]
+# INPUT_TX = [
+# ]
 
 # 앱 자체적으로 전자 기어비 적용을 위한 부분
 # 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
@@ -104,6 +100,41 @@ class STATUS_MASK(IntEnum):
     STATUS_FAULT_REACTION_ACTIVE = 0x000F
     STATUS_FAULT = 0x0008
     STATUS_WARNING = 0x0080
+
+# input 맵
+class INPUT_MAP(IntEnum):
+    INPUT_00 = 0
+    INPUT_01 = 1
+    INPUT_02 = 2
+    INPUT_03 = 3
+    INPUT_04 = 4
+    INPUT_05 = 5
+    INPUT_06 = 6
+    INPUT_07 = 7
+    INPUT_08 = 8
+    INPUT_09 = 9
+    INPUT_10 = 10
+    INPUT_11 = 11
+    INPUT_12 = 12
+    INPUT_13 = 13
+    INPUT_14 = 14
+    INPUT_15 = 15
+    INPUT_16 = 16
+    INPUT_17 = 17
+    INPUT_18 = 18
+    INPUT_19 = 19
+    INPUT_20 = 20
+    INPUT_21 = 21
+    INPUT_22 = 22
+    INPUT_23 = 23
+    INPUT_24 = 24
+    INPUT_25 = 25
+    INPUT_26 = 26
+    INPUT_27 = 27
+    INPUT_28 = 28
+    INPUT_29 = 29
+    INPUT_30 = 30
+    INPUT_31 = 31
 
 def check_mask(s, m):
     low_bit = s & 0x00FF

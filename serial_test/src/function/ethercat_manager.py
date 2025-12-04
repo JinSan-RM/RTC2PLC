@@ -37,21 +37,21 @@ class EtherCATManager():
             if not self.master.config_init() > 0:
                 raise Exception("[WARNING] EtherCAT Slaves not found")
 
-            self.servo = []
-            self.input = []
-            self.output = []
+            self.servo_drives = []
+            self.input_modules = []
+            self.output_modules = []
             for slave in self.master.slaves:
                 if slave.man == LS_VENDOR_ID:
                     # config_func는 마스터의 config_map 함수 실행 시 실행됨 -> PDO 매핑을 반드시 해야 함
                     if slave.id == L7NH_PRODUCT_CODE:
                         slave.config_func = self.setup_servo_drive
-                        self.servo.append(slave)
+                        self.servo_drives.append(slave)
                     elif slave.id == D232_PRODUCT_CODE:
-                        slave.config_func = self.setup_input_module
-                        self.input.append(slave)
+                        # slave.config_func = self.setup_input_module
+                        self.input_modules.append(slave)
                     elif slave.id == TR32K_PRODUCT_CODE:
-                        slave.config_func = self.setup_output_module
-                        self.output.append(slave)
+                        # slave.config_func = self.setup_output_module
+                        self.output_modules.append(slave)
                     else:
                         self.master.close()
                         raise Exception("[WARNING] unexpected slave layout")
@@ -140,6 +140,7 @@ class EtherCATManager():
             if not self.recv == self.master.expected_wkc:
                 self.app.on_log("[WARNING] incorrect wkc")
             
+            self.update_io()
             self.update_monitor_values()
 
             time.sleep(ETHERCAT_DELAY)
@@ -195,7 +196,8 @@ class EtherCATManager():
     def _process_task_loop(self):
         self.master.in_op = True
 
-        for i, _ in enumerate(self.servo):
+        # 동작 실행 전에 한 번 셧다운을 해줘야 이후 정상작동함
+        for i, _ in enumerate(self.servo_drives):
             self.servo_shutdown(i)
         
         while not self.stop_event.is_set():
@@ -204,7 +206,8 @@ class EtherCATManager():
                 task = self.tasks.get()
                 # todo: run task function
             
-            ret = struct.unpack('<HbiiH', self.servo[0].input)
+            # 테스트용 출력
+            ret = struct.unpack('<HbiiH', self.servo_drives[0].input)
             status_word = ret[0]
             cur_mode = ret[1]
             cur_pos = ret[2]
@@ -219,6 +222,7 @@ class EtherCATManager():
         slave = self.master.slaves[slave_pos]
         try:
             # RxPDO(master -> slave) 설정
+            # sync manager 2에 RxPDO 맵으로 사용할 오브젝트의 인덱스 할당
             rx_map_bytes = struct.pack(
                 "<Bx" + "".join(["H" for _ in range(len(SERVO_RX_MAP))]),
                 len(SERVO_RX_MAP),
@@ -226,6 +230,7 @@ class EtherCATManager():
             )
             slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
 
+            # RxPDO 맵에 RxPDO 구성을 매핑
             rx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(SERVO_RX))]),
                 len(SERVO_RX),
@@ -234,6 +239,7 @@ class EtherCATManager():
             slave.sdo_write(index=SERVO_RX_MAP[0], subindex=0, data=rx_bytes, ca=True)
 
             # TxPDO(slave -> master) 설정
+            # sync manager 3에 TxPDO 맵으로 사용할 오브젝트의 인덱스 할당
             tx_map_bytes = struct.pack(
                 "<Bx" + "".join(["H" for _ in range(len(SERVO_TX_MAP))]),
                 len(SERVO_TX_MAP),
@@ -241,6 +247,7 @@ class EtherCATManager():
             )
             slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
 
+            # TxPDO 맵에 TxPDO 구성을 매핑
             tx_bytes = struct.pack(
                 "<Bx" + "".join(["I" for _ in range(len(SERVO_TX))]),
                 len(SERVO_TX),
@@ -252,77 +259,49 @@ class EtherCATManager():
             self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
     # IO 모듈 셋업
-    def setup_input_module(self, slave_pos):
-        slave = self.master.slaves[slave_pos]
-        try:
-            # RxPDO(master -> slave) 설정
-            rx_map_bytes = struct.pack(
-                "<Bx" + "".join(["H" for _ in range(len(IO_RX_MAP))]),
-                len(IO_RX_MAP),
-                *IO_RX_MAP
-            )
-            slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
+    # def setup_input_module(self, slave_pos):
+    #     slave = self.master.slaves[slave_pos]
+    #     try:
+    #         # 입력 모듈은 TxPDO만 존재
+    #         # TxPDO(slave -> master) 설정
+    #         tx_map_bytes = struct.pack(
+    #             "<Bx" + "".join(["H" for _ in range(len(INPUT_TX_MAP))]),
+    #             len(INPUT_TX_MAP),
+    #             *INPUT_TX_MAP
+    #         )
+    #         slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
 
-            rx_bytes = struct.pack(
-                "<Bx" + "".join(["I" for _ in range(len(IO_RX))]),
-                len(IO_RX),
-                *IO_RX
-            )
-            slave.sdo_write(index=IO_RX_MAP[0], subindex=0, data=rx_bytes, ca=True)
+    #         tx_bytes = struct.pack(
+    #             "<Bx" + "".join(["I" for _ in range(len(INPUT_TX))]),
+    #             len(INPUT_TX),
+    #             *INPUT_TX
+    #         )
+    #         slave.sdo_write(index=INPUT_TX_MAP[0], subindex=0, data=tx_bytes, ca=True)
 
-            # TxPDO(slave -> master) 설정
-            tx_map_bytes = struct.pack(
-                "<Bx" + "".join(["H" for _ in range(len(IO_TX_MAP))]),
-                len(IO_TX_MAP),
-                *IO_TX_MAP
-            )
-            slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
+    #     except Exception as e:
+    #         self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
-            tx_bytes = struct.pack(
-                "<Bx" + "".join(["I" for _ in range(len(IO_TX))]),
-                len(IO_TX),
-                *IO_TX
-            )
-            slave.sdo_write(index=IO_TX_MAP[0], subindex=0, data=tx_bytes, ca=True)
+    # def setup_output_module(self, slave_pos):
+    #     slave = self.master.slaves[slave_pos]
+    #     try:
+    #         # 출력 모듈은 RxPDO만 존재
+    #         # RxPDO(master -> slave) 설정
+    #         rx_map_bytes = struct.pack(
+    #             "<Bx" + "".join(["H" for _ in range(len(OUTPUT_RX_MAP))]),
+    #             len(OUTPUT_RX_MAP),
+    #             *OUTPUT_RX_MAP
+    #         )
+    #         slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
 
-        except Exception as e:
-            self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
+    #         rx_bytes = struct.pack(
+    #             "<Bx" + "".join(["I" for _ in range(len(OUTPUT_RX))]),
+    #             len(OUTPUT_RX),
+    #             *OUTPUT_RX
+    #         )
+    #         slave.sdo_write(index=OUTPUT_RX_MAP[0], subindex=0, data=rx_bytes, ca=True)
 
-    def setup_output_module(self, slave_pos):
-        slave = self.master.slaves[slave_pos]
-        try:
-            # RxPDO(master -> slave) 설정
-            rx_map_bytes = struct.pack(
-                "<Bx" + "".join(["H" for _ in range(len(IO_RX_MAP))]),
-                len(IO_RX_MAP),
-                *IO_RX_MAP
-            )
-            slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
-
-            rx_bytes = struct.pack(
-                "<Bx" + "".join(["I" for _ in range(len(IO_RX))]),
-                len(IO_RX),
-                *IO_RX
-            )
-            slave.sdo_write(index=IO_RX_MAP[0], subindex=0, data=rx_bytes, ca=True)
-
-            # TxPDO(slave -> master) 설정
-            tx_map_bytes = struct.pack(
-                "<Bx" + "".join(["H" for _ in range(len(IO_TX_MAP))]),
-                len(IO_TX_MAP),
-                *IO_TX_MAP
-            )
-            slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
-
-            tx_bytes = struct.pack(
-                "<Bx" + "".join(["I" for _ in range(len(IO_TX))]),
-                len(IO_TX),
-                *IO_TX
-            )
-            slave.sdo_write(index=IO_TX_MAP[0], subindex=0, data=tx_bytes, ca=True)
-
-        except Exception as e:
-            self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
+    #     except Exception as e:
+    #         self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
 # region servo functions
     # RxPDO 설정
@@ -332,20 +311,20 @@ class EtherCATManager():
         slave.output = bytes(buf)
 
     def update_monitor_values(self):
-        def _get_tx_pdo(slave):
-            return struct.unpack('<HbiiH', slave.input)
+        def _get_tx_pdo(servo):
+            return struct.unpack('<HbiiH', servo.input)
 
         _data = []
-        for slave in self.servo:
-            tx_pdo = _get_tx_pdo(slave)
+        for servo in self.servo_drives:
+            tx_pdo = _get_tx_pdo(servo)
             _data.append(tx_pdo)
         
         self.app.on_update_servo_status(_data)
 
     # 서보 on/off
-    def servo_onoff(self, slave_id: int, onoff: bool):
+    def servo_onoff(self, servo_id: int, onoff: bool):
         try:
-            servo = self.servo[slave_id]
+            servo = self.servo_drives[servo_id]
             if onoff:
                 self._set_rx_pdo(servo, 0x000F)
             else:
@@ -354,43 +333,45 @@ class EtherCATManager():
             self.app.on_log(f"[ERROR] servo on/off failed: {e}")
 
     # 원점 지정
-    def servo_set_home(self, slave_id: int):
+    def servo_set_home(self, servo_id: int):
         try:
-            servo = self.servo[slave_id]
-            cur_pos = struct.unpack('<i', servo.input[4:8])[0]
+            servo = self.servo_drives[servo_id]
+            # cur_pos = struct.unpack('<i', servo.input[4:8])[0]
+            cur_pos = int.from_bytes(servo.input[4:8], 'little', signed=True)
             servo.sdo_write(0x607C, 0, struct.pack('<i', get_servo_unmodified_value(cur_pos)))
         except Exception as e:
             self.app.on_log(f"[ERROR] servo set home failed: {e}")
 
     # 하한 설정
-    def servo_set_min_limit(self, slave_id: int, pos: int):
+    def servo_set_min_limit(self, servo_id: int, pos: int):
         try:
-            servo = self.servo[slave_id]
+            servo = self.servo_drives[servo_id]
             servo.sdo_write(0x607D, 1, struct.pack('<i', get_servo_unmodified_value(pos)))
         except Exception as e:
             self.app.on_log(f"[ERROR] servo set minimum position limit failed: {e}")
 
     # 상한 설정
-    def servo_set_min_limit(self, slave_id: int, pos: int):
+    def servo_set_min_limit(self, servo_id: int, pos: int):
         try:
-            servo = self.servo[slave_id]
+            servo = self.servo_drives[servo_id]
             servo.sdo_write(0x607D, 2, struct.pack('<i', get_servo_unmodified_value(pos)))
         except Exception as e:
             self.app.on_log(f"[ERROR] servo set maximum position limit failed: {e}")
 
     # 원점 복귀
-    def servo_homing(self, slave_id: int):
+    def servo_homing(self, servo_id: int):
         try:
-            servo = self.servo[slave_id]
+            servo = self.servo_drives[servo_id]
             self._set_rx_pdo(servo, 0x001F, 6)
         except Exception as e:
             self.app.on_log(f"[ERROR] servo homing failed: {e}")
 
     # 절대 위치 이동
-    def servo_move_absolute(self, slave_id: int, pos: float):
+    def servo_move_absolute(self, servo_id: int, pos: float):
         try:
-            servo = self.servo[slave_id]
-            cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            servo = self.servo_drives[servo_id]
+            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
             
@@ -399,24 +380,27 @@ class EtherCATManager():
             self.app.on_log(f"[ERROR] servo CSP move failed: {e}")
 
     # 상대 위치 이동
-    def servo_move_relative(self, slave_id: int, dist: float):
+    def servo_move_relative(self, servo_id: int, dist: float):
         try:
-            servo = self.servo[slave_id]
-            cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            servo = self.servo_drives[servo_id]
+            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
             
-            cur_pos = struct.unpack('<i', servo.input[4:8])[0]
+            # cur_pos = struct.unpack('<i', servo.input[4:8])[0]
+            cur_pos = int.from_bytes(servo.input[4:8], 'little', signed=True)
             pos = cur_pos + dist
             self._set_rx_pdo(servo, 0x000F, 8, pos, 0)
         except Exception as e:
             self.app.on_log(f"[ERROR] servo CSP move failed: {e}")
 
     # 속도 이동
-    def servo_move_velocity(self, slave_id: int, v:float):
+    def servo_move_velocity(self, servo_id: int, v:float):
         try:
-            servo = self.servo[slave_id]
-            cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            servo = self.servo_drives[servo_id]
+            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
 
@@ -426,10 +410,11 @@ class EtherCATManager():
             self.app.on_log(f"[ERROR] servo CSV move failed: {e}")
 
     # 정지(대기 상태로 전환)
-    def servo_halt(self, slave_id: int):
+    def servo_halt(self, servo_id: int):
         try:
-            servo = self.servo[slave_id]
-            cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            servo = self.servo_drives[servo_id]
+            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
+            cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
 
@@ -438,17 +423,17 @@ class EtherCATManager():
         except Exception as e:
             self.app.on_log(f"[ERROR] halt failed: {e}")
 
-    def servo_reset(self, slave_id: int):
+    def servo_reset(self, servo_id: int):
         try:
-            servo = self.servo[slave_id]
+            servo = self.servo_drives[servo_id]
             self._set_rx_pdo(servo, 0x008F)
 
         except Exception as e:
             self.app.on_log(f"[ERROR] reset failed: {e}")
 
-    def servo_shutdown(self, slave_id: int):
+    def servo_shutdown(self, servo_id: int):
         try:
-            servo = self.servo[slave_id]
+            servo = self.servo_drives[servo_id]
             self._set_rx_pdo(servo, 0x0006)
 
         except Exception as e:
@@ -458,11 +443,24 @@ class EtherCATManager():
 
 # region IO functions
     # IO 기능
-    # 비트 쓰기
-    def io_write_bit(self, slave_id: int, offset: int, bit_offset: int, data: int):
-        module = self.output[slave_id]
-        ...
+    def update_io(self):
+        for _i in self.input_modules:
+            total_bits = int.from_bytes(_i.input, 'little')
+            on_bits = [bit_pos for bit_pos in range(32) if total_bits & (1 << bit_pos)]
+            # todo: on 비트에 대한 처리
 
-    # 읽기는 PDO에서 주기적으로 할 것이므로 별도 구현은 필요 없음
-    # 사실 쓰기도 PDO로 하면 됨
+    # 비트 쓰기
+    def io_write_bit(self, output_id: int, byte_offset: int, bit_offset: int, data: bool):
+        if not (byte_offset >= 0 and byte_offset < 4) or not (bit_offset >= 0 and bit_offset < 8):
+            self.app.on_log(f"[WARNING] wrong byte offset({byte_offset}) of bit offset({bit_offset})")
+            return
+
+        # byte_offset 번째 바이트의 bit_offset 번째 비트. little endian 방식이므로 바이트 순서를 뒤집음.
+        target_bit = 1 << ((3 - byte_offset) * 8 + bit_offset)
+        module = self.output_modules[output_id]
+        if data:
+            module.output |= target_bit
+        else:
+            module.output &= ~target_bit
+
 # endregion
