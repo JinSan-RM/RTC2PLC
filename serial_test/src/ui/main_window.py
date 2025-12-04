@@ -11,6 +11,7 @@ from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
 
 import inspect
+import platform
 
 class MainWindow(QMainWindow):
     
@@ -301,8 +302,13 @@ class MainWindow(QMainWindow):
     def log(self, message):
         """로그 메시지 추가"""
         # 호출한 위치 정보 가져오기
-        frame = inspect.currentframe().f_back
-        filename = frame.f_code.co_filename.split('/')[-1]  # 파일명만
+        frame = inspect.currentframe().f_back.f_back
+        os_name = platform.system()
+        if os_name == "Windows":
+            sep = '\\'
+        else:
+            sep = '/'
+        filename = frame.f_code.co_filename.split(sep)[-1]  # 파일명만
         lineno = frame.f_lineno
         funcname = frame.f_code.co_name
         

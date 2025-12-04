@@ -55,7 +55,7 @@ class ConveyorTab(QWidget):
         
         # CV01 ~ CV04 컨베이어 섹션 생성
         for i in range(1, 5):
-            self.create_conveyor_section(scroll_layout, f"0{i}", i)
+            self.create_conveyor_section(scroll_layout, f"컨베이어 0{i}", f"inverter_00{i+2}")
         
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
@@ -64,9 +64,9 @@ class ConveyorTab(QWidget):
         # 스타일 시트 적용 (피더 탭과 동일한 스타일)
         self.apply_styles()
     
-    def create_conveyor_section(self, parent_layout, conv_id, conv_num):
+    def create_conveyor_section(self, parent_layout, title, conv_id):
         """컨베이어 제어 섹션"""
-        conv_group = QGroupBox(f"컨베이어 {conv_id}")
+        conv_group = QGroupBox(f"{title}")
         conv_group.setObjectName("group_box")  # 스타일 적용을 위한 ID
         conv_main_layout = QVBoxLayout(conv_group)
         
@@ -199,6 +199,7 @@ class ConveyorTab(QWidget):
         value_label = QLabel(value)
         value_label.setObjectName(obj_name)
         value_label.setStyleSheet("color: #58a6ff; font-size: 18px; font-weight: bold; background-color: transparent; border: none;")
+        setattr(self, obj_name, value_label)
         value_layout.addWidget(value_label)
         
         unit_label = QLabel(unit)
@@ -260,6 +261,18 @@ class ConveyorTab(QWidget):
         if status_label:
             status_label.setText("⚫ 정지")
             status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e; background-color: transparent; border: none;")
+
+    def update_values(self, _data):
+        for _id, _list in _data.items():
+            if _list:
+                _freq = getattr(self, f"{_id}_freq", None)
+                if _freq is None:
+                    continue
+                _acc = getattr(self, f"{_id}_acc")
+                _dec = getattr(self, f"{_id}_dec")
+                _freq.setText(f"{_list[3]:.2f}")
+                _acc.setText(f"{_list[0]:.1f}")
+                _dec.setText(f"{_list[1]:.1f}")
     
     def apply_styles(self):
         """스타일시트 적용 (FeederTab과 디자인 통일)"""

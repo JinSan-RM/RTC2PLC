@@ -276,12 +276,15 @@ class FeederTab(QWidget):
 
     def update_values(self, _data):
         for _id, _list in _data.items():
-            _freq = self.findChild(QLabel, f"{_id}_freq")
-            _acc = self.findChild(QLabel, f"{_id}_acc")
-            _dec = self.findChild(QLabel, f"{_id}_dec")
-            _freq.setText(f"{_list[3]:.2f}")
-            _acc.setText(f"{_list[0]:.1f}")
-            _dec.setText(f"{_list[1]:.1f}")
+            if _list:
+                _freq = self.findChild(QLabel, f"{_id}_freq")
+                if _freq is None:
+                    continue
+                _acc = self.findChild(QLabel, f"{_id}_acc")
+                _dec = self.findChild(QLabel, f"{_id}_dec")
+                _freq.setText(f"{_list[3]:.2f}")
+                _acc.setText(f"{_list[0]:.1f}")
+                _dec.setText(f"{_list[1]:.1f}")
     
     def on_set_size(self, size):
         self.app.on_on_log(f"배출물 크기 설정: {size}")

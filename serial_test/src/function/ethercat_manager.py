@@ -45,12 +45,15 @@ class EtherCATManager():
                     # config_func는 마스터의 config_map 함수 실행 시 실행됨 -> PDO 매핑을 반드시 해야 함
                     if slave.id == L7NH_PRODUCT_CODE:
                         slave.config_func = self.setup_servo_drive
+                        slave.add_emergency_callback(self.emcy_callback_servo)
                         self.servo_drives.append(slave)
                     elif slave.id == D232_PRODUCT_CODE:
                         # slave.config_func = self.setup_input_module
+                        slave.add_emergency_callback(self.emcy_callback_input)
                         self.input_modules.append(slave)
                     elif slave.id == TR32K_PRODUCT_CODE:
                         # slave.config_func = self.setup_output_module
+                        slave.add_emergency_callback(self.emcy_callback_output)
                         self.output_modules.append(slave)
                     else:
                         self.master.close()
@@ -207,13 +210,16 @@ class EtherCATManager():
                 # todo: run task function
             
             # 테스트용 출력
-            ret = struct.unpack('<HbiiH', self.servo_drives[0].input)
-            status_word = ret[0]
-            cur_mode = ret[1]
-            cur_pos = ret[2]
-            cur_v = ret[3]
-            err = ret[4]
-            print(f"status:{status_word:016b}, mode:{cur_mode}, pos:{cur_pos}, v:{cur_v}, err:{err:X}")
+            # ret = struct.unpack('<HbiiH', self.servo_drives[0].input)
+            # status_word = ret[0]
+            # cur_mode = ret[1]
+            # cur_pos = ret[2]
+            # cur_v = ret[3]
+            # err = ret[4]
+            # print(f"status:{status_word:016b}, mode:{cur_mode}, pos:{cur_pos}, v:{cur_v}, err:{err:X}")
+
+            # temp2 = int.from_bytes(self.servo_drives[0].sdo_read(0x60F4, 0, 4), 'little', signed=True)
+            # print(f"diff: {temp2}")
 
             time.sleep(1)
 
@@ -254,6 +260,10 @@ class EtherCATManager():
                 *SERVO_TX
             )
             slave.sdo_write(index=SERVO_TX_MAP[0], subindex=0, data=tx_bytes, ca=True)
+
+            # temp = int.from_bytes(slave.sdo_read(0x6081, 0, 4), 'little')
+            # print(f"profile velocity actual value: {temp} modified: {get_servo_modified_value(temp)}")
+            
 
         except Exception as e:
             self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
@@ -362,7 +372,12 @@ class EtherCATManager():
     def servo_homing(self, servo_id: int):
         try:
             servo = self.servo_drives[servo_id]
-            self._set_rx_pdo(servo, 0x001F, 6)
+            cur_pos = int.from_bytes(servo.input[3:7], 'little', signed=True)
+            if cur_pos >= 0:
+                servo.sdo_write(0x6098, 0, struct.pack('b', 33))
+            else:
+                servo.sdo_write(0x6098, 0, struct.pack('b', 34))
+            threading.Timer(0.01, lambda: self._set_rx_pdo(servo, 0x001F, 6))
         except Exception as e:
             self.app.on_log(f"[ERROR] servo homing failed: {e}")
 
@@ -464,3 +479,14 @@ class EtherCATManager():
             module.output &= ~target_bit
 
 # endregion
+
+# region emergency functions
+    # 메일박스로 긴급 호출 시 콜백 함수
+    def emcy_callback_servo(self, msg):
+        self.app.on_log(f"[ERROR] servo emergency: {msg}")
+
+    def emcy_callback_input(self, msg):
+        self.app.on_log(f"[ERROR] input emergency: {msg}")
+
+    def emcy_callback_output(self, msg):
+        self.app.on_log(f"[ERROR] output emergency: {msg}")
