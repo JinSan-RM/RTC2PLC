@@ -2,7 +2,7 @@
 설정 페이지 - 서보, 피더, 컨베이어, 에어나이프 제어
 """
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget
 )
 

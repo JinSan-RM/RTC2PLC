@@ -2,13 +2,13 @@
 진단 페이지 - IO 체크 및 로그
 """
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QGroupBox, QTextEdit, QScrollArea,
     QFrame, QTabWidget
 )
-from PyQt5.QtCore import Qt, QDateTime
-from PyQt5.QtGui import QTextCursor
+from PySide6.QtCore import Qt, QDateTime
+from PySide6.QtGui import QTextCursor
 
 
 class IOIndicator(QFrame):

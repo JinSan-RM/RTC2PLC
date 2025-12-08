@@ -2,3 +2,5 @@
 *.png
 PLC_TestTool
 RGB_streaming
+*env
+env*

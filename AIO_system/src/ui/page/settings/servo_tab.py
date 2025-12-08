@@ -2,12 +2,12 @@
 서보 제어 탭
 """
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QGroupBox, QLineEdit, QRadioButton,
     QButtonGroup, QFrame
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 
 class ServoTab(QWidget):

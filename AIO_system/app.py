@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QFont
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QFont
 import sys
 
 from src.ui.main_window import MainWindow
