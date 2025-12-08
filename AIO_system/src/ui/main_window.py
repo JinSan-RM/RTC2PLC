@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QPushButton, QLabel, QFrame, QTextEdit, 
 )
-from PyQt5.QtCore import Qt, QDateTime, QTimer
-from PyQt5.QtGui import QFont
+from PySide6.QtCore import Qt, QDateTime, QTimer
+from PySide6.QtGui import QFont
 
 from src.ui.page.home_page import HomePage
 from src.ui.page.monitoring_page import MonitoringPage
@@ -324,7 +324,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     import sys
-    from PyQt5.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     class DummyApp:
         def on_log(self, msg):

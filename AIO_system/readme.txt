@@ -5,7 +5,7 @@ AIO ( All - in - one ) system
 
 1. 라이브러리 설치
     - pip install pysoem
-    - pip install PyQt5
+    - pip install PySide6
     - pip install pymodbus
     - pip install datetime
 

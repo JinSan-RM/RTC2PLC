@@ -2,14 +2,16 @@
 모니터링 페이지 - 카메라 스트림
 """
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QGroupBox, QFrame, QComboBox
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QPen
-
-
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QPen
+from src.vision_camera.predict_AI import AIPlasticDetectionSystem
+import sys
+import cv2
+import numpy as np
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     
@@ -17,7 +19,16 @@ class CameraView(QFrame):
         super().__init__()
         self.camera_id = camera_id
         self.camera_name = camera_name
+        self.detector = AIPlasticDetectionSystem(
+            confidence_threshold=0.7,
+            img_size=640,
+        )
+        self.detector_frame_generator = self.detector.run()
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_frame)
+        
         self.init_ui()
+        
     
     def init_ui(self):
         """UI 초기화"""
@@ -74,11 +85,34 @@ class CameraView(QFrame):
         info_layout.addWidget(self.resolution)
         
         layout.addLayout(info_layout)
-    
-    def update_frame(self, image):
-        """프레임 업데이트"""
-        # TODO: 실제 이미지로 업데이트
-        pass
+
+    def update_frame(self):
+        """카메라 프레임 업데이트"""
+        try:
+            # predict_AI.py의 run()해서 프레임 가져오기
+            frame = next(self.detector_frame_generator)
+            
+            if frame is not None:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                h, w, ch = rgb_frame.shape
+                bytes_per_line = ch * w
+                qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                pixmap = QPixmap.fromImage(qt_image)
+                
+                # QLabel의 크기에 맞춰서 스케일링
+                scaled_pixmap = pixmap.scaled(
+                    self.image_label.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                
+                self.image_label.setPixmap(scaled_pixmap)
+        except StopIteration:
+            # 제너레이터 종료
+            self.timer.stop()
+            print("카메라 프레임 업데이트 종료")
+        except Exception as e:
+            print(f"카메라 프레임 업데이트 오류: {e}")
     
     def update_status(self, connected):
         """상태 업데이트"""
@@ -96,12 +130,17 @@ class MonitoringPage(QWidget):
     def __init__(self, app):
         super().__init__()
         self.app = app
+        self.rgb_cameras = []
+        self.hyper_camera = None
         self.init_ui()
         
         # 업데이트 타이머
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_cameras)
         self.timer.start(33)  # 30 FPS
+        
+        self.plastic_counts = {}             # 플라스틱 종류별 카운트 라벨
+        self.total_count = QLabel()          # 총 처리량 라벨
     
     def init_ui(self):
         """UI 초기화"""
@@ -179,8 +218,8 @@ class MonitoringPage(QWidget):
         cameras = [
             ("RGB 카메라 1", 0, 0),
             ("RGB 카메라 2", 0, 1),
-            ("RGB 카메라 3", 1, 0),
-            ("RGB 카메라 4", 1, 1),
+            # ("RGB 카메라 3", 1, 0),
+            # ("RGB 카메라 4", 1, 1),
         ]
         
         for name, row, col in cameras:
@@ -267,9 +306,10 @@ class MonitoringPage(QWidget):
         parent_layout.addWidget(hyper_group)
     
     def update_cameras(self):
-        """카메라 업데이트 (타이머)"""
-        # TODO: 실제 카메라 프레임 가져오기
-        pass
+        """⭐ 카메라 프레임 업데이트 - 간단하게!"""
+        # RGB 카메라들 업데이트
+        for camera in self.rgb_cameras:
+            camera.update_frame()
     
     def on_start_all(self):
         """전체 시작"""
