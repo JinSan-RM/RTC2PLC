@@ -1,3 +1,8 @@
+AIO ( All - in - one ) system
+
+일체형 폐플라스틱 선별 시스템
+
+
 1. 라이브러리 설치
     - pip install pysoem
     - pip install PyQt5
