@@ -19,7 +19,7 @@ class ModbusManager():
 
             self.tasks: queue.Queue[Dict] = queue.Queue()
             
-            self.slave_ids = self.config['slave_ids']
+            # self.slave_ids = self.config['slave_ids']
             self.client = None
             
             self._initialized = True
@@ -37,9 +37,15 @@ class ModbusManager():
 
             self.client.connect()
 
-            # self.slave_ids = {}
-            # for name, id in self.config['slave_ids'].items():
-            #     self.slave_ids[name] = id
+            # 연결된 슬레이브만 딕셔너리에 넣어서 사용
+            self.slave_ids = {}
+            for name, id in self.config['slave_ids'].items():
+                try:
+                    ret = self.client.read_holding_registers(0x0001, count=1, device_id=id)
+                    if not ret.isError():
+                        self.slave_ids[name] = id
+                except:
+                    continue
 
             self.run()
         except Exception as e:
@@ -197,18 +203,19 @@ class ModbusManager():
     def read_monitor_values(self):
         # 모니터링 값: 가속시간(0007, 0.1sec), 감속시간(0008, 0.1sec), 출력전류(0009, 0.1A), 출력주파수(000A, 0.01Hz), 출력전압(000B, 1V), DC Link 전압(000C, 1V), 출력파워(000D, 0.1kW), 운전상태6종(000E)
         # 운전 상태: 정지(B0), 정방향(B1), 역방향(B2), Fault(B3), 가속중(B4), 감속중(B5)
-        _name = "inverter_001"
-        ret = self.read_multiple_registers(_name, 0x0007 - 1, 8)
-        if ret and len(ret) == 8:
-            ret[0] = ret[0] * 0.1
-            ret[1] = ret[1] * 0.1
-            ret[2] = ret[2] * 0.1
-            ret[3] = ret[3] * 0.01
-            ret[6] = ret[6] * 0.1
+        _data = {}
+        for _name, _id in self.slave_ids.items():
+            ret = self.read_multiple_registers(_name, 0x0007 - 1, 8)
+            if ret and len(ret) == 8:
+                ret[0] = ret[0] * 0.1
+                ret[1] = ret[1] * 0.1
+                ret[2] = ret[2] * 0.1
+                ret[3] = ret[3] * 0.01
+                ret[6] = ret[6] * 0.1
 
-            _data = {}
-            _data[_name] = ret
-            self.app.on_update_inverter_status(_data)
+                _data[_name] = ret
+
+        self.app.on_update_inverter_status(_data)
 
     # 주파수 설정 함수
     def set_freq(self, motor_id:str = 'inverter_001', value: float = 0.0):
