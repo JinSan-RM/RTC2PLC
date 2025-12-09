@@ -25,7 +25,10 @@ class EtherCATManager():
             self.master.in_op = False
             self.master.do_check_state = False
             self._expected_slave_layout = {
-                0: EtherCATDevice("L7NH", LS_VENDOR_ID, L7NH_PRODUCT_CODE, self.setup_servo_drive)
+                0: EtherCATDevice("D232A", LS_VENDOR_ID, D232A_PRODUCT_CODE, self.setup_input_module),
+                1: EtherCATDevice("TR32KA", LS_VENDOR_ID, TR32KA_PRODUCT_CODE, self.setup_output_module),
+                2: EtherCATDevice("L7NH", LS_VENDOR_ID, L7NH_PRODUCT_CODE, self.setup_servo_drive),
+                3: EtherCATDevice("L7NH", LS_VENDOR_ID, L7NH_PRODUCT_CODE, self.setup_servo_drive)
             }
 
             self.tasks : queue.Queue[Dict] = queue.Queue()
@@ -47,12 +50,12 @@ class EtherCATManager():
                         slave.config_func = self.setup_servo_drive
                         slave.add_emergency_callback(self.emcy_callback_servo)
                         self.servo_drives.append(slave)
-                    elif slave.id == D232_PRODUCT_CODE:
-                        # slave.config_func = self.setup_input_module
+                    elif slave.id == D232A_PRODUCT_CODE:
+                        slave.config_func = self.setup_input_module
                         slave.add_emergency_callback(self.emcy_callback_input)
                         self.input_modules.append(slave)
-                    elif slave.id == TR32K_PRODUCT_CODE:
-                        # slave.config_func = self.setup_output_module
+                    elif slave.id == TR32KA_PRODUCT_CODE:
+                        slave.config_func = self.setup_output_module
                         slave.add_emergency_callback(self.emcy_callback_output)
                         self.output_modules.append(slave)
                     else:
@@ -136,6 +139,7 @@ class EtherCATManager():
         except Exception as e:
             self.app.on_log(f"[ERROR] EtherCAT disconnection error: {e}")
 
+    # PDO 송수신 스레드
     def _process_data_loop(self):
         while not self.stop_event.is_set():
             self.master.send_processdata()
@@ -183,6 +187,7 @@ class EtherCATManager():
                 if app:
                     app.on_log(f"MESSAGE : slave {pos} found")
     
+    # 슬레이브 상태 체크 스레드
     def _check_slave_loop(self):
         while not self.stop_event.is_set():
             if self.master.in_op and ((self.recv < self.master.expected_wkc) or self.master.do_check_state):
@@ -196,6 +201,7 @@ class EtherCATManager():
                     self.app.on_log("[INFO] OK : all slaves resumed OPERATIONAL.")
             time.sleep(ETHERCAT_DELAY)
 
+    # task 실행 스레드
     def _process_task_loop(self):
         self.master.in_op = True
 
@@ -269,49 +275,49 @@ class EtherCATManager():
             self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
     # IO 모듈 셋업
-    # def setup_input_module(self, slave_pos):
-    #     slave = self.master.slaves[slave_pos]
-    #     try:
-    #         # 입력 모듈은 TxPDO만 존재
-    #         # TxPDO(slave -> master) 설정
-    #         tx_map_bytes = struct.pack(
-    #             "<Bx" + "".join(["H" for _ in range(len(INPUT_TX_MAP))]),
-    #             len(INPUT_TX_MAP),
-    #             *INPUT_TX_MAP
-    #         )
-    #         slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
+    def setup_input_module(self, slave_pos):
+        slave = self.master.slaves[slave_pos]
+        try:
+            # 입력 모듈은 TxPDO만 존재
+            # TxPDO(slave -> master) 설정
+            tx_map_bytes = struct.pack(
+                "<Bx" + "".join(["H" for _ in range(len(INPUT_TX_MAP))]),
+                len(INPUT_TX_MAP),
+                *INPUT_TX_MAP
+            )
+            slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=tx_map_bytes, ca=True)
 
-    #         tx_bytes = struct.pack(
-    #             "<Bx" + "".join(["I" for _ in range(len(INPUT_TX))]),
-    #             len(INPUT_TX),
-    #             *INPUT_TX
-    #         )
-    #         slave.sdo_write(index=INPUT_TX_MAP[0], subindex=0, data=tx_bytes, ca=True)
+            tx_bytes = struct.pack(
+                "<Bx" + "".join(["I" for _ in range(len(INPUT_TX))]),
+                len(INPUT_TX),
+                *INPUT_TX
+            )
+            slave.sdo_write(index=INPUT_TX_MAP[0], subindex=0, data=tx_bytes, ca=True)
 
-    #     except Exception as e:
-    #         self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
+        except Exception as e:
+            self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
-    # def setup_output_module(self, slave_pos):
-    #     slave = self.master.slaves[slave_pos]
-    #     try:
-    #         # 출력 모듈은 RxPDO만 존재
-    #         # RxPDO(master -> slave) 설정
-    #         rx_map_bytes = struct.pack(
-    #             "<Bx" + "".join(["H" for _ in range(len(OUTPUT_RX_MAP))]),
-    #             len(OUTPUT_RX_MAP),
-    #             *OUTPUT_RX_MAP
-    #         )
-    #         slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
+    def setup_output_module(self, slave_pos):
+        slave = self.master.slaves[slave_pos]
+        try:
+            # 출력 모듈은 RxPDO만 존재
+            # RxPDO(master -> slave) 설정
+            rx_map_bytes = struct.pack(
+                "<Bx" + "".join(["H" for _ in range(len(OUTPUT_RX_MAP))]),
+                len(OUTPUT_RX_MAP),
+                *OUTPUT_RX_MAP
+            )
+            slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=rx_map_bytes, ca=True)
 
-    #         rx_bytes = struct.pack(
-    #             "<Bx" + "".join(["I" for _ in range(len(OUTPUT_RX))]),
-    #             len(OUTPUT_RX),
-    #             *OUTPUT_RX
-    #         )
-    #         slave.sdo_write(index=OUTPUT_RX_MAP[0], subindex=0, data=rx_bytes, ca=True)
+            rx_bytes = struct.pack(
+                "<Bx" + "".join(["I" for _ in range(len(OUTPUT_RX))]),
+                len(OUTPUT_RX),
+                *OUTPUT_RX
+            )
+            slave.sdo_write(index=OUTPUT_RX_MAP[0], subindex=0, data=rx_bytes, ca=True)
 
-    #     except Exception as e:
-    #         self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
+        except Exception as e:
+            self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
 # region servo functions
     # RxPDO 설정
@@ -460,23 +466,17 @@ class EtherCATManager():
     # IO 기능
     def update_io(self):
         for _i in self.input_modules:
-            total_bits = int.from_bytes(_i.input, 'little')
-            on_bits = [bit_pos for bit_pos in range(32) if total_bits & (1 << bit_pos)]
+            for _byte in _i.input:
+                continue
             # todo: on 비트에 대한 처리
 
     # 비트 쓰기
-    def io_write_bit(self, output_id: int, byte_offset: int, bit_offset: int, data: bool):
-        if not (byte_offset >= 0 and byte_offset < 4) or not (bit_offset >= 0 and bit_offset < 8):
-            self.app.on_log(f"[WARNING] wrong byte offset({byte_offset}) of bit offset({bit_offset})")
-            return
-
-        # byte_offset 번째 바이트의 bit_offset 번째 비트. little endian 방식이므로 바이트 순서를 뒤집음.
-        target_bit = 1 << ((3 - byte_offset) * 8 + bit_offset)
+    def io_write_bit(self, output_id: int, byte_offset: int, data: bool):
         module = self.output_modules[output_id]
-        if data:
-            module.output |= target_bit
-        else:
-            module.output &= ~target_bit
+        tmp = bytearray(module.output)
+        tmp[byte_offset] = data
+        module.output = tmp
+
 
 # endregion
 

@@ -107,7 +107,7 @@ class App():
     def run(self):
         """애플리케이션 실행"""
         self.ui.show()
-        sys.exit(self.qt_app.exec_())
+        sys.exit(self.qt_app.exec())
         # self.root.protocol("WM_DELETE_WINDOW", self.quit)
         # self.root.mainloop()
 
