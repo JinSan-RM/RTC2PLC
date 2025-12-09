@@ -1,6 +1,7 @@
 PySide6
 pysoem
 pymodbus
+pyserial
 datetime
 asyncio
 pypylon
