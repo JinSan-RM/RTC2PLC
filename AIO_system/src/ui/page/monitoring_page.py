@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QPen
-from src.vision_camera.predict_AI import AIPlasticDetectionSystem
+from src.AI.predict_AI import AIPlasticDetectionSystem
 import sys
 import cv2
 import numpy as np
@@ -215,9 +215,11 @@ class MonitoringPage(QWidget):
         
         # 4개의 RGB 카메라
         self.rgb_cameras = []
+        
+        # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
             ("RGB 카메라 1", 0, 0),
-            ("RGB 카메라 2", 0, 1),
+            # ("RGB 카메라 2", 0, 1),
             # ("RGB 카메라 3", 1, 0),
             # ("RGB 카메라 4", 1, 1),
         ]

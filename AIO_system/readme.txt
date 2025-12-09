@@ -2,6 +2,7 @@ AIO ( All - in - one ) system
 
 일체형 폐플라스틱 선별 시스템
 
+프로젝트 실행 전 npcap.exe 파일을 먼저 실행해서 install
 
 1. 라이브러리 설치
     - pip install pysoem
