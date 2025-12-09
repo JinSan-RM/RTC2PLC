@@ -10,7 +10,7 @@ MODBUS_RTU_CONFIG = {
         "inverter_005": 5,
         "inverter_006": 6
     },
-    "port": "COM7",
+    "port": "COM3",
     "baudrate": 9600,
     "bytesize": 8,
     "parity": "N",
@@ -26,7 +26,7 @@ MODBUS_RTU_CONFIG = {
 # ============================================================
 
 # 네트워크 인터페이스 이름 -> search_ifname.py 를 실행해서 얻은 네트워크 어댑터 이름을 사용함
-IF_NAME = '\\Device\\NPF_{82D71BA4-0710-4E4A-9ED2-4FD7DA4F0FD3}' 
+IF_NAME = '\\Device\\NPF_{C7EBE891-A804-4047-85E5-4D0148B1D3EA}' 
 
 # 통신 사이클 간격
 ETHERCAT_DELAY = 0.01
