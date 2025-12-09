@@ -102,5 +102,5 @@ async def run_async_simple_client(comm, host, port, framer=FramerType.SOCKET):
 
 if __name__ == "__main__":
     asyncio.run(
-        run_async_simple_client("serial", "127.0.0.1", "COM7", FramerType.RTU), debug=True
+        run_async_simple_client("serial", "127.0.0.1", "COM3", FramerType.RTU), debug=True
     )

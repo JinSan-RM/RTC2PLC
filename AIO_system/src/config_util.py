@@ -1,74 +1,100 @@
+# ============================================================
 # region Modbus
+# ============================================================
 MODBUS_RTU_CONFIG = {
     "slave_ids": {
         "inverter_001": 1,
-        "inverter_002": 2
+        "inverter_002": 2,
+        "inverter_003": 3,
+        "inverter_004": 4,
+        "inverter_005": 5,
+        "inverter_006": 6
     },
-    "port": "COM7",
+    "port": "COM3",
     "baudrate": 9600,
     "bytesize": 8,
     "parity": "N",
     "stopbits": 1,
     "timeout": 1
 }
+# ============================================================
 # endregion
+# ============================================================
 
 # ============================================================
 # region EtherCAT
 # ============================================================
-IF_NAME = '\\Device\\NPF_{82D71BA4-0710-4E4A-9ED2-4FD7DA4F0FD3}' # 네트워크 인터페이스 이름
 
+# 네트워크 인터페이스 이름 -> search_ifname.py 를 실행해서 얻은 네트워크 어댑터 이름을 사용함
+IF_NAME = '\\Device\\NPF_{C7EBE891-A804-4047-85E5-4D0148B1D3EA}' 
+
+# 통신 사이클 간격
 ETHERCAT_DELAY = 0.01
 
+# 각종 ID
+LS_VENDOR_ID = 30101
+L7NH_PRODUCT_CODE = 0x00010001
+D232_PRODUCT_CODE = 0x10010002
+TR32K_PRODUCT_CODE = 0x10010003
+
+# Sync Manager 는 0 ~ 3이 있고, 그 중 0과 1은 Mailbox(SDO)에 사용됨.
+EC_RX_INDEX = 0x1C12 # Sync Manager 2 -> RxPDO를 매칭
+EC_TX_INDEX = 0x1C13 # Sync Manager 3 -> TxPDO를 매칭
+
+# RxPDO 매핑은 0x1600 ~ 0x1603의 4개가 존재하고, 일단 기본값인 0x1601을 사용하도록 한다.
 SERVO_RX_MAP = [
     0x1601,
 ] # master -> slave
 
+# TxPDO 매핑은 0x1A00 ~ 0x1A03의 4개가 존재하고, 일단 기본값인 0x1A01을 사용하도록 한다.
 SERVO_TX_MAP = [
     0x1A01,
 ] # slave -> master
 
+# 위에서 지정한 PDO 맵 주소에 아래의 매핑 데이터를 넣어준다.
+# PDO 맵 주소의 subindex 0 에는 전체 매핑 개수, subindex 1 부터 매핑 데이터를 1개씩 할당
+# PDO 매핑 구조: 0x 0000 / 00 / 00 -> 앞 2byte는 index, 중간 1byte는 subindex, 뒤 1byte는 해당 오브젝트 bit사이즈
 SERVO_RX = [
-    0x60400010, # 컨트롤 워드
-    0x60600008, # 운전 모드
-    0x607A0020, # 목표 위치
-    0x60FF0020, # 목표 속도(int32)
+    0x60400010, # 컨트롤 워드(unsigned short)
+    0x60600008, # 운전 모드(signed char)
+    0x607A0020, # 목표 위치(int)
+    0x60FF0020, # 목표 속도(int)
 ]
 
 SERVO_TX = [
-    0x60410010, # 스테이터스 워드
-    0x60410008, # 운전 모드 표시
-    0x60640020, # 현재 위치
-    0x606C0020, # 현재 속도
-    0x26140010, # 경고 코드
+    0x60410010, # 스테이터스 워드(unsigned short)
+    0x60610008, # 운전 모드 표시(signed char)
+    0x60640020, # 현재 위치(int)
+    0x606C0020, # 현재 속도(int)
+    0x603F0010, # 에러 코드(unsigned short)
 ]
 
-IO_RX_MAP = [
+# OUTPUT_RX_MAP = [
+# ]
 
-]
+# INPUT_TX_MAP = [
+# ]
 
-IO_TX_MAP = [
+# OUTPUT_RX = [
+# ]
 
-]
+# INPUT_TX = [
+# ]
 
-IO_RX = [
-
-]
-
-IO_TX = [
-
-]
-
-def check_mask(s, m):
-    low_bit = s & 0x00FF
-    return (low_bit & m) == m
-
-def get_servo_modified_value(value):
-    gear_ratio = 524288 / 10000
+# 앱 자체적으로 전자 기어비 적용을 위한 부분
+# 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
+# UI에서 입력 시 값 1당 1 μm 를 의미하게 됨
+gear_ratio = 524288 / 10000
+# 서보로 전달할 값
+def get_servo_unmodified_value(value):
     return int(value * gear_ratio)
 
-from enum import IntEnum
+# UI에 출력할 값
+def get_servo_modified_value(value):
+    return int(value / gear_ratio)
 
+from enum import IntEnum
+# 서보 상태 체크용 bit mask
 class STATUS_MASK(IntEnum):
     STATUS_NOT_READY_TO_SWITCH_ON = 0x0000
     STATUS_SWITCH_ON_DISABLED = 0x0040
@@ -77,7 +103,46 @@ class STATUS_MASK(IntEnum):
     STATUS_QUICK_STOP_ACTIVE = 0x0007
     STATUS_FAULT_REACTION_ACTIVE = 0x000F
     STATUS_FAULT = 0x0008
-    STATUS_WARNING = 0x8000
+    STATUS_WARNING = 0x0080
+
+# input 맵
+class INPUT_MAP(IntEnum):
+    INPUT_00 = 0
+    INPUT_01 = 1
+    INPUT_02 = 2
+    INPUT_03 = 3
+    INPUT_04 = 4
+    INPUT_05 = 5
+    INPUT_06 = 6
+    INPUT_07 = 7
+    INPUT_08 = 8
+    INPUT_09 = 9
+    INPUT_10 = 10
+    INPUT_11 = 11
+    INPUT_12 = 12
+    INPUT_13 = 13
+    INPUT_14 = 14
+    INPUT_15 = 15
+    INPUT_16 = 16
+    INPUT_17 = 17
+    INPUT_18 = 18
+    INPUT_19 = 19
+    INPUT_20 = 20
+    INPUT_21 = 21
+    INPUT_22 = 22
+    INPUT_23 = 23
+    INPUT_24 = 24
+    INPUT_25 = 25
+    INPUT_26 = 26
+    INPUT_27 = 27
+    INPUT_28 = 28
+    INPUT_29 = 29
+    INPUT_30 = 30
+    INPUT_31 = 31
+
+def check_mask(s, m):
+    low_bit = s & 0x00FF
+    return (low_bit & m) == m
 
 from dataclasses import dataclass
 from typing import Callable
@@ -93,10 +158,13 @@ class EtherCATDevice:
 # endregion
 # ============================================================
 
+# ============================================================
 # region Others
+# ============================================================
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+# 변수 입력용 키패드
 class DigitInput(tk.Toplevel):
     def __init__(self, parent, callback):
         super().__init__(parent)
@@ -224,4 +292,7 @@ class DigitInput(tk.Toplevel):
             self.destroy()
         else:
             messagebox.showwarning("입력 오류", "값을 입력해주세요.", parent=self)
+
+# ============================================================
 # endregion
+# ============================================================

@@ -11,6 +11,7 @@ from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
 
 import inspect
+import platform
 
 class MainWindow(QMainWindow):
     
@@ -198,6 +199,10 @@ class MainWindow(QMainWindow):
         # TODO: 로그 페이지에 추가
         # if hasattr(self, 'logs_page'):
         #     self.logs_page.add_log(message)
+    
+    def closeEvent(self, a0):
+        self.app.quit()
+        # return super().closeEvent(a0)
         
     def apply_styles(self):
         """스타일시트 적용"""
@@ -297,8 +302,13 @@ class MainWindow(QMainWindow):
     def log(self, message):
         """로그 메시지 추가"""
         # 호출한 위치 정보 가져오기
-        frame = inspect.currentframe().f_back
-        filename = frame.f_code.co_filename.split('/')[-1]  # 파일명만
+        frame = inspect.currentframe().f_back.f_back
+        os_name = platform.system()
+        if os_name == "Windows":
+            sep = '\\'
+        else:
+            sep = '/'
+        filename = frame.f_code.co_filename.split(sep)[-1]  # 파일명만
         lineno = frame.f_lineno
         funcname = frame.f_code.co_name
         
