@@ -4,4 +4,4 @@ PLC_TestTool
 RGB_streaming
 *env
 env*
-/AIO_system/src/vision_camera/model
+/AIO_system/src/AI/model
