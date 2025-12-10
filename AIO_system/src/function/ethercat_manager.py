@@ -523,7 +523,7 @@ class EtherCATManager():
         """
         try:
             self.io_write_bit(output_id, air_num+19, True)
-            log(f"[INFO] Airknife {output_id} on")
+            log(f"[INFO] Airknife {air_num} on")
             self._reserve_task(on_term/1000, self.airknife_off, output_id, air_num)
         except Exception as e:
             log(f"[ERROR] airknife on failed: {e}")
@@ -540,8 +540,8 @@ class EtherCATManager():
         """
         try:
             self.io_write_bit(output_id, air_num+19, False)
-            log(f"[INFO] Airknife {output_id} off")
-            self.app.on_airknife_off(output_id)
+            log(f"[INFO] Airknife {air_num} off")
+            self.app.on_airknife_off(air_num)
         except Exception as e:
             log(f"[ERROR] airknife off failed: {e}")
 
