@@ -104,6 +104,12 @@ class App():
         self.ethercat_manager.servo_move_relative(servo_id, dist)
 # endregion
 
+# region I/O
+    def airknife_on(self, air_num: int, on_term: int):
+        self.ethercat_manager.airknife_onoff(0, air_num, on_term)
+
+# endregion
+
     def on_log(self, msg):
         self.ui.log(msg)
 

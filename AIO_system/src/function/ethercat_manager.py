@@ -482,6 +482,23 @@ class EtherCATManager():
         tmp[byte_offset] = data
         module.output = tmp
 
+    def airknife_onoff(self, output_id: int, air_num: int, on_term: int):
+        """
+        airknife_onoff
+        
+        :param self:
+        :param output_id: 출력 모듈 번호(0)
+        :type output_id: int
+        :param air_num: 에어나이프 번호(1~3)
+        :type air_num: int
+        :param on_term: 에어 출력 시간값
+        :type on_term: int
+        """
+        try:
+            self.io_write_bit(output_id, air_num+19, True)
+            threading.Timer(on_term/1000, lambda: self.io_write_bit(output_id, air_num+19, False))
+        except Exception as e:
+            self.app.on_log(f"[ERROR] airknife onoff failed: {e}")
 
 # endregion
 
