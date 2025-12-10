@@ -60,7 +60,7 @@ class ConveyorBoxZone:
                 self.class_counts[class_name] += 1  # 클래스별 카운트
                 return True  # 액션 트리거
             else:
-                self.tracked_objects(obj_id)
+                self.tracked_objects.add(obj_id)
                 self.is_active = True
         else:
             self.tracked_objects.discard(obj_id)

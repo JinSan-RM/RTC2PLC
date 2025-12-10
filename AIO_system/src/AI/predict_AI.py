@@ -100,13 +100,14 @@ class AIPlasticDetectionSystem:
         model_path: str = None,
         confidence_threshold: float = 0.7,
         img_size: int = 640,
+        airknife_callback=None
     ):
-        self.log = log
         self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\251012_yolov10_plastic_OD_model.pt"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
         if self.model is None:
             raise RuntimeError("YOLOv11 모델 로드 실패")
+        self.airknife_callback = airknife_callback
         
         self.confidence_threshold = confidence_threshold
         self.img_size = img_size
@@ -276,6 +277,17 @@ class AIPlasticDetectionSystem:
         
         return frame
     
+    def send_airknife_signal(self, air_num, on_term):
+        """AirKnife 신호 전송"""
+        if self.airknife_callback:
+            if air_num:
+                self.airknife_callback(air_num, on_term)  # ON
+            else:
+                # OFF용 콜백이 따로 필요하면 추가
+                pass
+        else:
+            log(f"AirKnife 콜백 없음: Zone {air_num}")
+    
     def run(self):
         """메인 실행 루프"""
         log("AI Hub 폐플라스틱 감지 시스템 시작 (YOLOv11 + GPU)")
@@ -345,12 +357,11 @@ class AIPlasticDetectionSystem:
                 if len(detected_objects) > 0:
                     # log(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
                     for box in self.box_manager.boxes:
-                        log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                        # log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
                         if box.is_active:
                             log(f"blow action")
-                            # self.send_airknife_signal(box.box_id)
-                        
-                    
+                            self.send_airknife_signal(air_num=box.box_id, on_term=1000)
+
                 t4 = time.time()
                 timing_inference.append((t4 - t3) * 1000)
                 
@@ -362,7 +373,6 @@ class AIPlasticDetectionSystem:
                 
                 # 30프레임마다 정리
                 frame_count += 1
-
                 
                 # 3. 그리기 시간
                 t5 = time.time()
@@ -371,7 +381,6 @@ class AIPlasticDetectionSystem:
                 
                 t6 = time.time()
                 timing_draw.append((t6 - t5) * 1000)
-                
                 timing_total.append((time.time() - t_total_start) * 1000)
                 
                 # 100프레임마다 타이밍 통계 출력
@@ -401,7 +410,6 @@ class AIPlasticDetectionSystem:
                     timing_total.clear()
                 
                 yield frame
-
         
         except KeyboardInterrupt:
             log("\n시스템 중단")

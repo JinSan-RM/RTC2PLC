@@ -119,6 +119,19 @@ class App():
         if hasattr(self, 'settings_page'):
             self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
 # endregion
+    def on_auto_start(self):
+        # 피더 동작 함수
+        
+        # 컨베이어 동작 함수
+        
+        # 카메라 동작 함수
+        
+    def on_auto_stop(self):
+        # 피더 멈춤 함수
+        
+        # 컨베이어 멈춤 함수
+        
+        # 카메라 멈춤 함수
 
     def run(self):
         """애플리케이션 실행"""

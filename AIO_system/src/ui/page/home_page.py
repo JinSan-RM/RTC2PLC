@@ -254,10 +254,10 @@ class HomePage(QWidget):
                         color: #8b949e;
                     """)
     
-    def on_start_clicked(self):
+    def on_auto_start_clicked(self):
         """시작 버튼 클릭"""
         log("시스템 시작")
-        self.app.on_start_clicked()
+        self.app.on_auto_start_clicked()
     
     def on_stop_clicked(self):
         """정지 버튼 클릭"""

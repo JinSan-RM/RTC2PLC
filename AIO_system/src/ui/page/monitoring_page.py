@@ -18,8 +18,9 @@ from src.utils.logger import log
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     
-    def __init__(self, camera_id, camera_name):
+    def __init__(self, camera_id, camera_name, app):
         super().__init__()
+        self.app = app
         self.camera_id = camera_id
         self.camera_name = camera_name
         self.detector = None
@@ -96,7 +97,8 @@ class CameraView(QFrame):
                 if self.detector is None:
                     self.detector = AIPlasticDetectionSystem(
                         confidence_threshold=0.7,
-                        img_size=640
+                        img_size=640,
+                        airknife_callback=self.app.airknife_on
                     )
                     self.detector_frame_generator = self.detector.run()
                 
@@ -257,7 +259,7 @@ class MonitoringPage(QWidget):
         ]
         
         for name, row, col in cameras:
-            cam = CameraView(f"rgb_{row}{col}", name)
+            cam = CameraView(f"rgb_{row}{col}", name, app=self.app)
             rgb_layout.addWidget(cam, row, col)
             self.rgb_cameras.append(cam)
         
@@ -272,7 +274,7 @@ class MonitoringPage(QWidget):
         # 카메라 뷰
         camera_layout = QHBoxLayout()
         
-        self.hyper_camera = CameraView("hyperspectral", "Specim FX17")
+        self.hyper_camera = CameraView("hyperspectral", "Specim FX17",app=self.app)
         self.hyper_camera.setMinimumSize(600, 400)
         camera_layout.addWidget(self.hyper_camera)
         
