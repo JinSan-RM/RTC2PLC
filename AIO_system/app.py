@@ -120,9 +120,6 @@ class App():
             self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
 # endregion
 
-    def on_log(self, msg):
-        self.ui.log(msg)
-
     def run(self):
         """애플리케이션 실행"""
         self.ui.show()
