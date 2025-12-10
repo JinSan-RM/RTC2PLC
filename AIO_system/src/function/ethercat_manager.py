@@ -279,6 +279,8 @@ class EtherCATManager():
         slave = self.master.slaves[slave_pos]
         try:
             # 입력 모듈은 TxPDO만 존재
+            # RxPDO 제거
+            slave.sdo_write(index=EC_RX_INDEX, subindex=0, data=struct.pack('<B', 0))
             # TxPDO(slave -> master) 설정
             tx_map_bytes = struct.pack(
                 "<Bx" + "".join(["H" for _ in range(len(INPUT_TX_MAP))]),
@@ -315,6 +317,9 @@ class EtherCATManager():
                 *OUTPUT_RX
             )
             slave.sdo_write(index=OUTPUT_RX_MAP[0], subindex=0, data=rx_bytes, ca=True)
+
+            # TxPDO 제거
+            slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=struct.pack('<B', 0))
 
         except Exception as e:
             self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
