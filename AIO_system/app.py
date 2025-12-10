@@ -87,6 +87,9 @@ class App():
 
     def servo_stop(self, servo_id: int):
         self.ethercat_manager.servo_halt(servo_id)
+    
+    def servo_homing(self, servo_id: int):
+        self.ethercat_manager.servo_homing(servo_id)
 
     def servo_set_origin(self, servo_id: int):
         self.ethercat_manager.servo_set_home(servo_id)

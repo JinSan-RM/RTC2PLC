@@ -197,6 +197,13 @@ class ServoTab(QWidget):
         stop_btn.setMinimumHeight(50)
         stop_btn.clicked.connect(lambda: self.on_stop(servo_id))
         control_layout.addWidget(stop_btn)
+
+        # 원점복귀
+        homing_btn = QPushButton("원점복귀")
+        homing_btn.setObjectName("control_btn_homing")
+        homing_btn.setMinimumHeight(50)
+        homing_btn.clicked.connect(lambda: self.on_homing(servo_id))
+        control_layout.addWidget(homing_btn)
         
         parent_layout.addWidget(control_group)
     
@@ -355,6 +362,10 @@ class ServoTab(QWidget):
     def on_stop(self, servo_id):
         self.app.on_log("서보 정지")
         self.app.servo_stop(servo_id)
+
+    def on_homing(self, servo_id):
+        self.app.on_log("서보 원점 복귀")
+        self.app.servo_homing(servo_id)
     
     def on_set_origin(self, servo_id):
         self.app.on_log("원점 설정")
@@ -516,6 +527,19 @@ class ServoTab(QWidget):
             
             #control_btn_stop:hover {
                 background-color: #f85149;
+            }
+                           
+            #control_btn_homing {
+                background-color: #1f6feb;
+                color: white;
+                border: 2px solid #58a6ff;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            
+            #control_btn_homing:hover {
+                background-color: #58a6ff;
             }
             
             #setting_btn {
