@@ -253,16 +253,26 @@ class HomePage(QWidget):
                         font-size: 13px;
                         color: #8b949e;
                     """)
-    
-    def on_auto_start_clicked(self):
+                    
+    def on_start_clicked(self):
         """시작 버튼 클릭"""
         log("시스템 시작")
-        self.app.on_auto_start_clicked()
+        self.app.on_auto_start()
     
     def on_stop_clicked(self):
         """정지 버튼 클릭"""
         log("시스템 정지")
-        self.app.on_stop_clicked()
+        self.app.on_auto_stop()
+    
+    def on_auto_start_clicked(self):
+        """시작 버튼 클릭"""
+        log("시스템 시작")
+        self.app.on_auto_start()
+    
+    def on_auto_stop_clicked(self):
+        """정지 버튼 클릭"""
+        log("시스템 정지")
+        self.app.on_auto_stop()
     
     def on_reset_clicked(self):
         """리셋 버튼 클릭"""
