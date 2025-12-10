@@ -8,10 +8,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QPen
-from src.AI.predict_AI import AIPlasticDetectionSystem
+
 import sys
 import cv2
 import numpy as np
+
+from src.AI.predict_AI import AIPlasticDetectionSystem
+from src.utils.logger import log
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     
@@ -93,16 +96,16 @@ class CameraView(QFrame):
                 if self.detector is None:
                     self.detector = AIPlasticDetectionSystem(
                         confidence_threshold=0.7,
-                        img_size=640,
+                        img_size=640
                     )
                     self.detector_frame_generator = self.detector.run()
                 
                 self.timer.start(33)
                 self.is_running = True
                 self.update_status(True)
-                print(f"{self.camera_name} 시작")
+                log(f"{self.camera_name} 시작")
             except Exception as e:
-                print(f"카메라 시작 오류 : {e}")
+                log(f"카메라 시작 오류 : {e}")
                 self.timer.stop()
                 self.is_running = False
                 self.update_status(False)
@@ -113,7 +116,7 @@ class CameraView(QFrame):
             self.is_running = False
             self.update_status(False)
             self.image_label.setText("카메라 정지")
-            print(f"{self.camera_name} 정지")
+            log(f"{self.camera_name} 정지")
     
                 
     def update_frame(self):
@@ -143,9 +146,9 @@ class CameraView(QFrame):
         except StopIteration:
             # 제너레이터 종료
             self.timer.stop()
-            print("카메라 프레임 업데이트 종료")
+            log("카메라 프레임 업데이트 종료")
         except Exception as e:
-            print(f"카메라 프레임 업데이트 오류: {e}")
+            log(f"카메라 프레임 업데이트 오류: {e}")
     
     def update_status(self, connected):
         """상태 업데이트"""
@@ -339,7 +342,7 @@ class MonitoringPage(QWidget):
     
     def on_start_all(self):
         """전체 시작"""
-        self.app.on_log("모든 카메라 시작")
+        log("모든 카메라 시작")
         # TODO: 모든 카메라 시작
         for camera in self.rgb_cameras:
             camera.start_camera()
@@ -348,7 +351,7 @@ class MonitoringPage(QWidget):
             
     def on_stop_all(self):
         """전체 정지"""
-        self.app.on_log("모든 카메라 정지")
+        log("모든 카메라 정지")
         for camera in self.rgb_cameras:
             camera.stop_camera()
         # if self.hyper_camera:
@@ -363,23 +366,23 @@ class MonitoringPage(QWidget):
     
     def on_snapshot(self):
         """스냅샷"""
-        self.app.on_log("스냅샷 저장")
+        log("스냅샷 저장")
         # TODO: 현재 프레임 저장
     
     def on_record(self, checked):
         """녹화"""
         if checked:
             self.record_btn.setText("⏹ 녹화 중지")
-            self.app.on_log("녹화 시작")
+            log("녹화 시작")
             # TODO: 녹화 시작
         else:
             self.record_btn.setText("⏺ 녹화 시작")
-            self.app.on_log("녹화 중지")
+            log("녹화 중지")
             # TODO: 녹화 중지
     
     def on_reset_counter(self):
         """카운터 리셋"""
-        self.app.on_log("분류 카운터 리셋")
+        log("분류 카운터 리셋")
         for count_label in self.plastic_counts.values():
             count_label.setText("0")
         self.total_count.setText("0")

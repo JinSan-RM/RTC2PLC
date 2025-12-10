@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from src.utils.logger import log
+
 class FeederTab(QWidget):
     """피더 제어 탭"""
     
@@ -215,7 +217,7 @@ class FeederTab(QWidget):
         try:
             freq = float(getattr(self, f"{motor_id}_target_freq").text())
             self.app.on_set_freq(motor_id, freq)  # motor_id 추가
-            self.app.on_log(f"{motor_id} 주파수 설정: {freq} Hz")
+            log(f"{motor_id} 주파수 설정: {freq} Hz")
             
             # 모니터링 부분에 현재 주파수 표시 업데이트
             freq_label = self.findChild(QLabel, f"{motor_id}_freq")
@@ -223,13 +225,13 @@ class FeederTab(QWidget):
                 freq_label.setText(f"{freq:.2f}")
                     
         except ValueError:
-            self.app.on_log(f"잘못된 주파수 값")
+            log(f"잘못된 주파수 값")
     
     def on_set_acc(self, motor_id):
         try:
             acc = float(getattr(self, f"{motor_id}_target_acc").text())
             self.app.on_set_acc(motor_id, acc)
-            self.app.on_log(f"{motor_id} 가속시간 설정: {acc} s")
+            log(f"{motor_id} 가속시간 설정: {acc} s")
             
             # 모니터링 부분 가속 시간 표시 업데이트
             acc_label = self.findChild(QLabel, f"{motor_id}_acc")
@@ -237,13 +239,13 @@ class FeederTab(QWidget):
                 acc_label.setText(f"{acc:.1f}")
                 
         except ValueError:
-            self.app.on_log(f"잘못된 가속시간 값")
+            log(f"잘못된 가속시간 값")
 
     def on_set_dec(self, motor_id):
         try:
             dec = float(getattr(self, f"{motor_id}_target_dec").text())
             self.app.on_set_dec(motor_id, dec)
-            self.app.on_log(f"{motor_id} 감속시간 설정: {dec} s")
+            log(f"{motor_id} 감속시간 설정: {dec} s")
             
             # 모니터링에 감속 시간 표시 업데이트
             dec_label = self.findChild(QLabel, f"{motor_id}_dec")
@@ -254,7 +256,7 @@ class FeederTab(QWidget):
     
     def on_motor_start(self, motor_id):
         self.app.motor_start(motor_id)  # 실제 모터 시작
-        self.app.on_log(f"{motor_id} 모터 시작")
+        log(f"{motor_id} 모터 시작")
         # TODO: 실제 모터 시작
         
         # 상태 표시 업데이트
@@ -265,7 +267,7 @@ class FeederTab(QWidget):
 
     def on_motor_stop(self, motor_id):
         self.app.motor_stop(motor_id)  # 실제 모터 정지
-        self.app.on_log(f"{motor_id} 모터 정지")
+        log(f"{motor_id} 모터 정지")
         # TODO: 실제 모터 정지
         
         # 상태 표시 업데이트

@@ -8,7 +8,8 @@ import struct
 from typing import Any, Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
 
-from src.config_util import *
+from src.utils.config_util import *
+from src.utils.logger import log
 
 class EtherCATManager():
     _lock = threading.Lock()
@@ -75,7 +76,7 @@ class EtherCATManager():
             # DC(Distributed Clock) 동기화
             # slave.dc_sync(act=True, sync0_cycle_time=1_000_000) # 1,000,000 ns = 1 ms
         except Exception as e:
-            self.app.on_log(f"{e}")
+            log(f"{e}")
 
         self.run()
     
@@ -106,7 +107,7 @@ class EtherCATManager():
                 self.task_thread = threading.Thread(target=self._process_task_loop)
                 self.task_thread.start()
         except Exception as e:
-            self.app.on_log(f"[ERROR] EtherCAT runtime error: {e}")
+            log(f"[ERROR] EtherCAT runtime error: {e}")
 
     def disconnect(self):
         print("EtherCAT disconnect start")
@@ -137,7 +138,7 @@ class EtherCATManager():
 
             self.master.close()
         except Exception as e:
-            self.app.on_log(f"[ERROR] EtherCAT disconnection error: {e}")
+            log(f"[ERROR] EtherCAT disconnection error: {e}")
 
     # PDO 송수신 스레드
     def _process_data_loop(self):
@@ -145,7 +146,7 @@ class EtherCATManager():
             self.master.send_processdata()
             self.recv = self.master.receive_processdata(timeout=100_000)
             if not self.recv == self.master.expected_wkc:
-                self.app.on_log("[WARNING] incorrect wkc")
+                log("[WARNING] incorrect wkc")
             
             self.update_io()
             self.update_monitor_values()
@@ -198,7 +199,7 @@ class EtherCATManager():
                         self.master.do_check_state = True
                         EtherCATManager._check_slave(slave, i)
                 if not self.master.do_check_state:
-                    self.app.on_log("[INFO] OK : all slaves resumed OPERATIONAL.")
+                    log("[INFO] OK : all slaves resumed OPERATIONAL.")
             time.sleep(ETHERCAT_DELAY)
 
     # task 실행 스레드
@@ -272,7 +273,7 @@ class EtherCATManager():
             
 
         except Exception as e:
-            self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
+            log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
     # IO 모듈 셋업
     def setup_input_module(self, slave_pos):
@@ -297,7 +298,7 @@ class EtherCATManager():
             slave.sdo_write(index=INPUT_TX_MAP[0], subindex=0, data=tx_bytes, ca=True)
 
         except Exception as e:
-            self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
+            log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
     def setup_output_module(self, slave_pos):
         slave = self.master.slaves[slave_pos]
@@ -322,7 +323,7 @@ class EtherCATManager():
             slave.sdo_write(index=EC_TX_INDEX, subindex=0, data=struct.pack('<B', 0))
 
         except Exception as e:
-            self.app.on_log(f"[ERROR] EtherCAT PDO setting error: {e}")
+            log(f"[ERROR] EtherCAT PDO setting error: {e}")
 
 # region servo functions
     # RxPDO 설정
@@ -340,7 +341,7 @@ class EtherCATManager():
             tx_pdo = _get_tx_pdo(servo)
             _data.append(tx_pdo)
         
-        self.app.on_update_servo_status(_data)
+        update_servo_status(_data)
 
     # 서보 on/off
     def servo_onoff(self, servo_id: int, onoff: bool):
@@ -351,7 +352,7 @@ class EtherCATManager():
             else:
                 self._set_rx_pdo(servo, 0x0106)
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo on/off failed: {e}")
+            log(f"[ERROR] servo on/off failed: {e}")
 
     # 원점 지정
     def servo_set_home(self, servo_id: int):
@@ -361,7 +362,7 @@ class EtherCATManager():
             cur_pos = int.from_bytes(servo.input[4:8], 'little', signed=True)
             servo.sdo_write(0x607C, 0, struct.pack('<i', get_servo_unmodified_value(cur_pos)))
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo set home failed: {e}")
+            log(f"[ERROR] servo set home failed: {e}")
 
     # 하한 설정
     def servo_set_min_limit(self, servo_id: int, pos: int):
@@ -369,7 +370,7 @@ class EtherCATManager():
             servo = self.servo_drives[servo_id]
             servo.sdo_write(0x607D, 1, struct.pack('<i', get_servo_unmodified_value(pos)))
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo set minimum position limit failed: {e}")
+            log(f"[ERROR] servo set minimum position limit failed: {e}")
 
     # 상한 설정
     def servo_set_min_limit(self, servo_id: int, pos: int):
@@ -377,7 +378,7 @@ class EtherCATManager():
             servo = self.servo_drives[servo_id]
             servo.sdo_write(0x607D, 2, struct.pack('<i', get_servo_unmodified_value(pos)))
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo set maximum position limit failed: {e}")
+            log(f"[ERROR] servo set maximum position limit failed: {e}")
 
     # 원점 복귀
     def servo_homing(self, servo_id: int):
@@ -390,7 +391,7 @@ class EtherCATManager():
                 servo.sdo_write(0x6098, 0, struct.pack('b', 34))
             threading.Timer(0.01, lambda: self._set_rx_pdo(servo, 0x001F, 6))
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo homing failed: {e}")
+            log(f"[ERROR] servo homing failed: {e}")
 
     # 절대 위치 이동
     def servo_move_absolute(self, servo_id: int, pos: float):
@@ -403,7 +404,7 @@ class EtherCATManager():
             
             self._set_rx_pdo(servo, 0x000F, 8, pos, 0)
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo CSP move failed: {e}")
+            log(f"[ERROR] servo CSP move failed: {e}")
 
     # 상대 위치 이동
     def servo_move_relative(self, servo_id: int, dist: float):
@@ -419,7 +420,7 @@ class EtherCATManager():
             pos = cur_pos + dist
             self._set_rx_pdo(servo, 0x000F, 8, pos, 0)
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo CSP move failed: {e}")
+            log(f"[ERROR] servo CSP move failed: {e}")
 
     # 속도 이동
     def servo_move_velocity(self, servo_id: int, v:float):
@@ -433,7 +434,7 @@ class EtherCATManager():
             self._set_rx_pdo(servo, 0x000F, 9, 0, v)
 
         except Exception as e:
-            self.app.on_log(f"[ERROR] servo CSV move failed: {e}")
+            log(f"[ERROR] servo CSV move failed: {e}")
 
     # 정지(대기 상태로 전환)
     def servo_halt(self, servo_id: int):
@@ -447,7 +448,7 @@ class EtherCATManager():
             self._set_rx_pdo(servo, 0x010F)
 
         except Exception as e:
-            self.app.on_log(f"[ERROR] halt failed: {e}")
+            log(f"[ERROR] halt failed: {e}")
 
     def servo_reset(self, servo_id: int):
         try:
@@ -455,7 +456,7 @@ class EtherCATManager():
             self._set_rx_pdo(servo, 0x008F)
 
         except Exception as e:
-            self.app.on_log(f"[ERROR] reset failed: {e}")
+            log(f"[ERROR] reset failed: {e}")
 
     def servo_shutdown(self, servo_id: int):
         try:
@@ -463,7 +464,7 @@ class EtherCATManager():
             self._set_rx_pdo(servo, 0x0006)
 
         except Exception as e:
-            self.app.on_log(f"[ERROR] shutdown failed: {e}")
+            log(f"[ERROR] shutdown failed: {e}")
 
 # endregion
 
@@ -505,10 +506,10 @@ class EtherCATManager():
 # region emergency functions
     # 메일박스로 긴급 호출 시 콜백 함수
     def emcy_callback_servo(self, msg):
-        self.app.on_log(f"[ERROR] servo emergency: {msg}")
+        log(f"[ERROR] servo emergency: {msg}")
 
     def emcy_callback_input(self, msg):
-        self.app.on_log(f"[ERROR] input emergency: {msg}")
+        log(f"[ERROR] input emergency: {msg}")
 
     def emcy_callback_output(self, msg):
-        self.app.on_log(f"[ERROR] output emergency: {msg}")
+        log(f"[ERROR] output emergency: {msg}")

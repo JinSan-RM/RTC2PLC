@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from src.config_util import get_servo_modified_value
-
+from src.utils.config_util import get_servo_modified_value
+from src.utils.logger import log
 
 class ServoTab(QWidget):
     """서보 제어 탭"""
@@ -346,29 +346,29 @@ class ServoTab(QWidget):
     
     # 이벤트 핸들러
     def on_servo_on(self, servo_id):
-        self.app.on_log("서보 ON")
+        log("서보 ON")
         self.app.servo_on(servo_id)
     
     def on_servo_off(self, servo_id):
-        self.app.on_log("서보 OFF")
+        log("서보 OFF")
         self.app.servo_off(servo_id)
     
     def on_reset(self, servo_id):
-        self.app.on_log("서보 리셋")
+        log("서보 리셋")
         # self.alarm_indicator.setText("⚫ 정상")
         # self.error_code.setText("0x0000")
         self.app.servo_reset(servo_id)
     
     def on_stop(self, servo_id):
-        self.app.on_log("서보 정지")
+        log("서보 정지")
         self.app.servo_stop(servo_id)
 
     def on_homing(self, servo_id):
-        self.app.on_log("서보 원점 복귀")
+        log("서보 원점 복귀")
         self.app.servo_homing(servo_id)
     
     def on_set_origin(self, servo_id):
-        self.app.on_log("원점 설정")
+        log("원점 설정")
         self.app.servo_set_origin(servo_id)
     
     def on_move_to_position(self, servo_id):
@@ -376,18 +376,18 @@ class ServoTab(QWidget):
         speed_txt = getattr(self, f"servo_{servo_id}_target_speed")
         position = pos_txt.text()
         speed = speed_txt.text()
-        self.app.on_log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
+        log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
         self.app.on_move_to_position(0, int(position*(10**3)))
     
     def on_jog_move(self, servo_id, direction):
         is_jog = getattr(self, f"servo_{servo_id}_is_jog")
         jog_speed = getattr(self, f"servo_{servo_id}_jog_speed")
         if is_jog.isChecked():
-            self.app.on_log(f"조그 이동: {direction}")
+            log(f"조그 이동: {direction}")
             _dir = 1 if direction == "right" else -1
             v = float(jog_speed.text()) * (10 ** 3)
             if v == 0:
-                self.app.on_log("조그 속도를 설정해주세요")
+                log("조그 속도를 설정해주세요")
             else:
                 self.app.servo_jog_move(servo_id, v*_dir)
     
@@ -395,18 +395,18 @@ class ServoTab(QWidget):
         is_inch = getattr(self, f"servo_{servo_id}_is_inch")
         inch_dist = getattr(self, f"servo_{servo_id}_inch_dist")
         if is_inch.isChecked():
-            self.app.on_log(f"인칭 이동: {direction}")
+            log(f"인칭 이동: {direction}")
             _dir = 1 if direction == "right" else -1
             dist = int(inch_dist.text()) * (10 ** 3)
             if dist == 0:
-                self.app.on_log(f"인칭 거리를 설정해주세요")
+                log(f"인칭 거리를 설정해주세요")
             else:
                 self.app.servo_inch_move(servo_id, dist*_dir)
     
     def on_jog_stop(self, servo_id):
         is_jog = getattr(self, f"servo_{servo_id}_is_jog")
         if is_jog.isChecked():
-            self.app.on_log("조그 이동 정지")
+            log("조그 이동 정지")
             self.app.servo_stop(servo_id)
     
     def update_values(self, _data):

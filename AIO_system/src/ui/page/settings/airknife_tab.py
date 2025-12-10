@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from src.utils.logger import log
+
 
 class AirKnifeTab(QWidget):
     """에어나이프 제어 탭"""
@@ -179,12 +181,12 @@ class AirKnifeTab(QWidget):
         """설정 적용"""
         timing = getattr(self, f"airknife_{num}_timing").text()
         duration = getattr(self, f"airknife_{num}_duration").text()
-        self.app.on_log(f"에어나이프 #{num} 설정: 타이밍={timing}ms, 시간={duration}ms")
+        log(f"에어나이프 #{num} 설정: 타이밍={timing}ms, 시간={duration}ms")
         # TODO: 실제 설정 적용
     
     def on_test(self, num):
         """개별 테스트"""
-        self.app.on_log(f"에어나이프 #{num} 테스트 분사")
+        log(f"에어나이프 #{num} 테스트 분사")
         # TODO: 실제 테스트 분사
         
         # 상태 표시 업데이트 (시뮬레이션)
@@ -197,7 +199,7 @@ class AirKnifeTab(QWidget):
     def on_toggle(self, num, enabled):
         """개별 ON/OFF"""
         state = "활성화" if enabled else "비활성화"
-        self.app.on_log(f"에어나이프 #{num} {state}")
+        log(f"에어나이프 #{num} {state}")
         
         # 버튼 텍스트 변경
         btn = self.findChild(QPushButton, f"toggle_btn_{num}")
@@ -208,7 +210,7 @@ class AirKnifeTab(QWidget):
     def on_all_toggle(self, enable):
         """전체 활성화/비활성화"""
         state = "활성화" if enable else "비활성화"
-        self.app.on_log(f"에어나이프 전체 {state}")
+        log(f"에어나이프 전체 {state}")
         
         # 모든 토글 버튼 상태 변경
         for i in range(1, 9):
@@ -220,12 +222,12 @@ class AirKnifeTab(QWidget):
     
     def on_all_test(self):
         """전체 테스트"""
-        self.app.on_log("에어나이프 전체 테스트 분사")
+        log("에어나이프 전체 테스트 분사")
         # TODO: 실제 전체 테스트
     
     def on_emergency_stop(self):
         """긴급 정지"""
-        self.app.on_log("🚨 에어나이프 긴급 정지!")
+        log("🚨 에어나이프 긴급 정지!")
         # TODO: 실제 긴급 정지
     
     def apply_styles(self):

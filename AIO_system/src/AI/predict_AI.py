@@ -10,7 +10,7 @@ import sys
 from .tracking.detection_box import ConveyorBoxZone, ConveyorBoxManager
 from .model_load import load_yolov11
 from .cam.basler_manager import BaslerCameraManager
-
+from src.utils.logger import log
 
 @dataclass
 class DetectedObject:
@@ -99,10 +99,11 @@ class AIPlasticDetectionSystem:
         self,
         model_path: str = None,
         confidence_threshold: float = 0.7,
-        img_size: int = 640
+        img_size: int = 640,
     ):
+        self.log = log
         self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\251012_yolov10_plastic_OD_model.pt"
-        print(f"모델 경로: {self.model_path}")
+        log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
         if self.model is None:
             raise RuntimeError("YOLOv11 모델 로드 실패")
@@ -124,16 +125,16 @@ class AIPlasticDetectionSystem:
         self.total_processed = 0
         
         # 모델 워밍업
-        print("모델 워밍업 중...")
+        log("모델 워밍업 중...")
         dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
         for _ in range(3):
             _ = self.model.predict(dummy_img, verbose=False, device=self.device, imgsz=self.img_size)
-        print("워밍업 완료!")
+        log("워밍업 완료!")
         
         # 모델 클래스명 가져오기
         if hasattr(self.model, 'names'):
             self.CLASS_NAMES = [self.model.names[i].upper() for i in range(len(self.model.names))]
-            print(f"모델 클래스: {self.CLASS_NAMES}")
+            log(f"모델 클래스: {self.CLASS_NAMES}")
     
     def detect(self, frame: np.ndarray) -> List[DetectedObject]:
         """YOLOv11을 사용한 객체 감지 + 추적 (GPU 가속)"""
@@ -162,7 +163,7 @@ class AIPlasticDetectionSystem:
                 
                 # ID 확인 (tracking 실패 시 None일 수 있음)
                 if boxes.id is None:
-                    # print("⚠️ Tracking ID가 없습니다. predict 모드로 fallback")
+                    # log("⚠️ Tracking ID가 없습니다. predict 모드로 fallback")
                     # Tracking 실패 시 기존 방식 사용
                     xyxy = boxes.xyxy.cpu().numpy()
                     conf = boxes.conf.cpu().numpy()
@@ -214,7 +215,7 @@ class AIPlasticDetectionSystem:
             return detected_objects
             
         except Exception as e:
-            print(f"감지 오류: {e}")
+            log(f"감지 오류: {e}")
             return []
     
     
@@ -277,7 +278,7 @@ class AIPlasticDetectionSystem:
     
     def run(self):
         """메인 실행 루프"""
-        print("AI Hub 폐플라스틱 감지 시스템 시작 (YOLOv11 + GPU)")
+        log("AI Hub 폐플라스틱 감지 시스템 시작 (YOLOv11 + GPU)")
         
         # 타이밍 측정용
         timing_grab = []
@@ -287,16 +288,16 @@ class AIPlasticDetectionSystem:
         
         camera_ip = None
         if not self.camera_manager.initialize(camera_ip=camera_ip):
-            print("Basler 카메라 실패. 웹캠 사용")
+            log("Basler 카메라 실패. 웹캠 사용")
             
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
             
             if not cap.isOpened():
-                print("카메라 인덱스 0 실패, 인덱스 1 시도...")
+                log("카메라 인덱스 0 실패, 인덱스 1 시도...")
                 cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
             
             if not cap.isOpened():
-                print("❌ 사용 가능한 카메라를 찾을 수 없습니다.")
+                log("❌ 사용 가능한 카메라를 찾을 수 없습니다.")
                 return
             
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -307,7 +308,7 @@ class AIPlasticDetectionSystem:
             actual_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
             actual_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
             actual_fps = cap.get(cv2.CAP_PROP_FPS)
-            print(f"카메라 설정: {actual_width}x{actual_height} @ {actual_fps}fps")
+            log(f"카메라 설정: {actual_width}x{actual_height} @ {actual_fps}fps")
             
             use_basler = False
         else:
@@ -342,11 +343,11 @@ class AIPlasticDetectionSystem:
                 self.box_manager.update_detections(detected_objects)
                 # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작
                 if len(detected_objects) > 0:
-                    # print(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
+                    # log(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
                     for box in self.box_manager.boxes:
-                        print(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                        log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
                         if box.is_active:
-                            print(f"blow action")
+                            log(f"blow action")
                             # self.send_airknife_signal(box.box_id)
                         
                     
@@ -355,7 +356,7 @@ class AIPlasticDetectionSystem:
                 
                 for obj in detected_objects:
                     metainfo = PlasticClassifier.parse_metainfo("기본_투명_병류_대_비압축")
-                    print(f"감지 ID {obj.id}: {obj.class_name} ({PlasticClassifier.get_plastic_info(obj.class_name)})")
+                    log(f"감지 ID {obj.id}: {obj.class_name} ({PlasticClassifier.get_plastic_info(obj.class_name)})")
                     self.sorting_system.execute_sorting(obj.class_name, metainfo)
                     self.total_processed += 1
                 
@@ -375,23 +376,23 @@ class AIPlasticDetectionSystem:
                 
                 # 100프레임마다 타이밍 통계 출력
                 if frame_count == 100:
-                    print("\n" + "="*70)
-                    print("⏱️  타이밍 분석 (100 프레임 평균)")
-                    print("="*70)
-                    print(f"{'구간':<20} {'평균(ms)':<15} {'예상 FPS':<15}")
-                    print("-"*70)
-                    print(f"{'프레임 획득':<20} {np.mean(timing_grab):>10.2f}ms    {1000/np.mean(timing_grab):>10.1f} fps")
-                    print(f"{'추론':<20} {np.mean(timing_inference):>10.2f}ms    {1000/np.mean(timing_inference):>10.1f} fps")
-                    print(f"{'그리기+표시':<20} {np.mean(timing_draw):>10.2f}ms    {1000/np.mean(timing_draw):>10.1f} fps")
-                    print(f"{'전체':<20} {np.mean(timing_total):>10.2f}ms    {1000/np.mean(timing_total):>10.1f} fps")
-                    print("="*70)
+                    log("\n" + "="*70)
+                    log("⏱️  타이밍 분석 (100 프레임 평균)")
+                    log("="*70)
+                    log(f"{'구간':<20} {'평균(ms)':<15} {'예상 FPS':<15}")
+                    log("-"*70)
+                    log(f"{'프레임 획득':<20} {np.mean(timing_grab):>10.2f}ms    {1000/np.mean(timing_grab):>10.1f} fps")
+                    log(f"{'추론':<20} {np.mean(timing_inference):>10.2f}ms    {1000/np.mean(timing_inference):>10.1f} fps")
+                    log(f"{'그리기+표시':<20} {np.mean(timing_draw):>10.2f}ms    {1000/np.mean(timing_draw):>10.1f} fps")
+                    log(f"{'전체':<20} {np.mean(timing_total):>10.2f}ms    {1000/np.mean(timing_total):>10.1f} fps")
+                    log("="*70)
                     
                     # 병목 진단
                     grab_avg = np.mean(timing_grab)
                     if grab_avg > 50:
-                        print(f"⚠️  병목: 프레임 획득 ({grab_avg:.1f}ms)")
-                        print("   → Basler 카메라 FPS 설정 확인 필요")
-                        print("   → Pylon Viewer로 카메라 FPS 설정 확인")
+                        log(f"⚠️  병목: 프레임 획득 ({grab_avg:.1f}ms)")
+                        log("   → Basler 카메라 FPS 설정 확인 필요")
+                        log("   → Pylon Viewer로 카메라 FPS 설정 확인")
                     
                     # 타이밍 리셋
                     timing_grab.clear()
@@ -403,11 +404,11 @@ class AIPlasticDetectionSystem:
 
         
         except KeyboardInterrupt:
-            print("\n시스템 중단")
+            log("\n시스템 중단")
         except Exception as e:
-            print(f"\n시스템 오류: {e}")
+            log(f"\n시스템 오류: {e}")
             import traceback
-            traceback.print_exc()
+            traceback.log_exc()
         finally:
             if use_basler:
                 self.camera_manager.stop_grabbing()
@@ -415,25 +416,25 @@ class AIPlasticDetectionSystem:
             else:
                 cap.release()
             # cv2.destroyAllWindows()
-    def print_statistics(self):
+    def log_statistics(self):
         """통계 출력"""
-        print("\n" + "="*60)
-        print("AI Hub 폐플라스틱 감지 시스템 통계")
-        print("="*60)
+        log("\n" + "="*60)
+        log("AI Hub 폐플라스틱 감지 시스템 통계")
+        log("="*60)
         total_count = sum(self.line_counter.class_counts.values())
-        print(f"총 처리량: {total_count}개")
-        print(f"현재 FPS: {self.current_fps}")
-        print(f"사용 장치: {self.device.upper()}")
+        log(f"총 처리량: {total_count}개")
+        log(f"현재 FPS: {self.current_fps}")
+        log(f"사용 장치: {self.device.upper()}")
         if torch.cuda.is_available():
-            print(f"GPU 메모리 사용량: {torch.cuda.memory_allocated(0) / 1024**2:.2f} MB")
+            log(f"GPU 메모리 사용량: {torch.cuda.memory_allocated(0) / 1024**2:.2f} MB")
 
 if __name__ == "__main__":
-    print("AI Hub 폐플라스틱 감지 시스템 v4.0 (YOLOv11 + GPU)")
+    log("AI Hub 폐플라스틱 감지 시스템 v4.0 (YOLOv11 + GPU)")
     
     model_path = sys.path[0] + "\\model\\weights\\251012_yolov10_plastic_OD_model.pt"
     
     if not os.path.exists(model_path):
-        print(f"\n❌ 모델 파일을 찾을 수 없습니다: {model_path}")
+        log(f"\n❌ 모델 파일을 찾을 수 없습니다: {model_path}")
         exit(1)
     
     try:
@@ -444,6 +445,6 @@ if __name__ == "__main__":
         )
         detector.run()
     except Exception as e:
-        print(f"\n오류: {e}")
+        log(f"\n오류: {e}")
         import traceback
-        traceback.print_exc()
+        traceback.log_exc()

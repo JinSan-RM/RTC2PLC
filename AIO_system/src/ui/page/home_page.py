@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 
+from src.utils.logger import log
+
 
 class StatusCard(QFrame):
     """상태 카드 위젯"""
@@ -254,17 +256,17 @@ class HomePage(QWidget):
     
     def on_start_clicked(self):
         """시작 버튼 클릭"""
-        self.app.on_log("시스템 시작")
+        log("시스템 시작")
         self.app.on_start_clicked()
     
     def on_stop_clicked(self):
         """정지 버튼 클릭"""
-        self.app.on_log("시스템 정지")
+        log("시스템 정지")
         self.app.on_stop_clicked()
     
     def on_reset_clicked(self):
         """리셋 버튼 클릭"""
-        self.app.on_log("시스템 리셋")
+        log("시스템 리셋")
         # TODO: 실제 리셋 로직
     
     def apply_styles(self):

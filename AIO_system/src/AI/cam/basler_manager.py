@@ -2,6 +2,8 @@ from pypylon import pylon
 import numpy as np
 from typing import Optional
 
+from src.utils.logger import log
+
 
 class BaslerCameraManager:
     """Basler 산업용 카메라 관리"""
@@ -36,20 +38,20 @@ class BaslerCameraManager:
             self.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
             
             self.is_connected = True
-            print(f"Basler 카메라 연결 성공!")
+            log(f"Basler 카메라 연결 성공!")
             return True
         except Exception as e:
-            print(f"카메라 연결 실패: {e}")
+            log(f"카메라 연결 실패: {e}")
             return False
     
     def setup_camera_parameters(self):
         """카메라 파라미터 설정 - FPS 최적화"""
         try:
-            print("\n📷 Basler 카메라 설정 시작...")
+            log("\n📷 Basler 카메라 설정 시작...")
             
             # 1. 버퍼 설정
             self.camera.MaxNumBuffer.Value = 5
-            print("  ✓ 버퍼 크기: 5")
+            log("  ✓ 버퍼 크기: 5")
             
             # 2. 해상도 설정
             max_width = self.camera.Width.Max
@@ -59,22 +61,22 @@ class BaslerCameraManager:
             
             self.camera.Width.Value = target_width
             self.camera.Height.Value = target_height
-            print(f"  ✓ 해상도: {target_width}x{target_height}")
+            log(f"  ✓ 해상도: {target_width}x{target_height}")
             
             # 3. ExposureAuto 끄기 (매우 중요!)
             try:
                 if hasattr(self.camera, 'ExposureAuto'):
                     self.camera.ExposureAuto.SetValue('Off')
-                    print(f"  ✓ 자동 노출: Off")
+                    log(f"  ✓ 자동 노출: Off")
             except Exception as e:
-                print(f"  ⚠ 자동 노출 설정 실패: {e}")
+                log(f"  ⚠ 자동 노출 설정 실패: {e}")
             
             # 4. ExposureTime 설정 (FPS의 핵심!)
             try:
                 if hasattr(self.camera, 'ExposureTime'):
                     # 현재 노출 시간 확인
                     current_exposure = self.camera.ExposureTime.GetValue()
-                    print(f"  • 현재 노출 시간: {current_exposure:.0f}μs ({1000000/current_exposure:.1f} fps 제한)")
+                    log(f"  • 현재 노출 시간: {current_exposure:.0f}μs ({1000000/current_exposure:.1f} fps 제한)")
                     
                     # 목표: 10ms (10000μs) = 최대 100fps 가능
                     target_exposure = 10000
@@ -89,38 +91,38 @@ class BaslerCameraManager:
                     
                     actual_exposure = self.camera.ExposureTime.GetValue()
                     max_fps = 1000000 / actual_exposure
-                    print(f"  ✓ 새 노출 시간: {actual_exposure:.0f}μs (최대 {max_fps:.1f} fps)")
+                    log(f"  ✓ 새 노출 시간: {actual_exposure:.0f}μs (최대 {max_fps:.1f} fps)")
             except Exception as e:
-                print(f"  ⚠ 노출 시간 설정 실패: {e}")
+                log(f"  ⚠ 노출 시간 설정 실패: {e}")
             
             # 5. GainAuto 끄기
             try:
                 if hasattr(self.camera, 'GainAuto'):
                     self.camera.GainAuto.SetValue('Off')
-                    print(f"  ✓ 자동 게인: Off")
+                    log(f"  ✓ 자동 게인: Off")
             except Exception as e:
-                print(f"  ⚠ 자동 게인 설정 실패: {e}")
+                log(f"  ⚠ 자동 게인 설정 실패: {e}")
             
             # 6. TriggerMode 끄기 (중요!)
             try:
                 if hasattr(self.camera, 'TriggerMode'):
                     self.camera.TriggerMode.SetValue('Off')
-                    print(f"  ✓ 트리거 모드: Off")
+                    log(f"  ✓ 트리거 모드: Off")
             except Exception as e:
-                print(f"  ⚠ 트리거 모드 설정 실패: {e}")
+                log(f"  ⚠ 트리거 모드 설정 실패: {e}")
             
             # 7. Acquisition Mode 설정
             try:
                 if hasattr(self.camera, 'AcquisitionMode'):
                     self.camera.AcquisitionMode.SetValue('Continuous')
-                    print(f"  ✓ Acquisition Mode: Continuous")
+                    log(f"  ✓ Acquisition Mode: Continuous")
             except Exception as e:
-                print(f"  ⚠ Acquisition 모드 설정 실패: {e}")
+                log(f"  ⚠ Acquisition 모드 설정 실패: {e}")
             
-            print("📷 카메라 설정 완료!\n")
+            log("📷 카메라 설정 완료!\n")
             
         except Exception as e:
-            print(f"❌ 카메라 설정 오류: {e}")
+            log(f"❌ 카메라 설정 오류: {e}")
     
     def grab_frame(self) -> Optional[np.ndarray]:
         if not self.is_connected or not self.camera:
@@ -136,7 +138,7 @@ class BaslerCameraManager:
                 else:
                     grabResult.Release()
         except Exception as e:
-            print(f"프레임 캡처 오류: {e}")
+            log(f"프레임 캡처 오류: {e}")
         return None
     
     def start_grabbing(self):
@@ -155,4 +157,4 @@ class BaslerCameraManager:
                 self.camera.Close()
             self.is_connected = False
         except Exception as e:
-            print(f"카메라 해제 오류: {e}")
+            log(f"카메라 해제 오류: {e}")

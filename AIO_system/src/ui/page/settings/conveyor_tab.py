@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from src.utils.logger import log
 
 class ConveyorTab(QWidget):
     """컨베이어 제어 탭 (CV01~CV04)"""
@@ -214,37 +215,37 @@ class ConveyorTab(QWidget):
         try:
             freq = float(getattr(self, f"{conv_id}_target_freq").text())
             self.app.on_set_freq(conv_id, freq)
-            self.app.on_log(f"{conv_id} 주파수 설정: {freq} Hz")
+            log(f"{conv_id} 주파수 설정: {freq} Hz")
             
             freq_label = self.findChild(QLabel, f"{conv_id}_freq")
             if freq_label:
                 freq_label.setText(f"{freq:.2f}")
         except ValueError:
-            self.app.on_log(f"잘못된 주파수 값")
+            log(f"잘못된 주파수 값")
     
     def on_set_acc(self, conv_id):
         try:
             acc = float(getattr(self, f"{conv_id}_target_acc").text())
             self.app.on_set_acc(conv_id, acc)
-            self.app.on_log(f"{conv_id} 가속시간 설정: {acc} s")
+            log(f"{conv_id} 가속시간 설정: {acc} s")
             
             acc_label = self.findChild(QLabel, f"{conv_id}_acc")
             if acc_label:
                 acc_label.setText(f"{acc:.1f}")
         except ValueError:
-            self.app.on_log(f"잘못된 가속시간 값")
+            log(f"잘못된 가속시간 값")
     
     def on_set_dec(self, conv_id):
         try:
             dec = float(getattr(self, f"{conv_id}_target_dec").text())
             self.app.on_set_dec(conv_id, dec)
-            self.app.on_log(f"{conv_id} 감속시간 설정: {dec} s")
+            log(f"{conv_id} 감속시간 설정: {dec} s")
             
             dec_label = self.findChild(QLabel, f"{conv_id}_dec")
             if dec_label:
                 dec_label.setText(f"{dec:.1f}")
         except ValueError:
-            self.app.on_log(f"잘못된 감속시간 값")
+            log(f"잘못된 감속시간 값")
     
     def on_conveyor_start(self, conv_id):
         self.app.motor_start(conv_id)
