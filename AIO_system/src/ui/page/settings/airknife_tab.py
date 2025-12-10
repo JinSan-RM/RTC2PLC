@@ -199,6 +199,7 @@ class AirKnifeTab(QWidget):
             # TODO: 일정 시간 후 "대기" 상태로 복귀
     
     def on_airknife_off(self, num):
+        log(f"에어나이프 #{num} 테스트 분사 종료")
         status_label = self.findChild(QLabel, f"airknife_{num}_status")
         if status_label:
             status_label.setText("⚫ 대기")

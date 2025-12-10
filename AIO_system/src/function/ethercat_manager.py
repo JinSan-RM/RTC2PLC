@@ -515,6 +515,7 @@ class EtherCATManager():
         """
         try:
             self.io_write_bit(output_id, air_num+19, True)
+            log(f"[INFO] Airknife {output_id} on")
             threading.Timer(on_term/1000, lambda: self.airknife_off(output_id, air_num+19))
         except Exception as e:
             log(f"[ERROR] airknife on failed: {e}")
@@ -531,6 +532,7 @@ class EtherCATManager():
         """
         try:
             self.io_write_bit(output_id, air_num+19, False)
+            log(f"[INFO] Airknife {output_id} off")
         except Exception as e:
             log(f"[ERROR] airknife off failed: {e}")
 
