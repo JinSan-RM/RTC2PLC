@@ -215,7 +215,7 @@ class EtherCATManager():
             current_time = datetime.now()
             with self._lock:
                 for _i, task in enumerate(self.tasks):
-                    if current_time > task[0][0]:
+                    if current_time > task[0]:
                         task[1](*task[2])
                         del self.tasks[_i]
 
