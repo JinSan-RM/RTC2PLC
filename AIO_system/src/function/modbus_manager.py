@@ -216,7 +216,7 @@ class ModbusManager():
 
                 _data[_name] = ret
 
-        update_inverter_status(_data)
+        self.on_update_inverter_status(_data)
 
     # 주파수 설정 함수
     def set_freq(self, motor_id:str = 'inverter_001', value: float = 0.0):
