@@ -534,6 +534,8 @@ class EtherCATManager():
         except Exception as e:
             log(f"[ERROR] airknife off failed: {e}")
 
+        self.app.on_airknife_off(output_id)
+
         
         
 
