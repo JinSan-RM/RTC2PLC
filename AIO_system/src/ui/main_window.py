@@ -9,6 +9,7 @@ from src.ui.page.home_page import HomePage
 from src.ui.page.monitoring_page import MonitoringPage
 from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
+from src.utils.logger import Logger, log
 
 import inspect
 import platform
@@ -20,6 +21,7 @@ class MainWindow(QMainWindow):
         self.app = app
         self.init_ui()
         
+        Logger.set_callback(self.add_log_to_ui)
         # 시간 업데이트 타이머
         self.time_timer = QTimer()
         self.time_timer.timeout.connect(self.update_time)
@@ -192,14 +194,7 @@ class MainWindow(QMainWindow):
         self.app.on_log("긴급정지 버튼 눌림")
         self.update_status("긴급정지", "red")
     
-    def add_log(self, message):
-        """로그 추가"""
-        timestamp = QDateTime.currentDateTime().toString("hh:mm:ss")
-        print(f"[{timestamp}] {message}")
-        # TODO: 로그 페이지에 추가
-        # if hasattr(self, 'logs_page'):
-        #     self.logs_page.add_log(message)
-    
+   
     def closeEvent(self, a0):
         self.app.quit()
         # return super().closeEvent(a0)
@@ -299,26 +294,8 @@ class MainWindow(QMainWindow):
             }
         """)
     
-    def log(self, message):
-        """로그 메시지 추가"""
-        # 호출한 위치 정보 가져오기
-        frame = inspect.currentframe().f_back.f_back
-        os_name = platform.system()
-        if os_name == "Windows":
-            sep = '\\'
-        else:
-            sep = '/'
-        filename = frame.f_code.co_filename.split(sep)[-1]  # 파일명만
-        lineno = frame.f_lineno
-        funcname = frame.f_code.co_name
-        
-        # 시간
-        timestamp = QDateTime.currentDateTime().toString("HH:mm:ss.zzz")
-        
-        # 포맷팅
-        log_msg = f"[{timestamp}] [{filename}:{lineno} {funcname}()] {message}"
-        print(log_msg)
-        
+    def add_log_to_ui(self, log_msg):
+        """UI에 로그 추가"""
         if hasattr(self, 'logs_page'):
             self.logs_page.add_log(log_msg)
 

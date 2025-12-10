@@ -4,7 +4,8 @@ import queue
 import threading
 import time
 
-from ..config_util import *
+from src.utils.config_util import *
+from src.utils.logger import log
 
 class ModbusManager():
     _lock = threading.Lock()
@@ -49,25 +50,25 @@ class ModbusManager():
 
             self.run()
         except Exception as e:
-            self.app.on_log(f"Modbus connection error: {e}")
+            log(f"Modbus connection error: {e}")
 
     def run(self):
         try:
             self.process_thread = threading.Thread(target=self._process_task, daemon=True)
             self.process_thread.start()
         except Exception as e:
-            self.app.on_log(f"error while process: {e}")
+            log(f"error while process: {e}")
 
     def disconnect(self):
         try:
             self.stop_event.set()
             self.process_thread.join(timeout=5)
             if self.process_thread.is_alive():
-                self.app.on_log("comm manager thread did not terminate properly")
+                log("comm manager thread did not terminate properly")
             self.client.close()
             self.client = None
         except Exception as e:
-            self.app.on_log(f"Modbus disconnection error: {e}")
+            log(f"Modbus disconnection error: {e}")
 
     def _process_task(self):
         while not self.stop_event.is_set():
@@ -94,7 +95,7 @@ class ModbusManager():
         """
         try:
             if host_name not in self.slave_ids:
-                self.app.on_log(f"can't find slave: {host_name}")
+                log(f"can't find slave: {host_name}")
                 return False
 
             slave_id = self.slave_ids[host_name]
@@ -103,11 +104,11 @@ class ModbusManager():
                 raise Exception(f"Modbus error: {ret}")
 
             value = ret.registers[0]
-            # self.app.on_log(f"[{host_name}] Register {register_address} read: {value}")
+            # log(f"[{host_name}] Register {register_address} read: {value}")
             return value
 
         except Exception as e:
-            self.app.on_log(f"read register failed (Name: {host_name}, Register: {register_address}): {e}")
+            log(f"read register failed (Name: {host_name}, Register: {register_address}): {e}")
             return None
 
     def write_holding_register(self, host_name: str, register_address: int, value: int) -> bool:
@@ -124,7 +125,7 @@ class ModbusManager():
         """
         try:
             if host_name not in self.slave_ids:
-                self.app.on_log(f"can't find slave: {host_name}")
+                log(f"can't find slave: {host_name}")
                 return False
 
             slave_id = self.slave_ids[host_name]
@@ -132,11 +133,11 @@ class ModbusManager():
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
-            # self.app.on_log(f"[{host_name}] write value {value} on register {register_address} completed")
+            # log(f"[{host_name}] write value {value} on register {register_address} completed")
             return True
 
         except Exception as e:
-            self.app.on_log(f"register writing failed (Name: {host_name}, Register: {register_address}, Value: {value}): {e}")
+            log(f"register writing failed (Name: {host_name}, Register: {register_address}, Value: {value}): {e}")
             return False
 
     def read_multiple_registers(self, host_name: str, start_address: int, count: int) -> Optional[List[int]]:
@@ -153,7 +154,7 @@ class ModbusManager():
         """
         try:
             if host_name not in self.slave_ids:
-                self.app.on_log(f"can't find slave: {host_name}")
+                log(f"can't find slave: {host_name}")
                 return None
 
             slave_id = self.slave_ids[host_name]
@@ -162,11 +163,11 @@ class ModbusManager():
                 raise Exception(f"Modbus error: {ret}")
 
             values = ret.registers[:count]
-            # self.app.on_log(f"[{host_name}] register {start_address}-{start_address+count-1} read: {values}")
+            # log(f"[{host_name}] register {start_address}-{start_address+count-1} read: {values}")
             return values
 
         except Exception as e:
-            self.app.on_log(f"reading multiple registers failed (Name: {host_name}, Start: {start_address}, Count: {count}): {e}")
+            log(f"reading multiple registers failed (Name: {host_name}, Start: {start_address}, Count: {count}): {e}")
             return None
 
     def write_multiple_registers(self, host_name: str, start_address: int, values: List[int]) -> bool:
@@ -183,7 +184,7 @@ class ModbusManager():
         """
         try:
             if host_name not in self.slave_ids:
-                self.app.on_log(f"can't find slave: {host_name}")
+                log(f"can't find slave: {host_name}")
                 return False
 
             slave_id = self.slave_ids[host_name]
@@ -191,11 +192,11 @@ class ModbusManager():
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
-            # self.app.on_log(f"[{host_name}] write values {values} on register {start_address}-{start_address+len(values)-1} completed")
+            # log(f"[{host_name}] write values {values} on register {start_address}-{start_address+len(values)-1} completed")
             return True
 
         except Exception as e:
-            self.app.on_log(f"multiple registers writing failed (Name: {host_name}, Start: {start_address}, Count: {len(values)}): {e}")
+            log(f"multiple registers writing failed (Name: {host_name}, Start: {start_address}, Count: {len(values)}): {e}")
             return False
 # endregion
 
@@ -215,70 +216,70 @@ class ModbusManager():
 
                 _data[_name] = ret
 
-        self.app.on_update_inverter_status(_data)
+        update_inverter_status(_data)
 
     # 주파수 설정 함수
     def set_freq(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 주파수 설정 """
         ret = self.write_holding_register(motor_id, 0x0005 - 1, int(value * 100))
         if ret:
-            self.app.on_log(f"set Frequency to {value:.2f} Hz success")
+            log(f"set Frequency to {value:.2f} Hz success")
             
     # 가속 시간 설정 함수
     def set_acc(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 가속 시간 설정 """
         ret = self.write_holding_register(motor_id, 0x0007 - 1, int(value * 10))
         if ret:
-            self.app.on_log(f"set acceleration time to {value:.1f} sec success")
+            log(f"set acceleration time to {value:.1f} sec success")
 
     # 감속 시간 설정 함수
     def set_dec(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 감속 시간 설정 """
         ret = self.write_holding_register(motor_id, 0x0008 - 1, int(value * 10))
         if ret:
-            self.app.on_log(f"set Frequency to {value:.1f} sec success")
+            log(f"set Frequency to {value:.1f} sec success")
     
     # 모터 동작 함수
     def motor_start(self, motor_id: str = 'inverter_001'):
         """모터 운전 시작"""
-        self.app.on_log(f"motor_start called: {motor_id}")
+        log(f"motor_start called: {motor_id}")
         
         if motor_id not in self.slave_ids:
-            self.app.on_log(f"Unknown motor_id: {motor_id}")
+            log(f"Unknown motor_id: {motor_id}")
             return
         
         ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0003)
         if ret:
-            self.app.on_log(f"{motor_id} started")
+            log(f"{motor_id} started")
         else:
-            self.app.on_log("motor start failed")
+            log("motor start failed")
 
     # 모터 정지 함수
     def motor_stop(self, motor_id: str):
         """모터 운전 정지"""
-        self.app.on_log(f"motor_stop called: {motor_id}")
+        log(f"motor_stop called: {motor_id}")
         
         if motor_id not in self.slave_ids:
-            self.app.on_log(f"Unknown motor_id: {motor_id}")
+            log(f"Unknown motor_id: {motor_id}")
             return
         
         ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0000)
         if ret:
-            self.app.on_log(f"{motor_id} stopped")
+            log(f"{motor_id} stopped")
         else:
-            self.app.on_log("motor stop failed")
+            log("motor stop failed")
 
     def custom_check(self, addr):
         ret = self.read_holding_register("inverter_001", addr - 1)
         if ret != None:
-            self.app.on_log(f"read addr: {addr:X} value: {ret}")
+            log(f"read addr: {addr:X} value: {ret}")
         else:
-            self.app.on_log(f"read addr: {addr:X} failed")
+            log(f"read addr: {addr:X} failed")
 
     def custom_write(self, addr, value):
         ret = self.write_holding_register("inverter_001", addr - 1, value)
         if ret:
-            self.app.on_log(f"write addr: {addr:X} value: {value}")
+            log(f"write addr: {addr:X} value: {value}")
         else:
-            self.app.on_log(f"write addr: {addr:X} failed")
+            log(f"write addr: {addr:X} failed")
 # endregion

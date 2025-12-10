@@ -6,6 +6,7 @@ import sys
 from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
+from src.utils.logger import log
 
 class App():
     def __init__(self):
@@ -43,23 +44,23 @@ class App():
                 self.ui.settings_page.tabs.widget(tab_index).update_values(_data)
 
     def on_set_freq(self, motor_id: str, value: float):
-        self.ui.log(f"Setting frequency for {motor_id} to {value} Hz")
+        log(f"Setting frequency for {motor_id} to {value} Hz")
         self.modbus_manager.set_freq(motor_id, value)
 
     def on_set_acc(self, motor_id: str, value: float):
-        self.ui.log(f"Setting acceleration time for {motor_id} to {value} sec")
+        log(f"Setting acceleration time for {motor_id} to {value} sec")
         self.modbus_manager.set_acc(motor_id, value)
 
     def on_set_dec(self, motor_id: str, value: float):
-        self.ui.log(f"Setting deceleration time for {motor_id} to {value} sec")
+        log(f"Setting deceleration time for {motor_id} to {value} sec")
         self.modbus_manager.set_dec(motor_id, value)
 
     def motor_start(self, motor_id: str = 'inverter_001'):
-        self.ui.log(f"Starting motor: {motor_id}")
+        log(f"Starting motor: {motor_id}")
         self.modbus_manager.motor_start(motor_id)
 
     def motor_stop(self, motor_id):
-        self.ui.log(f"Stopping motor: {motor_id}")
+        log(f"Stopping motor: {motor_id}")
         self.modbus_manager.motor_stop(motor_id)
         
     def custom_check(self, addr):
@@ -103,9 +104,6 @@ class App():
     def servo_inch_move(self, servo_id: int, dist: int):
         self.ethercat_manager.servo_move_relative(servo_id, dist)
 # endregion
-
-    def on_log(self, msg):
-        self.ui.log(msg)
 
     def run(self):
         """애플리케이션 실행"""
