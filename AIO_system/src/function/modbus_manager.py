@@ -269,6 +269,18 @@ class ModbusManager():
         else:
             log("motor stop failed")
 
+    # 자동 운전 시작
+    def on_automode_start(self):
+        log("auto mode started")
+        for _name, _id in self.slave_ids.items():
+            self.motor_start(_name)
+
+    # 자동 운전 정지
+    def on_automode_stop(self):
+        log("auto mode stopped")
+        for _name, _id in self.slave_ids.items():
+            self.motor_stop(_name)
+
     def custom_check(self, addr):
         ret = self.read_holding_register("inverter_001", addr - 1)
         if ret != None:

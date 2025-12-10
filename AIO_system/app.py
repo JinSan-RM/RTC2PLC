@@ -124,8 +124,8 @@ class App():
 # endregion
     def on_auto_start(self):
         # 피더 동작 함수
-        
         # 컨베이어 동작 함수
+        self.modbus_manager.on_automode_start()
         
         # 카메라 동작 함수
         self.camera_manager.on_start_all()
@@ -133,8 +133,8 @@ class App():
         
     def on_auto_stop(self):
         # 피더 멈춤 함수
-        
         # 컨베이어 멈춤 함수
+        self.modbus_manager.on_automode_stop()
         
         # 카메라 멈춤 함수
         self.camera_manager.on_stop_all()
