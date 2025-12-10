@@ -116,7 +116,7 @@ class App():
         self.ethercat_manager.airknife_on(0, air_num, on_term)
 
     def on_airknife_off(self, air_num: int):
-        if hasattr(self, 'settings_page'):
+        if hasattr(self.ui, 'settings_page'):
             self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
 # endregion
 

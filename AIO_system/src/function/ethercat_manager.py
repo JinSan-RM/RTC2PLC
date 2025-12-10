@@ -7,6 +7,7 @@ import struct
 
 from typing import Any, Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 
 from src.utils.config_util import *
 from src.utils.logger import log
@@ -32,7 +33,7 @@ class EtherCATManager():
                 3: EtherCATDevice("L7NH", LS_VENDOR_ID, L7NH_PRODUCT_CODE, self.setup_servo_drive)
             }
 
-            self.tasks : queue.Queue[Dict] = queue.Queue()
+            self.tasks = []
             self._initialized = True
 
     def connect(self):
@@ -211,11 +212,13 @@ class EtherCATManager():
             self.servo_shutdown(i)
         
         while not self.stop_event.is_set():
-            
-            while not self.tasks.empty():
-                task = self.tasks.get()
-                # todo: run task function
-            
+            current_time = datetime.now()
+            with self._lock:
+                for _i, task in enumerate(self.tasks):
+                    if current_time > task[0][0]:
+                        task[1](*task[2])
+                        del self.tasks[_i]
+
             # 테스트용 출력
             # ret = struct.unpack('<HbiiH', self.servo_drives[0].input)
             # status_word = ret[0]
@@ -228,7 +231,7 @@ class EtherCATManager():
             # temp2 = int.from_bytes(self.servo_drives[0].sdo_read(0x60F4, 0, 4), 'little', signed=True)
             # print(f"diff: {temp2}")
 
-            time.sleep(1)
+            time.sleep(ETHERCAT_DELAY)
 
     # 서보 드라이브 셋업
     def setup_servo_drive(self, slave_pos):
@@ -324,6 +327,11 @@ class EtherCATManager():
 
         except Exception as e:
             log(f"[ERROR] EtherCAT PDO setting error: {e}")
+
+    def _reserve_task(self, delay, func, *args):
+        time_after = datetime.now() + timedelta(seconds=delay)
+        with self._lock:
+            self.tasks.append((time_after, func, args))
 
 # region servo functions
     # RxPDO 설정
@@ -516,7 +524,7 @@ class EtherCATManager():
         try:
             self.io_write_bit(output_id, air_num+19, True)
             log(f"[INFO] Airknife {output_id} on")
-            threading.Timer(on_term/1000, lambda: self.airknife_off(output_id, air_num+19))
+            self._reserve_task(on_term/1000, self.airknife_off, output_id, air_num)
         except Exception as e:
             log(f"[ERROR] airknife on failed: {e}")
 
@@ -533,13 +541,9 @@ class EtherCATManager():
         try:
             self.io_write_bit(output_id, air_num+19, False)
             log(f"[INFO] Airknife {output_id} off")
+            self.app.on_airknife_off(output_id)
         except Exception as e:
             log(f"[ERROR] airknife off failed: {e}")
-
-        self.app.on_airknife_off(output_id)
-
-        
-        
 
 # endregion
 
