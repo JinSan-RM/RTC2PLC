@@ -341,7 +341,7 @@ class EtherCATManager():
             tx_pdo = _get_tx_pdo(servo)
             _data.append(tx_pdo)
         
-        update_servo_status(_data)
+        self.app.on_update_servo_status(_data)
 
     # 서보 on/off
     def servo_onoff(self, servo_id: int, onoff: bool):
@@ -471,21 +471,39 @@ class EtherCATManager():
 # region IO functions
     # IO 기능
     def update_io(self):
-        for _i in self.input_modules:
-            for _byte in _i.input:
-                continue
-            # todo: on 비트에 대한 처리
+        input_data = []
+        output_data = []
+        for module in self.input_modules:
+            total_input = int.from_bytes(module.input, 'little')
+            input_data.append(total_input)
+        
+        for module in self.output_modules:
+            total_output = int.from_bytes(module.output, 'little')
+            output_data.append(total_output)
+        
+        self.app.on_update_io_status(input_data, output_data)
 
     # 비트 쓰기
-    def io_write_bit(self, output_id: int, byte_offset: int, data: bool):
-        module = self.output_modules[output_id]
-        tmp = bytearray(module.output)
-        tmp[byte_offset] = data
-        module.output = tmp
+    def io_write_bit(self, output_id: int, bit_offset: int, data: bool):
+        if bit_offset > 31 or bit_offset < 0:
+            log(f"[WARNING] bit offset must be integer between 0 and 31. current value: {bit_offset}")
+            return
+        
+        try:
+            target_bit = 1 << bit_offset
+            module = self.output_modules[output_id]
+            total_bits = int.from_bytes(module.output, 'little')
+            if data:
+                total_bits |= target_bit
+            else:
+                total_bits &= ~target_bit
+            module.output = struct.pack('<I', total_bits)
+        except Exception as e:
+            log(f"[ERROR] write output bit failed: {e}")
 
-    def airknife_onoff(self, output_id: int, air_num: int, on_term: int):
+    def airknife_on(self, output_id: int, air_num: int, on_term: int):
         """
-        airknife_onoff
+        airknife_on
         
         :param self:
         :param output_id: 출력 모듈 번호(0)
@@ -497,9 +515,27 @@ class EtherCATManager():
         """
         try:
             self.io_write_bit(output_id, air_num+19, True)
-            threading.Timer(on_term/1000, lambda: self.io_write_bit(output_id, air_num+19, False))
+            threading.Timer(on_term/1000, lambda: self.airknife_off(output_id, air_num+19))
         except Exception as e:
-            self.app.on_log(f"[ERROR] airknife onoff failed: {e}")
+            log(f"[ERROR] airknife on failed: {e}")
+
+    def airknife_off(self, output_id: int, air_num: int):
+        """
+        airknife_off
+        
+        :param self:
+        :param output_id: 출력 모듈 번호(0)
+        :type output_id: int
+        :param air_num: 에어나이프 번호(1~3)
+        :type air_num: int
+        """
+        try:
+            self.io_write_bit(output_id, air_num+19, False)
+        except Exception as e:
+            log(f"[ERROR] airknife off failed: {e}")
+
+        
+        
 
 # endregion
 

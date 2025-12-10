@@ -105,18 +105,24 @@ class App():
         self.ethercat_manager.servo_move_relative(servo_id, dist)
 # endregion
 
-<<<<<<< HEAD
 # region I/O
+    def on_update_io_status(self, input_data, output_data):
+        if hasattr(self.ui, 'logs_page') and self.ui.pages.currentIndex() == 3:
+            tab_index = self.ui.logs_page.tabs.currentIndex()
+            if tab_index == 0:
+                self.ui.logs_page.tabs.widget(tab_index).update_io_status(input_data, output_data)
+
     def airknife_on(self, air_num: int, on_term: int):
         self.ethercat_manager.airknife_onoff(0, air_num, on_term)
 
+    def on_airknife_off(self, air_num: int):
+        if hasattr(self, 'settings_page'):
+            self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
 # endregion
 
     def on_log(self, msg):
         self.ui.log(msg)
 
-=======
->>>>>>> 581ebe1d91f7d58bf1c72737e1c3836438af4cd6
     def run(self):
         """애플리케이션 실행"""
         self.ui.show()

@@ -41,8 +41,8 @@ class AirKnifeTab(QWidget):
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(10)
         
-        # 에어나이프 8개
-        for i in range(1, 9):
+        # 에어나이프 3개
+        for i in range(1, 4):
             self.create_airknife(scroll_layout, i)
         
         scroll_layout.addStretch()
@@ -188,6 +188,8 @@ class AirKnifeTab(QWidget):
         """개별 테스트"""
         log(f"에어나이프 #{num} 테스트 분사")
         # TODO: 실제 테스트 분사
+        duration = getattr(self, f"airknife_{num}_duration").text()
+        self.app.airknife_on(num, int(duration))
         
         # 상태 표시 업데이트 (시뮬레이션)
         status_label = self.findChild(QLabel, f"airknife_{num}_status")
@@ -195,6 +197,12 @@ class AirKnifeTab(QWidget):
             status_label.setText("🟢 분사")
             status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #3fb950;")
             # TODO: 일정 시간 후 "대기" 상태로 복귀
+    
+    def on_airknife_off(self, num):
+        status_label = self.findChild(QLabel, f"airknife_{num}_status")
+        if status_label:
+            status_label.setText("⚫ 대기")
+            status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #8b949e;")
     
     def on_toggle(self, num, enabled):
         """개별 ON/OFF"""
