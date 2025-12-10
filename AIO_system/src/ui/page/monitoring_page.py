@@ -19,13 +19,12 @@ class CameraView(QFrame):
         super().__init__()
         self.camera_id = camera_id
         self.camera_name = camera_name
-        self.detector = AIPlasticDetectionSystem(
-            confidence_threshold=0.7,
-            img_size=640,
-        )
-        self.detector_frame_generator = self.detector.run()
+        self.detector = None
+        self.detector_frame_generator = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
+        
+        self.is_running = False # 카메라 동작 상태
         
         self.init_ui()
         
@@ -85,9 +84,43 @@ class CameraView(QFrame):
         info_layout.addWidget(self.resolution)
         
         layout.addLayout(info_layout)
-
+        
+    def start_camera(self):
+        "카메라 시작 기능"
+        if not self.is_running:
+            try:
+                # Detector 초기화
+                if self.detector is None:
+                    self.detector = AIPlasticDetectionSystem(
+                        confidence_threshold=0.7,
+                        img_size=640,
+                    )
+                    self.detector_frame_generator = self.detector.run()
+                
+                self.timer.start(33)
+                self.is_running = True
+                self.update_status(True)
+                print(f"{self.camera_name} 시작")
+            except Exception as e:
+                print(f"카메라 시작 오류 : {e}")
+                self.timer.stop()
+                self.is_running = False
+                self.update_status(False)
+                
+    def stop_camera(self):
+        if self.is_running:
+            self.timer.stop()
+            self.is_running = False
+            self.update_status(False)
+            self.image_label.setText("카메라 정지")
+            print(f"{self.camera_name} 정지")
+    
+                
     def update_frame(self):
         """카메라 프레임 업데이트"""
+        if not self.is_running:
+            return
+        
         try:
             # predict_AI.py의 run()해서 프레임 가져오기
             frame = next(self.detector_frame_generator)
@@ -134,10 +167,6 @@ class MonitoringPage(QWidget):
         self.hyper_camera = None
         self.init_ui()
         
-        # 업데이트 타이머
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_cameras)
-        self.timer.start(33)  # 30 FPS
         
         self.plastic_counts = {}             # 플라스틱 종류별 카운트 라벨
         self.total_count = QLabel()          # 총 처리량 라벨
@@ -307,21 +336,30 @@ class MonitoringPage(QWidget):
         
         parent_layout.addWidget(hyper_group)
     
-    def update_cameras(self):
-        """⭐ 카메라 프레임 업데이트 - 간단하게!"""
-        # RGB 카메라들 업데이트
-        for camera in self.rgb_cameras:
-            camera.update_frame()
     
     def on_start_all(self):
         """전체 시작"""
         self.app.on_log("모든 카메라 시작")
         # TODO: 모든 카메라 시작
-    
+        for camera in self.rgb_cameras:
+            camera.start_camera()
+        # if self.hyper_camera:
+        #     self.hyper_camera.start_camera()
+            
     def on_stop_all(self):
         """전체 정지"""
         self.app.on_log("모든 카메라 정지")
+        for camera in self.rgb_cameras:
+            camera.stop_camera()
+        # if self.hyper_camera:
+        #     self.hyper_camera.stop_camera
+            
         # TODO: 모든 카메라 정지
+    # def update_cameras(self):
+    #     """카메라 프레임 업데이트"""
+    #     # RGB 카메라들 업데이트
+    #     for camera in self.rgb_cameras:
+    #         camera.update_frame()
     
     def on_snapshot(self):
         """스냅샷"""

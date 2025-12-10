@@ -239,13 +239,7 @@ class AIPlasticDetectionSystem:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         
         return frame
-    
-    # def setup_conveyor_line(self, frame_shape: Tuple[int, int]):
-    #     """컨베이어 라인 설정"""
-    #     height, width = frame_shape[:2]
-    #     line_start = (width // 2, height // 4)
-    #     line_end = (width // 2, 6 * height // 4)
-    #     self.line_counter = LineCounter(line_start, line_end, buffer_zone=60)
+
     
     def draw_ui(self, frame: np.ndarray) -> np.ndarray:
         """UI 그리기"""
@@ -345,9 +339,16 @@ class AIPlasticDetectionSystem:
                 # 2. 추론 시간
                 t3 = time.time()
                 detected_objects = self.detect(frame)
-                detected_objects, newly_detected_objects = self.box_manager.update_detections(detected_objects)
-                
-                print(f"프레임 {frame_count}: 감지된 객체 {detected_objects}개, 새로 감지된 객체 {newly_detected_objects}개")
+                self.box_manager.update_detections(detected_objects)
+                # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작
+                if len(detected_objects) > 0:
+                    print(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
+                    for box in self.box_manager.boxes:
+                        if box.is_active and len(box.tracked_objects) > 0:
+                            print(f"blow action")
+                            # self.send_airknife_signal(box.box_id)
+                        
+                    
                 t4 = time.time()
                 timing_inference.append((t4 - t3) * 1000)
                 
