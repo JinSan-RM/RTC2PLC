@@ -113,7 +113,7 @@ class App():
                 self.ui.logs_page.tabs.widget(tab_index).update_io_status(input_data, output_data)
 
     def airknife_on(self, air_num: int, on_term: int):
-        self.ethercat_manager.airknife_onoff(0, air_num, on_term)
+        self.ethercat_manager.airknife_on(0, air_num, on_term)
 
     def on_airknife_off(self, air_num: int):
         if hasattr(self, 'settings_page'):
