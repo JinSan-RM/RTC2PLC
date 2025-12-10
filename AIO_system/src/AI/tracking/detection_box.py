@@ -60,7 +60,8 @@ class ConveyorBoxZone:
                 self.class_counts[class_name] += 1  # 클래스별 카운트
                 return True  # 액션 트리거
             else:
-                pass
+                self.tracked_objects(obj_id)
+                self.is_active = True
         else:
             self.tracked_objects.discard(obj_id)
             
@@ -108,17 +109,17 @@ class ConveyorBoxManager:
         """
         current_ids = {obj.id for obj in detected_objects}
     
+        # 새로운 객체들 업데이트
+        for obj in detected_objects:
+            for box in self.boxes:
+                box.update(obj.id, obj.center, obj.class_name)
+                
         # 각 박스에서 사라진 객체 제거
         for box in self.boxes:
             # 현재 프레임에 없는 ID는 tracked_objects에서 제거
             box.tracked_objects = box.tracked_objects & current_ids
             # 박스 상태 업데이트
             box.is_active = len(box.tracked_objects) > 0
-        
-        # 새로운 객체들 업데이트
-        for obj in detected_objects:
-            for box in self.boxes:
-                box.update(obj.id, obj.center, obj.class_name)
     
     def draw_all(self, frame: np.ndarray) -> np.ndarray:
         """모든 박스 그리기"""

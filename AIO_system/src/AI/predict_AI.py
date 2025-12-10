@@ -342,9 +342,10 @@ class AIPlasticDetectionSystem:
                 self.box_manager.update_detections(detected_objects)
                 # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작
                 if len(detected_objects) > 0:
-                    print(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
+                    # print(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
                     for box in self.box_manager.boxes:
-                        if box.is_active and len(box.tracked_objects) > 0:
+                        print(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                        if box.is_active:
                             print(f"blow action")
                             # self.send_airknife_signal(box.box_id)
                         
