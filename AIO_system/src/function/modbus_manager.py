@@ -248,7 +248,7 @@ class ModbusManager():
             log(f"Unknown motor_id: {motor_id}")
             return
         
-        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0003)
+        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0001)
         if ret:
             log(f"{motor_id} started")
         else:
