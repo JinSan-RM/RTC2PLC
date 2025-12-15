@@ -172,41 +172,6 @@ class STATUS_MASK(IntEnum):
     STATUS_FAULT = 0x0008
     STATUS_WARNING = 0x0080
 
-# input 맵
-class INPUT_MAP(IntEnum):
-    MODE_SELECT = 0
-    AUTO_RUN = 1
-    AUTO_STOP = 2
-    RESET_ALRAM = 3
-    EMERGENCY_STOP = 4
-    FEEDER_1_ALRAM = 5
-    FEEDER_2_ALRAM = 6
-    CONVEYOR_1_ALRAM = 7
-    CONVEYOR_2_ALRAM = 8
-    CONVEYOR_3_ALRAM = 9
-    CONVEYOR_4_ALRAM = 10
-    SERVO_HOME = 11
-    INPUT_12 = 12
-    INPUT_13 = 13
-    INPUT_14 = 14
-    INPUT_15 = 15
-    FEEDER_OUTPUT = 16
-    INPUT_17 = 17
-    INPUT_18 = 18
-    INPUT_19 = 19
-    INPUT_20 = 20
-    INPUT_21 = 21
-    INPUT_22 = 22
-    INPUT_23 = 23
-    INPUT_24 = 24
-    INPUT_25 = 25
-    INPUT_26 = 26
-    INPUT_27 = 27
-    INPUT_28 = 28
-    INPUT_29 = 29
-    INPUT_30 = 30
-    INPUT_31 = 31
-
 def check_mask(s, m):
     low_bit = s & 0x00FF
     return (low_bit & m) == m
@@ -268,6 +233,9 @@ APP_CONFIG = {
         },
     },
 }
+
+FEEDER_TIME_1 = 20
+FEEDER_TIME_2 = 30
 
 # ============================================================
 # endregion

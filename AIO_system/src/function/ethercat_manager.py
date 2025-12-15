@@ -1,12 +1,9 @@
 import pysoem
 import threading
-import asyncio
 import time
-import queue
 import struct
 
-from typing import Any, Optional, Dict
-from concurrent.futures import ThreadPoolExecutor
+from typing import Dict
 from datetime import datetime, timedelta
 
 from src.utils.config_util import *
@@ -36,6 +33,17 @@ class EtherCATManager():
             }
 
             self.tasks = []
+            self.prev_input = []
+            self.input_bit_functions = {
+                0: self.mode_select,
+                1: self.auto_mode_run,
+                2: self.auto_mode_stop,
+                3: self.reset_alarm,
+                4: self.emergency_stop,
+                11: self.all_servo_homing,
+                16: self.feeder_output,
+            }
+
             self._initialized = True
 
     def connect(self):
@@ -143,6 +151,7 @@ class EtherCATManager():
         except Exception as e:
             log(f"[ERROR] EtherCAT disconnection error: {e}")
 
+# region threads
     # PDO 송수신 스레드
     def _process_data_loop(self):
         while not self.stop_event.is_set():
@@ -240,6 +249,8 @@ class EtherCATManager():
         time_after = datetime.now() + timedelta(seconds=delay)
         with self._task_lock:
             self.tasks.append((time_after, func, args))
+
+# endregion
 
 # region PDO setting
     # 서보 드라이브 셋업
@@ -357,21 +368,20 @@ class EtherCATManager():
         except Exception as e:
             log(f"[ERROR] servo RxPDO set failed: {e}")
 
-    def update_monitor_values(self):
-        def _get_tx_pdo(servo):
-            return struct.unpack('<HbiiHH', servo.input)
+    def _get_tx_pdo(self, servo):
+        with self._servo_lock:
+            ret = struct.unpack('<HbiiHH', servo.input)
+        return ret
 
-        _data = []
+    def update_monitor_values(self):
         try:
-            with self._servo_lock:
-                for servo in self.servo_drives:
-                    tx_pdo = _get_tx_pdo(servo)
-                    _data.append(tx_pdo)
+            _data = []
+            for servo in self.servo_drives:
+                tx_pdo = self._get_tx_pdo(servo)
+                _data.append(tx_pdo)
+                self.app.on_update_servo_status(_data)
         except Exception as e:
             log(f"[ERROR] servo TxPDO read failed {e}")
-            return
-            
-        self.app.on_update_servo_status(_data)
 
     # 서보 on/off
     def servo_onoff(self, servo_id: int, onoff: bool):
@@ -402,7 +412,7 @@ class EtherCATManager():
             log(f"[ERROR] servo set minimum position limit failed: {e}")
 
     # 상한 설정
-    def servo_set_min_limit(self, servo_id: int, pos: int):
+    def servo_set_max_limit(self, servo_id: int, pos: int):
         try:
             servo = self.servo_drives[servo_id]
             servo.sdo_write(0x607D, 2, struct.pack('<i', get_servo_unmodified_value(pos)))
@@ -505,35 +515,62 @@ class EtherCATManager():
             for module in self.output_modules:
                 total_output = int.from_bytes(module.output, 'little')
                 output_data.append(total_output)
+        
+        if input_data:
+            self.check_input_changed(input_data)
 
         self.app.on_update_io_status(input_data, output_data)
 
+    def check_input_changed(self, input_data):
+        if self.prev_input and input_data[0] == self.prev_input[0]:
+            # 입력 모듈 값 변경이 없는 경우 리턴
+            return
+        
+        changed_bits = input_data[0] ^ self.prev_input[0]
+
+        for bit_position in range(32):
+            # 현재 비트 위치에 해당하는 마스크 (1 << bit_position)
+            mask = 1 << bit_position
+            
+            # 변경 마스크와 AND 연산하여 해당 비트가 변경되었는지 확인
+            if (changed_bits & mask):
+                
+                # 새 값에서 해당 비트의 현재 상태 (0 또는 1) 확인
+                is_on = bool(input_data[0] & mask)
+                
+                # 해당 기능의 상태 변경 함수 호출
+                _func = self.input_bit_functions[bit_position]
+                _func(is_on)
+
+        # 처리 후 현재 값을 이전 값으로 업데이트
+        self.prev_input[0] = input_data[0]
+
     # 비트 쓰기
-    def io_write_bit(self, output_id: int, bit_offset: int, data: bool):
+    def io_write_bit(self, output_id: int, offset_dict: Dict[int, bool]):
         """
-        bit_offset번째 비트의 값을 0/1로 변경
+        offset번째 비트의 값을 0/1로 변경
         
         :param self:
         :param output_id: 출력 모듈 번호(0)
         :type output_id: int
-        :param bit_offset: 변경할 비트 인덱스(0~31)
-        :type bit_offset: int
-        :param data: 비트 값(True:1/False:0)
-        :type data: bool
+        :param offset_dict: 변경할 비트 인덱스(0~31)와 데이터의 딕셔너리
+        :type offset_dict: Dict[int, bool]
         """
-        if bit_offset > 31 or bit_offset < 0:
-            log(f"[WARNING] bit offset must be integer between 0 and 31. current value: {bit_offset}")
-            return
+        for _offset, _ in offset_dict.items():
+            if _offset > 31 or _offset < 0:
+                log(f"[WARNING] bit offset must be integer between 0 and 31. current value: {_offset}")
+                return
 
         try:
             with self._io_lock:
-                target_bit = 1 << bit_offset
-                module = self.output_modules[output_id]
                 total_bits = int.from_bytes(module.output, 'little')
-                if data:
-                    total_bits |= target_bit
-                else:
-                    total_bits &= ~target_bit
+                for _offset, _data in offset_dict.items():
+                    target_bit = 1 << _offset
+                    module = self.output_modules[output_id]
+                    if _data:
+                        total_bits |= target_bit
+                    else:
+                        total_bits &= ~target_bit
                 module.output = struct.pack('<I', total_bits)
         except Exception as e:
             log(f"[ERROR] write output bit failed: {e}")
@@ -551,7 +588,7 @@ class EtherCATManager():
         :type on_term: int
         """
         try:
-            self.io_write_bit(output_id, air_num+19, True)
+            self.io_write_bit(output_id, {air_num+19: True})
             log(f"[INFO] Airknife {air_num} on")
             self._reserve_task(on_term/1000, self.airknife_off, output_id, air_num)
         except Exception as e:
@@ -568,11 +605,58 @@ class EtherCATManager():
         :type air_num: int
         """
         try:
-            self.io_write_bit(output_id, air_num+19, False)
+            self.io_write_bit(output_id, {air_num+19: False})
             log(f"[INFO] Airknife {air_num} off")
             self.app.on_airknife_off(air_num)
         except Exception as e:
             log(f"[ERROR] airknife off failed: {e}")
+
+    def mode_select(self, is_on: bool):
+        self.app.set_auto_mode(is_on)
+
+    def auto_mode_run(self, is_on: bool):
+        if not self.app.auto_mode:
+            return
+        
+        if is_on:
+            _dict = { 0: True, 1: False, 2: True, 3: False }
+            self.io_write_bit(0, _dict)
+            self.app.auto_mode_run()
+
+    def auto_mode_stop(self, is_on: bool):
+        if not self.app.auto_mode:
+            return
+        
+        if is_on:
+            _dict = { 0: False, 1: True, 2: False, 3: True }
+            self.io_write_bit(0, _dict)
+            self.app.auto_mode_stop()
+        
+    def reset_alarm(self, is_on: bool):
+        if is_on:
+            _dict = { 4: False, 5: False }
+            self.io_write_bit(0, _dict)
+            self.app.reset_alarm()
+
+    def emergency_stop(self, is_on: bool):
+        if is_on:
+            self.app.emergency_stop()
+    
+    def all_servo_homing(self, is_on: bool):
+        if is_on:
+            self.app.all_servo_homing()
+    
+    def feeder_output(self, is_on: bool):
+        if is_on:
+            self.app.feeder_output()
+
+    def hopper_empty(self, is_on: bool):
+        if is_on:
+            self.app.hopper_empty()
+
+    def hopper_full(self, is_on: bool):
+        if is_on:
+            self.app.hopper_full()
 
 # endregion
 

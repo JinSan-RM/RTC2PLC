@@ -4,12 +4,15 @@ from PySide6.QtGui import QFont
 import sys
 import json
 import os
+import threading
+import time
+from datetime import datetime, timedelta
 
 from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
 from src.ui.page.monitoring_page import MonitoringPage
-from src.utils.config_util import CONFIG_PATH, APP_CONFIG
+from src.utils.config_util import CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2
 from src.utils.logger import log
 
 class App():
@@ -17,6 +20,15 @@ class App():
         # 우선적으로 설정값부터 읽어옴
         self.config = {}
         self.load_config()
+
+        # 자동 운전 관련        
+        self.auto_mode = False
+        self._auto_run = False
+        self._auto_thread = None
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._feeder_output_time = datetime.now()
+        self._current_size = 0
         
         self.qt_app = QApplication(sys.argv)
         
@@ -44,6 +56,28 @@ class App():
     def on_update_monitor(self, _list):
         if hasattr(self.ui, 'monitoring_page'):
             self.ui.monitoring_page.update_values(_list)
+
+    def _auto_loop(self):
+        if not self.auto_mode or not self._auto_run:
+            return
+        
+        while not self._stop_event.is_set():
+            with self._lock:
+                # 피더 미배출 체크
+                check_sec = FEEDER_TIME_2 if self._current_size == 5 else FEEDER_TIME_1
+                current_time = datetime.now()
+                check_time = self._feeder_output_time + timedelta(seconds=check_sec)
+                if current_time > check_time:
+                    # 배출물 사이즈 변경
+                    # TODO: 제품 감지 박스 연동, 서보 위치 이동
+                    cur_size = self._current_size
+                    if self._current_size == 5:
+                        self._current_size = 0
+                    else:
+                        self._current_size += 1
+                    log(f"[INFO] feeder output size level changed {cur_size+1} to {self._current_size+1}")
+
+            time.sleep(0.033)
 
 # region inverter control
     def on_update_inverter_status(self, _data):
@@ -127,6 +161,50 @@ class App():
     def on_airknife_off(self, air_num: int):
         if hasattr(self.ui, 'settings_page'):
             self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
+
+    def set_auto_mode(self, is_on: bool):
+        self.auto_mode = is_on
+        mode = "auto" if is_on else "manual"
+        log(f"[INFO] set {mode} mode")
+
+    def auto_mode_run(self):
+        self._auto_run = True
+        self._auto_thread = threading.Thread(target=self._auto_loop)
+        self._auto_thread.start()
+        log("[INFO] auto mode run")
+
+    def auto_mode_stop(self):
+        self._stop_event.set()
+        if hasattr(self, '_auto_thread') and self._auto_thread.is_alive():
+            log("[INFO] auto thread to terminate...")
+            self._auto_thread.join(timeout=5)
+            if self._auto_thread.is_alive():
+                log("[WARNING] auto thread did not terminate properly")
+        self._auto_run = False
+
+    def reset_alarm(self):
+        log("[INFO] alarm reset")
+
+    def emergency_stop(self):
+        log("[WARNING] !!!EMERGENCY STOP BUTTON PRESSED!!!")
+
+    def all_servo_homing(self):
+        log("[INFO] all servo homing")
+
+    def feeder_output(self):
+        if self.auto_mode and self._auto_run:
+            with self._lock:
+                self._feeder_output_time = datetime.now()
+            log("[INFO] feeder output checked")
+    
+    def hopper_empty(self):
+        log("[INFO] hopper empty")
+        # TODO: 호퍼 문닫기
+
+    def hopper_full(self):
+        log("[INFO] hopper full")
+        # TODO: 호퍼 문열기
+
 # endregion
 
     def on_auto_start(self):

@@ -1,5 +1,5 @@
 from pymodbus.client import ModbusSerialClient
-from typing import Any, Dict, List, Optional, Callable
+from typing import Dict, List, Optional
 import queue
 import threading
 import time
