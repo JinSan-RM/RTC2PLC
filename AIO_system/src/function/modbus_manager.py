@@ -56,7 +56,7 @@ class ModbusManager():
         try:
             # 시작 시 인버터들 설정 값 세팅
             for name, _ in self.slave_ids.items():
-                _conf = APP_CONFIG["inverter_config"][name]
+                _conf = self.app.config["inverter_config"][name]
                 self.set_freq(name, _conf[0])
                 self.set_acc(name, _conf[1])
                 self.set_dec(name, _conf[2])
@@ -231,7 +231,7 @@ class ModbusManager():
         """ 주파수 설정 """
         ret = self.write_holding_register(motor_id, 0x0005, int(value * 100))
         if ret:
-            APP_CONFIG["inverter_config"][motor_id][0] = value
+            self.app.config["inverter_config"][motor_id][0] = value
             log(f"set Frequency to {value:.2f} Hz success")
             
     # 가속 시간 설정 함수
@@ -239,7 +239,7 @@ class ModbusManager():
         """ 가속 시간 설정 """
         ret = self.write_holding_register(motor_id, 0x0007, int(value * 10))
         if ret:
-            APP_CONFIG["inverter_config"][motor_id][1] = value
+            self.app.config["inverter_config"][motor_id][1] = value
             log(f"set acceleration time to {value:.1f} sec success")
 
     # 감속 시간 설정 함수
@@ -247,7 +247,7 @@ class ModbusManager():
         """ 감속 시간 설정 """
         ret = self.write_holding_register(motor_id, 0x0008, int(value * 10))
         if ret:
-            APP_CONFIG["inverter_config"][motor_id][2] = value
+            self.app.config["inverter_config"][motor_id][2] = value
             log(f"set Frequency to {value:.1f} sec success")
     
     # 모터 동작 함수

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from src.utils.config_util import get_servo_modified_value, APP_CONFIG
+from src.utils.config_util import get_servo_modified_value
 from src.utils.logger import log
 
 class ServoTab(QWidget):
@@ -60,7 +60,7 @@ class ServoTab(QWidget):
         scroll_layout.setSpacing(15)  # 피더 탭과 동일한 간격
         scroll_layout.setContentsMargins(20, 20, 20, 20)  # 피더 탭과 동일한 여백
         
-        self.create_servo_section(scroll_layout, "크기 제어", 0)
+        self.create_servo_section(scroll_layout, "폭 제어", 0)
 
         self.create_servo_section(scroll_layout, "높이 제어", 1)
         
@@ -277,7 +277,7 @@ class ServoTab(QWidget):
         _name = "폭 조정" if servo_id == 0 else "높이 조정"
         parent_layout.addWidget(QLabel(f"{_name} {row}"), row, 0)
 
-        _conf = APP_CONFIG["servo_config"][f"servo_{servo_id}"]
+        _conf = self.app.config["servo_config"][f"servo_{servo_id}"]
 
         target_position = QLineEdit(f"{_conf['position'][row-1]}")
         target_position.setObjectName("input_field")
@@ -328,10 +328,12 @@ class ServoTab(QWidget):
         jog_layout.addLayout(mode_layout)
         
         # 설정값
+        _conf = self.app.config["servo_config"][f"servo_{servo_id}"]
+
         settings_layout = QHBoxLayout()
         
         settings_layout.addWidget(QLabel("조그 속도:"))
-        jog_speed = QLineEdit("10")
+        jog_speed = QLineEdit(f"{_conf['jog_speed']}")
         jog_speed.setObjectName(f"servo_{servo_id}_jog_speed")
         jog_speed.setMaximumWidth(100)
         jog_speed.returnPressed.connect(lambda: self.save_jog_speed(servo_id))
@@ -342,7 +344,7 @@ class ServoTab(QWidget):
         settings_layout.addSpacing(30)
         
         settings_layout.addWidget(QLabel("인칭 거리:"))
-        inch_distance = QLineEdit("1")
+        inch_distance = QLineEdit(f"{_conf['inch_distance']}")
         inch_distance.setObjectName(f"servo_{servo_id}_inch_dist")
         inch_distance.setMaximumWidth(100)
         inch_distance.returnPressed.connect(lambda: self.save_inch_distance(servo_id))
@@ -414,7 +416,7 @@ class ServoTab(QWidget):
         position = pos_txt.text()
         speed = speed_txt.text()
 
-        APP_CONFIG["servo_config"][f"servo_{servo_id}"][idx] = float(position)
+        self.app.config["servo_config"][f"servo_{servo_id}"][idx] = float(position)
 
         log(f"{_name} {idx} 저장. 위치: {position}mm, 속도: {speed}mm/s")
     
@@ -428,13 +430,13 @@ class ServoTab(QWidget):
 
     def save_jog_speed(self, servo_id):
         jog_speed = getattr(self, f"servo_{servo_id}_jog_speed").text()
-        APP_CONFIG["servo_config"][f"servo_{servo_id}"]["jog_speed"] = float(jog_speed)
+        self.app.config["servo_config"][f"servo_{servo_id}"]["jog_speed"] = float(jog_speed)
 
         log(f"조그 속도 저장: {jog_speed}mm/s")
 
     def save_inch_distance(self, servo_id):
         inch_dist = getattr(self, f"servo_{servo_id}_inch_dist").text()
-        APP_CONFIG["servo_config"][f"servo_{servo_id}"]["inch_distance"] = int(inch_dist)
+        self.app.config["servo_config"][f"servo_{servo_id}"]["inch_distance"] = float(inch_dist)
 
         log(f"인칭 거리 저장: {inch_dist}mm")
 
@@ -480,12 +482,16 @@ class ServoTab(QWidget):
             cur_pos = get_servo_modified_value(ret[2]) / (10 ** 3)
             cur_v = get_servo_modified_value(ret[3]) / (10 ** 3)
             err_code = ret[4]
+            warn_code = ret[5]
 
             _pos.setText(f"{cur_pos:.03f}")
             _v.setText(f"{cur_v:.03f}")
             if err_code != 0:
                 _err_ind.setText("🔴 오류")
                 _err.setText(f"{err_code:04X}")
+            elif warn_code != 0:
+                _err_ind.setText("🟡 경고")
+                _err.setText(f"{warn_code:04X}")
             else:
                 _err_ind.setText("⚫ 정상")
                 _err.setText("0x0000")

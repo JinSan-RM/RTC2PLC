@@ -3,6 +3,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont
 import sys
 import json
+import os
 
 from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
@@ -14,6 +15,7 @@ from src.utils.logger import log
 class App():
     def __init__(self):
         # 우선적으로 설정값부터 읽어옴
+        self.config = {}
         self.load_config()
         
         self.qt_app = QApplication(sys.argv)
@@ -144,12 +146,13 @@ class App():
         self.camera_manager.on_stop_all()
 
     def load_config(self):
-        global APP_CONFIG # config_util 에 선언된 기본값을 덮어써야 하므로 global로 처리
-
         try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                _conf = json.load(f)
-                APP_CONFIG = _conf
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                    self.config = json.load(f)
+
+                log("[INFO] config loaded")
+                return
         except FileNotFoundError as fnfe:
             log(f"[ERROR] can't find config file: {fnfe}")
         except json.JSONDecodeError as jde:
@@ -157,10 +160,18 @@ class App():
         except Exception as e:
             log(f"[ERROR] config file load failed: {e}")
 
+        self.config = APP_CONFIG.copy()
+        self.save_config()
+
     def save_config(self):
         try:
+            if CONFIG_PATH and not os.path.exists(CONFIG_PATH):
+                os.makedirs(CONFIG_PATH)
+
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-                json.dump(APP_CONFIG, f, indent=4)
+                json.dump(self.config, f, indent=4)
+
+            log("[INFO] config saved")
         except IOError as ioe:
             log(f"[ERROR] config file io error: {ioe}")
         except Exception as e:

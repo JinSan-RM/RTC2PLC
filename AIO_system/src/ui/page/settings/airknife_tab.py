@@ -85,7 +85,7 @@ class AirKnifeTab(QWidget):
         separator1.setStyleSheet("background-color: #30363d;")
         group_layout.addWidget(separator1)
 
-        _conf = APP_CONFIG["airknife_config"][f"airknife_{num}"]
+        _conf = self.app.config["airknife_config"][f"airknife_{num}"]
         
         # 분사 타이밍 설정
         group_layout.addWidget(QLabel("분사 타이밍:"))
@@ -185,8 +185,8 @@ class AirKnifeTab(QWidget):
         timing = getattr(self, f"airknife_{num}_timing").text()
         duration = getattr(self, f"airknife_{num}_duration").text()
         
-        APP_CONFIG["airknife_config"][f"airknife_{num}"]["timing"] = int(timing)
-        APP_CONFIG["airknife_config"][f"airknife_{num}"]["duration"] = int(duration)
+        self.app.config["airknife_config"][f"airknife_{num}"]["timing"] = int(timing)
+        self.app.config["airknife_config"][f"airknife_{num}"]["duration"] = int(duration)
         
         log(f"에어나이프 #{num} 설정: 타이밍={timing}ms, 시간={duration}ms")
     

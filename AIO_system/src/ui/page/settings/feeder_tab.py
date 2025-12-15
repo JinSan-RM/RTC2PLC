@@ -64,7 +64,7 @@ class FeederTab(QWidget):
         status_frame_layout.addWidget(status_label)
         status_layout.addWidget(status_frame)
 
-        _conf = APP_CONFIG["inverter_config"][motor_id]
+        _conf = self.app.config["inverter_config"][motor_id]
         
         # 현재 주파수
         self.add_value_display(status_layout, "현재 주파수", f"{_conf[0]:.2f}", "Hz", f"{motor_id}_freq")

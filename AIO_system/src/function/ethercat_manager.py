@@ -222,19 +222,26 @@ class EtherCATManager():
                         del self.tasks[_i]
 
             # 테스트용 출력
-            # ret = struct.unpack('<HbiiH', self.servo_drives[0].input)
+            # ret = struct.unpack('<HbiiHH', self.servo_drives[0].input)
             # status_word = ret[0]
             # cur_mode = ret[1]
             # cur_pos = ret[2]
             # cur_v = ret[3]
             # err = ret[4]
-            # print(f"status:{status_word:016b}, mode:{cur_mode}, pos:{cur_pos}, v:{cur_v}, err:{err:X}")
+            # warn = ret[5]
+            # print(f"status:{status_word:016b}, mode:{cur_mode}, pos:{cur_pos}, v:{cur_v}, err:{err:X} warn:{warn:X}")
 
             # temp2 = int.from_bytes(self.servo_drives[0].sdo_read(0x60F4, 0, 4), 'little', signed=True)
             # print(f"diff: {temp2}")
 
             time.sleep(ETHERCAT_DELAY)
 
+    def _reserve_task(self, delay, func, *args):
+        time_after = datetime.now() + timedelta(seconds=delay)
+        with self._task_lock:
+            self.tasks.append((time_after, func, args))
+
+# region PDO setting
     # 서보 드라이브 셋업
     def setup_servo_drive(self, slave_pos):
         slave = self.master.slaves[slave_pos]
@@ -337,11 +344,7 @@ class EtherCATManager():
 
         except Exception as e:
             log(f"[ERROR] EtherCAT PDO setting error: {e}")
-
-    def _reserve_task(self, delay, func, *args):
-        time_after = datetime.now() + timedelta(seconds=delay)
-        with self._task_lock:
-            self.tasks.append((time_after, func, args))
+# endregion
 
 # region servo functions
     # RxPDO 설정
@@ -356,7 +359,7 @@ class EtherCATManager():
 
     def update_monitor_values(self):
         def _get_tx_pdo(servo):
-            return struct.unpack('<HbiiH', servo.input)
+            return struct.unpack('<HbiiHH', servo.input)
 
         _data = []
         try:

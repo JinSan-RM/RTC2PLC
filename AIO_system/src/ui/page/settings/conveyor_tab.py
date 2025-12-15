@@ -92,7 +92,7 @@ class ConveyorTab(QWidget):
         status_frame_layout.addWidget(status_label)
         status_layout.addWidget(status_frame)
 
-        _conf = APP_CONFIG["inverter_config"][conv_id]
+        _conf = self.app.config["inverter_config"][conv_id]
         
         # 값 표시 (주파수, 시간 등)
         self.add_value_display(status_layout, "현재 주파수", f"{_conf[0]:.2f}", "Hz", f"{conv_id}_freq")

@@ -67,6 +67,7 @@ SERVO_TX = [
     0x60640020, # 현재 위치(int)
     0x606C0020, # 현재 속도(int)
     0x603F0010, # 에러 코드(unsigned short)
+    0x26140010, # 경고 코드(unsigned short)
 ]
 
 OUTPUT_RX_MAP = [
@@ -243,13 +244,13 @@ APP_CONFIG = {
     "servo_config": {
         "servo_0": {
             "position": [ 100, 150, 200, 250, 300, 350, ],
-            "jog_speed": 50,
-            "inch_distance": 10,
+            "jog_speed": 10.0,
+            "inch_distance": 1.0,
         },
         "servo_1": {
             "position": [ 100, 150, 200, 250, 300, 350, ],
-            "jog_speed": 50,
-            "inch_distance": 10,
+            "jog_speed": 10.0,
+            "inch_distance": 1.0,
         }
     },
     "airknife_config": {
