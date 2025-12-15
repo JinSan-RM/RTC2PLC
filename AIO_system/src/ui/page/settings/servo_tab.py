@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from src.utils.config_util import get_servo_modified_value
+from src.utils.config_util import get_servo_modified_value, APP_CONFIG
 from src.utils.logger import log
 
 class ServoTab(QWidget):
@@ -214,59 +214,92 @@ class ServoTab(QWidget):
         position_layout = QGridLayout(position_group)
         position_layout.setSpacing(10)
         
-        row = 0
+        # row = 0
         
-        # 원점 설정
-        position_layout.addWidget(QLabel("원점 설정:"), row, 0)
-        origin_btn = QPushButton("현재 위치를 원점으로")
-        origin_btn.setObjectName("setting_btn")
-        origin_btn.clicked.connect(lambda: self.on_set_origin(servo_id))
-        position_layout.addWidget(origin_btn, row, 1, 1, 2)
-        row += 1
+        # # 원점 설정
+        # position_layout.addWidget(QLabel("원점 설정:"), row, 0)
+        # origin_btn = QPushButton("현재 위치를 원점으로")
+        # origin_btn.setObjectName("setting_btn")
+        # origin_btn.clicked.connect(lambda: self.on_set_origin(servo_id))
+        # position_layout.addWidget(origin_btn, row, 1, 1, 2)
+        # row += 1
         
-        # 상한선 / 하한선
-        position_layout.addWidget(QLabel("상한선:"), row, 0)
-        upper_limit = QLineEdit("1000")
-        upper_limit.setObjectName("input_field")
-        setattr(self, f"servo_{servo_id}_upper_limit", upper_limit)
-        position_layout.addWidget(upper_limit, row, 1)
-        position_layout.addWidget(QLabel("mm"), row, 2)
-        row += 1
+        # # 상한선 / 하한선
+        # position_layout.addWidget(QLabel("상한선:"), row, 0)
+        # upper_limit = QLineEdit("1000")
+        # upper_limit.setObjectName("input_field")
+        # setattr(self, f"servo_{servo_id}_upper_limit", upper_limit)
+        # position_layout.addWidget(upper_limit, row, 1)
+        # position_layout.addWidget(QLabel("mm"), row, 2)
+        # row += 1
         
-        position_layout.addWidget(QLabel("하한선:"), row, 0)
-        lower_limit = QLineEdit("0")
-        lower_limit.setObjectName("input_field")
-        setattr(self, f"servo_{servo_id}_lower_limit", lower_limit)
-        position_layout.addWidget(lower_limit, row, 1)
-        position_layout.addWidget(QLabel("mm"), row, 2)
-        row += 1
+        # position_layout.addWidget(QLabel("하한선:"), row, 0)
+        # lower_limit = QLineEdit("0")
+        # lower_limit.setObjectName("input_field")
+        # setattr(self, f"servo_{servo_id}_lower_limit", lower_limit)
+        # position_layout.addWidget(lower_limit, row, 1)
+        # position_layout.addWidget(QLabel("mm"), row, 2)
+        # row += 1
         
-        # 목표 위치 / 속도
-        position_layout.addWidget(QLabel("목표 위치:"), row, 0)
-        target_position = QLineEdit("0")
+        # # 목표 위치 / 속도
+        # position_layout.addWidget(QLabel("목표 위치:"), row, 0)
+        # target_position = QLineEdit("0")
+        # target_position.setObjectName("input_field")
+        # setattr(self, f"servo_{servo_id}_target_pos", target_position)
+        # position_layout.addWidget(target_position, row, 1)
+        # position_layout.addWidget(QLabel("mm"), row, 2)
+        # row += 1
+        
+        # position_layout.addWidget(QLabel("이동 속도:"), row, 0)
+        # move_speed = QLineEdit("100")
+        # move_speed.setObjectName("input_field")
+        # setattr(self, f"servo_{servo_id}_target_speed", move_speed)
+        # position_layout.addWidget(move_speed, row, 1)
+        # position_layout.addWidget(QLabel("mm/s"), row, 2)
+        # row += 1
+        
+        # # 이동 버튼
+        # move_btn = QPushButton("지정 위치로 이동")
+        # move_btn.setObjectName("control_btn_move")
+        # move_btn.setMinimumHeight(45)
+        # move_btn.clicked.connect(lambda: self.on_move_to_position(servo_id))
+        # position_layout.addWidget(move_btn, row, 0, 1, 3)
+
+        position_layout.addWidget(QLabel("목표 위치(mm)"), 0, 1)
+        position_layout.addWidget(QLabel("속도(mm/s)"), 0, 2)
+
+        for i in range(6):
+            self.add_position_item(position_layout, servo_id, i+1)
+        
+        parent_layout.addWidget(position_group)
+
+    def add_position_item(self, parent_layout, servo_id, row):
+        _name = "폭 조정" if servo_id == 0 else "높이 조정"
+        parent_layout.addWidget(QLabel(f"{_name} {row}"), row, 0)
+
+        _conf = APP_CONFIG["servo_config"][f"servo_{servo_id}"]
+
+        target_position = QLineEdit(f"{_conf['position'][row-1]}")
         target_position.setObjectName("input_field")
         setattr(self, f"servo_{servo_id}_target_pos", target_position)
-        position_layout.addWidget(target_position, row, 1)
-        position_layout.addWidget(QLabel("mm"), row, 2)
-        row += 1
-        
-        position_layout.addWidget(QLabel("이동 속도:"), row, 0)
+        parent_layout.addWidget(target_position, row, 1)
+
         move_speed = QLineEdit("100")
         move_speed.setObjectName("input_field")
         setattr(self, f"servo_{servo_id}_target_speed", move_speed)
-        position_layout.addWidget(move_speed, row, 1)
-        position_layout.addWidget(QLabel("mm/s"), row, 2)
-        row += 1
-        
-        # 이동 버튼
-        move_btn = QPushButton("지정 위치로 이동")
+        parent_layout.addWidget(move_speed, row, 2)
+
+        origin_btn = QPushButton("현재 위치 저장")
+        origin_btn.setObjectName("control_btn_on")
+        origin_btn.clicked.connect(lambda: self.on_save_position(servo_id, row-1))
+        parent_layout.addWidget(origin_btn, row, 3)
+
+        move_btn = QPushButton("위치로 이동")
         move_btn.setObjectName("control_btn_move")
         move_btn.setMinimumHeight(45)
         move_btn.clicked.connect(lambda: self.on_move_to_position(servo_id))
-        position_layout.addWidget(move_btn, row, 0, 1, 3)
-        
-        parent_layout.addWidget(position_group)
-    
+        parent_layout.addWidget(move_btn, row, 4)
+
     def create_jog_section(self, parent_layout, servo_id):
         """정밀 이동 섹션"""
         jog_group = QGroupBox("정밀 이동")
@@ -301,6 +334,7 @@ class ServoTab(QWidget):
         jog_speed = QLineEdit("10")
         jog_speed.setObjectName(f"servo_{servo_id}_jog_speed")
         jog_speed.setMaximumWidth(100)
+        jog_speed.returnPressed.connect(lambda: self.save_jog_speed(servo_id))
         setattr(self, f"servo_{servo_id}_jog_speed", jog_speed)
         settings_layout.addWidget(jog_speed)
         settings_layout.addWidget(QLabel("mm/s"))
@@ -311,6 +345,7 @@ class ServoTab(QWidget):
         inch_distance = QLineEdit("1")
         inch_distance.setObjectName(f"servo_{servo_id}_inch_dist")
         inch_distance.setMaximumWidth(100)
+        inch_distance.returnPressed.connect(lambda: self.save_inch_distance(servo_id))
         setattr(self, f"servo_{servo_id}_inch_dist", inch_distance)
         settings_layout.addWidget(inch_distance)
         settings_layout.addWidget(QLabel("mm"))
@@ -371,6 +406,18 @@ class ServoTab(QWidget):
         log("원점 설정")
         self.app.servo_set_origin(servo_id)
     
+    def on_save_position(self, servo_id, idx):
+        _name = "폭 조정" if servo_id == 0 else "높이 조정"
+
+        pos_txt = getattr(self, f"servo_{servo_id}_target_pos")
+        speed_txt = getattr(self, f"servo_{servo_id}_target_speed")
+        position = pos_txt.text()
+        speed = speed_txt.text()
+
+        APP_CONFIG["servo_config"][f"servo_{servo_id}"][idx] = float(position)
+
+        log(f"{_name} {idx} 저장. 위치: {position}mm, 속도: {speed}mm/s")
+    
     def on_move_to_position(self, servo_id):
         pos_txt = getattr(self, f"servo_{servo_id}_target_pos")
         speed_txt = getattr(self, f"servo_{servo_id}_target_speed")
@@ -378,7 +425,19 @@ class ServoTab(QWidget):
         speed = speed_txt.text()
         log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
         self.app.on_move_to_position(0, int(position*(10**3)))
-    
+
+    def save_jog_speed(self, servo_id):
+        jog_speed = getattr(self, f"servo_{servo_id}_jog_speed").text()
+        APP_CONFIG["servo_config"][f"servo_{servo_id}"]["jog_speed"] = float(jog_speed)
+
+        log(f"조그 속도 저장: {jog_speed}mm/s")
+
+    def save_inch_distance(self, servo_id):
+        inch_dist = getattr(self, f"servo_{servo_id}_inch_dist").text()
+        APP_CONFIG["servo_config"][f"servo_{servo_id}"]["inch_distance"] = int(inch_dist)
+
+        log(f"인칭 거리 저장: {inch_dist}mm")
+
     def on_jog_move(self, servo_id, direction):
         is_jog = getattr(self, f"servo_{servo_id}_is_jog")
         jog_speed = getattr(self, f"servo_{servo_id}_jog_speed")

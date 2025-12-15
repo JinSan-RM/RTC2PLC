@@ -54,6 +54,13 @@ class ModbusManager():
 
     def run(self):
         try:
+            # 시작 시 인버터들 설정 값 세팅
+            for name, _ in self.slave_ids.items():
+                _conf = APP_CONFIG["inverter_config"][name]
+                self.set_freq(name, _conf[0])
+                self.set_acc(name, _conf[1])
+                self.set_dec(name, _conf[2])
+
             self.process_thread = threading.Thread(target=self._process_task, daemon=True)
             self.process_thread.start()
         except Exception as e:
@@ -73,9 +80,10 @@ class ModbusManager():
     def _process_task(self):
         while not self.stop_event.is_set():
             self.read_monitor_values()
-            while not self.tasks.empty():
-                task = self.tasks.get()
-                task['func']()
+            with self._lock:
+                while self.tasks:
+                    task = self.tasks.get()
+                    task[0](*task[1])
 
             time.sleep(0.033) # 60프레임 업데이트 해본다
 
@@ -99,7 +107,7 @@ class ModbusManager():
                 return False
 
             slave_id = self.slave_ids[host_name]
-            ret = self.client.read_holding_registers(register_address, count=1, device_id=slave_id)
+            ret = self.client.read_holding_registers(register_address-1, count=1, device_id=slave_id)
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
@@ -129,7 +137,7 @@ class ModbusManager():
                 return False
 
             slave_id = self.slave_ids[host_name]
-            ret = self.client.write_register(register_address, value, device_id=slave_id)
+            ret = self.client.write_register(register_address-1, value, device_id=slave_id)
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
@@ -158,7 +166,7 @@ class ModbusManager():
                 return None
 
             slave_id = self.slave_ids[host_name]
-            ret = self.client.read_holding_registers(start_address, count=count, device_id=slave_id)
+            ret = self.client.read_holding_registers(start_address-1, count=count, device_id=slave_id)
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
@@ -188,7 +196,7 @@ class ModbusManager():
                 return False
 
             slave_id = self.slave_ids[host_name]
-            ret = self.client.write_registers(start_address, values, device_id=slave_id)
+            ret = self.client.write_registers(start_address-1, values, device_id=slave_id)
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
@@ -205,8 +213,8 @@ class ModbusManager():
         # 모니터링 값: 가속시간(0007, 0.1sec), 감속시간(0008, 0.1sec), 출력전류(0009, 0.1A), 출력주파수(000A, 0.01Hz), 출력전압(000B, 1V), DC Link 전압(000C, 1V), 출력파워(000D, 0.1kW), 운전상태6종(000E)
         # 운전 상태: 정지(B0), 정방향(B1), 역방향(B2), Fault(B3), 가속중(B4), 감속중(B5)
         _data = {}
-        for _name, _id in self.slave_ids.items():
-            ret = self.read_multiple_registers(_name, 0x0007 - 1, 8)
+        for _name, _ in self.slave_ids.items():
+            ret = self.read_multiple_registers(_name, 0x0007, 8)
             if ret and len(ret) == 8:
                 ret[0] = ret[0] * 0.1
                 ret[1] = ret[1] * 0.1
@@ -221,22 +229,25 @@ class ModbusManager():
     # 주파수 설정 함수
     def set_freq(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 주파수 설정 """
-        ret = self.write_holding_register(motor_id, 0x0005 - 1, int(value * 100))
+        ret = self.write_holding_register(motor_id, 0x0005, int(value * 100))
         if ret:
+            APP_CONFIG["inverter_config"][motor_id][0] = value
             log(f"set Frequency to {value:.2f} Hz success")
             
     # 가속 시간 설정 함수
     def set_acc(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 가속 시간 설정 """
-        ret = self.write_holding_register(motor_id, 0x0007 - 1, int(value * 10))
+        ret = self.write_holding_register(motor_id, 0x0007, int(value * 10))
         if ret:
+            APP_CONFIG["inverter_config"][motor_id][1] = value
             log(f"set acceleration time to {value:.1f} sec success")
 
     # 감속 시간 설정 함수
     def set_dec(self, motor_id:str = 'inverter_001', value: float = 0.0):
         """ 감속 시간 설정 """
-        ret = self.write_holding_register(motor_id, 0x0008 - 1, int(value * 10))
+        ret = self.write_holding_register(motor_id, 0x0008, int(value * 10))
         if ret:
+            APP_CONFIG["inverter_config"][motor_id][2] = value
             log(f"set Frequency to {value:.1f} sec success")
     
     # 모터 동작 함수
@@ -248,7 +259,7 @@ class ModbusManager():
             log(f"Unknown motor_id: {motor_id}")
             return
         
-        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0001)
+        ret = self.write_holding_register(motor_id, 0x0382, 0x0001)
         if ret:
             log(f"{motor_id} started")
         else:
@@ -263,7 +274,7 @@ class ModbusManager():
             log(f"Unknown motor_id: {motor_id}")
             return
         
-        ret = self.write_holding_register(motor_id, 0x0382 - 1, 0x0000)
+        ret = self.write_holding_register(motor_id, 0x0382, 0x0000)
         if ret:
             log(f"{motor_id} stopped")
         else:
@@ -281,17 +292,17 @@ class ModbusManager():
         for _name, _id in self.slave_ids.items():
             self.motor_stop(_name)
 
-    def custom_check(self, addr):
-        ret = self.read_holding_register("inverter_001", addr - 1)
-        if ret != None:
-            log(f"read addr: {addr:X} value: {ret}")
-        else:
-            log(f"read addr: {addr:X} failed")
+    # def custom_check(self, addr):
+    #     ret = self.read_holding_register("inverter_001", addr - 1)
+    #     if ret != None:
+    #         log(f"read addr: {addr:X} value: {ret}")
+    #     else:
+    #         log(f"read addr: {addr:X} failed")
 
-    def custom_write(self, addr, value):
-        ret = self.write_holding_register("inverter_001", addr - 1, value)
-        if ret:
-            log(f"write addr: {addr:X} value: {value}")
-        else:
-            log(f"write addr: {addr:X} failed")
+    # def custom_write(self, addr, value):
+    #     ret = self.write_holding_register("inverter_001", addr - 1, value)
+    #     if ret:
+    #         log(f"write addr: {addr:X} value: {value}")
+    #     else:
+    #         log(f"write addr: {addr:X} failed")
 # endregion

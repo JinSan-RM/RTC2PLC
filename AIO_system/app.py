@@ -2,15 +2,19 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont
 import sys
+import json
 
 from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
 from src.ui.page.monitoring_page import MonitoringPage
+from src.utils.config_util import CONFIG_PATH, APP_CONFIG
 from src.utils.logger import log
 
 class App():
     def __init__(self):
+        # 우선적으로 설정값부터 읽어옴
+        self.load_config()
         
         self.qt_app = QApplication(sys.argv)
         
@@ -122,37 +126,58 @@ class App():
         if hasattr(self.ui, 'settings_page'):
             self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
 # endregion
+
     def on_auto_start(self):
         # 피더 동작 함수
         # 컨베이어 동작 함수
         self.modbus_manager.on_automode_start()
-        
+
         # 카메라 동작 함수
         self.camera_manager.on_start_all()
-        
-        
+
     def on_auto_stop(self):
         # 피더 멈춤 함수
         # 컨베이어 멈춤 함수
         self.modbus_manager.on_automode_stop()
-        
+
         # 카메라 멈춤 함수
         self.camera_manager.on_stop_all()
-        
+
+    def load_config(self):
+        global APP_CONFIG # config_util 에 선언된 기본값을 덮어써야 하므로 global로 처리
+
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                _conf = json.load(f)
+                APP_CONFIG = _conf
+        except FileNotFoundError as fnfe:
+            log(f"[ERROR] can't find config file: {fnfe}")
+        except json.JSONDecodeError as jde:
+            log(f"[ERROR] wrong json format: {jde}")
+        except Exception as e:
+            log(f"[ERROR] config file load failed: {e}")
+
+    def save_config(self):
+        try:
+            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+                json.dump(APP_CONFIG, f, indent=4)
+        except IOError as ioe:
+            log(f"[ERROR] config file io error: {ioe}")
+        except Exception as e:
+            log(f"[ERROR] config file save failed: {e}")
+
     def run(self):
         """애플리케이션 실행"""
         self.ui.show()
         sys.exit(self.qt_app.exec())
-        # self.root.protocol("WM_DELETE_WINDOW", self.quit)
-        # self.root.mainloop()
 
     def quit(self):
         """애플리케이션 종료"""
+        # 종료 시 설정값 저장
+        self.save_config()
+
         self.modbus_manager.disconnect()
         self.ethercat_manager.disconnect()
-        # self.qt_app.quit()
-        # self.manager.disconnect()
-        # self.root.destroy()
 
 if __name__ == '__main__':
     app = App()

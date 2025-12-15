@@ -173,23 +173,23 @@ class STATUS_MASK(IntEnum):
 
 # input 맵
 class INPUT_MAP(IntEnum):
-    INPUT_00 = 0
-    INPUT_01 = 1
-    INPUT_02 = 2
-    INPUT_03 = 3
-    INPUT_04 = 4
-    INPUT_05 = 5
-    INPUT_06 = 6
-    INPUT_07 = 7
-    INPUT_08 = 8
-    INPUT_09 = 9
-    INPUT_10 = 10
-    INPUT_11 = 11
+    MODE_SELECT = 0
+    AUTO_RUN = 1
+    AUTO_STOP = 2
+    RESET_ALRAM = 3
+    EMERGENCY_STOP = 4
+    FEEDER_1_ALRAM = 5
+    FEEDER_2_ALRAM = 6
+    CONVEYOR_1_ALRAM = 7
+    CONVEYOR_2_ALRAM = 8
+    CONVEYOR_3_ALRAM = 9
+    CONVEYOR_4_ALRAM = 10
+    SERVO_HOME = 11
     INPUT_12 = 12
     INPUT_13 = 13
     INPUT_14 = 14
     INPUT_15 = 15
-    INPUT_16 = 16
+    FEEDER_OUTPUT = 16
     INPUT_17 = 17
     INPUT_18 = 18
     INPUT_19 = 19
@@ -219,6 +219,54 @@ class EtherCATDevice:
     vendor_id: int
     product_code: int
     config_func: Callable
+
+# ============================================================
+# endregion
+# ============================================================
+
+# ============================================================
+# region Config for load&save
+# ============================================================
+from pathlib import Path
+
+CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+
+APP_CONFIG = {
+    "inverter_config": {
+        "inverter_001": [ 20.0, 5.0, 10.0 ],
+        "inverter_002": [ 40.0, 5.0, 10.0 ],
+        "inverter_003": [ 20.0, 5.0, 10.0 ],
+        "inverter_004": [ 30.0, 5.0, 10.0 ],
+        "inverter_005": [ 40.0, 5.0, 10.0 ],
+        "inverter_006": [ 30.0, 5.0, 10.0 ],
+    },
+    "servo_config": {
+        "servo_0": {
+            "position": [ 100, 150, 200, 250, 300, 350, ],
+            "jog_speed": 50,
+            "inch_distance": 10,
+        },
+        "servo_1": {
+            "position": [ 100, 150, 200, 250, 300, 350, ],
+            "jog_speed": 50,
+            "inch_distance": 10,
+        }
+    },
+    "airknife_config": {
+        "airknife_1": {
+            "timing": 100,
+            "duration": 500,
+        },
+        "airknife_2": {
+            "timing": 100,
+            "duration": 500,
+        },
+        "airknife_3": {
+            "timing": 100,
+            "duration": 500,
+        },
+    },
+}
 
 # ============================================================
 # endregion

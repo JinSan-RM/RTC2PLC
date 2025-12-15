@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from src.utils.config_util import APP_CONFIG
 from src.utils.logger import log
 
 class FeederTab(QWidget):
@@ -62,15 +63,17 @@ class FeederTab(QWidget):
         status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e;")
         status_frame_layout.addWidget(status_label)
         status_layout.addWidget(status_frame)
+
+        _conf = APP_CONFIG["inverter_config"][motor_id]
         
         # 현재 주파수
-        self.add_value_display(status_layout, "현재 주파수", "0.00", "Hz", f"{motor_id}_freq")
+        self.add_value_display(status_layout, "현재 주파수", f"{_conf[0]:.2f}", "Hz", f"{motor_id}_freq")
         
         # 가속 시간
-        self.add_value_display(status_layout, "가속 시간", "0.0", "s", f"{motor_id}_acc")
+        self.add_value_display(status_layout, "가속 시간", f"{_conf[1]:.1f}", "s", f"{motor_id}_acc")
         
         # 감속 시간
-        self.add_value_display(status_layout, "감속 시간", "0.0", "s", f"{motor_id}_dec")
+        self.add_value_display(status_layout, "감속 시간", f"{_conf[2]:.1f}", "s", f"{motor_id}_dec")
         
         status_layout.addStretch()
         motor_main_layout.addLayout(status_layout)
@@ -85,7 +88,7 @@ class FeederTab(QWidget):
         
         # 목표 주파수
         control_layout.addWidget(QLabel("목표 주파수:"), row, 0)
-        freq_input = QLineEdit("0.00")
+        freq_input = QLineEdit(f"{_conf[0]:.2f}")
         freq_input.setObjectName("input_field")
         setattr(self, f"{motor_id}_target_freq", freq_input)
         control_layout.addWidget(freq_input, row, 1)
@@ -99,7 +102,7 @@ class FeederTab(QWidget):
         
         # 가속 시간
         control_layout.addWidget(QLabel("목표 가속 시간:"), row, 0)
-        acc_input = QLineEdit("0.0")
+        acc_input = QLineEdit(f"{_conf[1]:.1f}")
         acc_input.setObjectName("input_field")
         setattr(self, f"{motor_id}_target_acc", acc_input)
         control_layout.addWidget(acc_input, row, 1)
@@ -113,7 +116,7 @@ class FeederTab(QWidget):
         
         # 감속 시간
         control_layout.addWidget(QLabel("목표 감속 시간:"), row, 0)
-        dec_input = QLineEdit("0.0")
+        dec_input = QLineEdit(f"{_conf[2]:.1f}")
         dec_input.setObjectName("input_field")
         setattr(self, f"{motor_id}_target_dec", dec_input)
         control_layout.addWidget(dec_input, row, 1)

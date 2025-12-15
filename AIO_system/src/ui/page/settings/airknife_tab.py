@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from src.utils.config_util import APP_CONFIG
 from src.utils.logger import log
 
 
@@ -83,10 +84,12 @@ class AirKnifeTab(QWidget):
         separator1.setFrameShape(QFrame.VLine)
         separator1.setStyleSheet("background-color: #30363d;")
         group_layout.addWidget(separator1)
+
+        _conf = APP_CONFIG["airknife_config"][f"airknife_{num}"]
         
         # 분사 타이밍 설정
         group_layout.addWidget(QLabel("분사 타이밍:"))
-        timing = QLineEdit("100")
+        timing = QLineEdit(f"{_conf['timing']}")
         timing.setObjectName("input_field")
         timing.setMaximumWidth(70)
         timing.setAlignment(Qt.AlignRight)
@@ -96,7 +99,7 @@ class AirKnifeTab(QWidget):
         
         # 분사 시간 설정
         group_layout.addWidget(QLabel("분사 시간:"))
-        duration = QLineEdit("50")
+        duration = QLineEdit(f"{_conf['duration']}")
         duration.setObjectName("input_field")
         duration.setMaximumWidth(70)
         duration.setAlignment(Qt.AlignRight)
@@ -181,8 +184,11 @@ class AirKnifeTab(QWidget):
         """설정 적용"""
         timing = getattr(self, f"airknife_{num}_timing").text()
         duration = getattr(self, f"airknife_{num}_duration").text()
+        
+        APP_CONFIG["airknife_config"][f"airknife_{num}"]["timing"] = int(timing)
+        APP_CONFIG["airknife_config"][f"airknife_{num}"]["duration"] = int(duration)
+        
         log(f"에어나이프 #{num} 설정: 타이밍={timing}ms, 시간={duration}ms")
-        # TODO: 실제 설정 적용
     
     def on_test(self, num):
         """개별 테스트"""

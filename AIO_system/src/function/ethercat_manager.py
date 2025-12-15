@@ -13,6 +13,7 @@ from src.utils.config_util import *
 from src.utils.logger import log
 
 class EtherCATManager():
+    _task_lock = threading.Lock()
     _servo_lock = threading.Lock()
     _io_lock = threading.Lock()
     _initialized = False
@@ -214,7 +215,7 @@ class EtherCATManager():
         
         while not self.stop_event.is_set():
             current_time = datetime.now()
-            with self._lock:
+            with self._task_lock:
                 for _i, task in enumerate(self.tasks):
                     if current_time > task[0]:
                         task[1](*task[2])
@@ -339,7 +340,7 @@ class EtherCATManager():
 
     def _reserve_task(self, delay, func, *args):
         time_after = datetime.now() + timedelta(seconds=delay)
-        with self._lock:
+        with self._task_lock:
             self.tasks.append((time_after, func, args))
 
 # region servo functions
