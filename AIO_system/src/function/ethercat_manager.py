@@ -13,7 +13,8 @@ from src.utils.config_util import *
 from src.utils.logger import log
 
 class EtherCATManager():
-    _lock = threading.Lock()
+    _servo_lock = threading.Lock()
+    _io_lock = threading.Lock()
     _initialized = False
     app = None
 
@@ -237,6 +238,14 @@ class EtherCATManager():
     def setup_servo_drive(self, slave_pos):
         slave = self.master.slaves[slave_pos]
         try:
+            # 센서 1~3(POT, NOT, HOME) A->B접점 방식 변경
+            for i in range(3):
+                slave.sdo_write(0x2200+i, 0, struct.pack('<H', 0x8001))
+
+            # homing 방법 설정: 역방향 운전하면서 원점 스위치에 의해 원점 복귀
+            # home 오프셋(0x607C) 지정해야 할지? 지정하는 경우 원점 스위치 on 시 오프셋 만큼 이동하여 원점 잡음
+            slave.sdo_write(0x6098, 0, struct.pack('<b', -5))
+
             # RxPDO(master -> slave) 설정
             # sync manager 2에 RxPDO 맵으로 사용할 오브젝트의 인덱스 할당
             rx_map_bytes = struct.pack(
@@ -336,19 +345,28 @@ class EtherCATManager():
 # region servo functions
     # RxPDO 설정
     def _set_rx_pdo(self, slave, ctrl: int = 0, mode: int = 0, pos: int = 0, v: int = 0):
-        buf = bytearray(11)
-        buf = struct.pack("<H", ctrl) + struct.pack("b", mode) + struct.pack("<i", get_servo_unmodified_value(pos)) + struct.pack("<i", get_servo_unmodified_value(v))
-        slave.output = bytes(buf)
+        try:
+            with self._servo_lock:
+                buf = bytearray(11)
+                buf = struct.pack("<H", ctrl) + struct.pack("b", mode) + struct.pack("<i", get_servo_unmodified_value(pos)) + struct.pack("<i", get_servo_unmodified_value(v))
+                slave.output = bytes(buf)
+        except Exception as e:
+            log(f"[ERROR] servo RxPDO set failed: {e}")
 
     def update_monitor_values(self):
         def _get_tx_pdo(servo):
             return struct.unpack('<HbiiH', servo.input)
 
         _data = []
-        for servo in self.servo_drives:
-            tx_pdo = _get_tx_pdo(servo)
-            _data.append(tx_pdo)
-        
+        try:
+            with self._servo_lock:
+                for servo in self.servo_drives:
+                    tx_pdo = _get_tx_pdo(servo)
+                    _data.append(tx_pdo)
+        except Exception as e:
+            log(f"[ERROR] servo TxPDO read failed {e}")
+            return
+            
         self.app.on_update_servo_status(_data)
 
     # 서보 on/off
@@ -362,11 +380,10 @@ class EtherCATManager():
         except Exception as e:
             log(f"[ERROR] servo on/off failed: {e}")
 
-    # 원점 지정
+    # 원점 오프셋 지정
     def servo_set_home(self, servo_id: int):
         try:
             servo = self.servo_drives[servo_id]
-            # cur_pos = struct.unpack('<i', servo.input[4:8])[0]
             cur_pos = int.from_bytes(servo.input[4:8], 'little', signed=True)
             servo.sdo_write(0x607C, 0, struct.pack('<i', get_servo_unmodified_value(cur_pos)))
         except Exception as e:
@@ -405,7 +422,6 @@ class EtherCATManager():
     def servo_move_absolute(self, servo_id: int, pos: float):
         try:
             servo = self.servo_drives[servo_id]
-            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
             cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
@@ -418,12 +434,10 @@ class EtherCATManager():
     def servo_move_relative(self, servo_id: int, dist: float):
         try:
             servo = self.servo_drives[servo_id]
-            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
             cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
             
-            # cur_pos = struct.unpack('<i', servo.input[4:8])[0]
             cur_pos = int.from_bytes(servo.input[4:8], 'little', signed=True)
             pos = cur_pos + dist
             self._set_rx_pdo(servo, 0x000F, 8, pos, 0)
@@ -434,7 +448,6 @@ class EtherCATManager():
     def servo_move_velocity(self, servo_id: int, v:float):
         try:
             servo = self.servo_drives[servo_id]
-            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
             cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
@@ -448,7 +461,6 @@ class EtherCATManager():
     def servo_halt(self, servo_id: int):
         try:
             servo = self.servo_drives[servo_id]
-            # cur_state = struct.unpack('<H', servo.input[0:2])[0]
             cur_state = int.from_bytes(servo.input[0:2], 'little')
             if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
                 raise Exception("servo is not ready to work")
@@ -481,37 +493,50 @@ class EtherCATManager():
     def update_io(self):
         input_data = []
         output_data = []
-        for module in self.input_modules:
-            total_input = int.from_bytes(module.input, 'little')
-            input_data.append(total_input)
-        
-        for module in self.output_modules:
-            total_output = int.from_bytes(module.output, 'little')
-            output_data.append(total_output)
-        
+        with self._io_lock:
+            for module in self.input_modules:
+                total_input = int.from_bytes(module.input, 'little')
+                input_data.append(total_input)
+
+            for module in self.output_modules:
+                total_output = int.from_bytes(module.output, 'little')
+                output_data.append(total_output)
+
         self.app.on_update_io_status(input_data, output_data)
 
     # 비트 쓰기
     def io_write_bit(self, output_id: int, bit_offset: int, data: bool):
+        """
+        bit_offset번째 비트의 값을 0/1로 변경
+        
+        :param self:
+        :param output_id: 출력 모듈 번호(0)
+        :type output_id: int
+        :param bit_offset: 변경할 비트 인덱스(0~31)
+        :type bit_offset: int
+        :param data: 비트 값(True:1/False:0)
+        :type data: bool
+        """
         if bit_offset > 31 or bit_offset < 0:
             log(f"[WARNING] bit offset must be integer between 0 and 31. current value: {bit_offset}")
             return
-        
+
         try:
-            target_bit = 1 << bit_offset
-            module = self.output_modules[output_id]
-            total_bits = int.from_bytes(module.output, 'little')
-            if data:
-                total_bits |= target_bit
-            else:
-                total_bits &= ~target_bit
-            module.output = struct.pack('<I', total_bits)
+            with self._io_lock:
+                target_bit = 1 << bit_offset
+                module = self.output_modules[output_id]
+                total_bits = int.from_bytes(module.output, 'little')
+                if data:
+                    total_bits |= target_bit
+                else:
+                    total_bits &= ~target_bit
+                module.output = struct.pack('<I', total_bits)
         except Exception as e:
             log(f"[ERROR] write output bit failed: {e}")
 
     def airknife_on(self, output_id: int, air_num: int, on_term: int):
         """
-        airknife_on
+        에어나이프 켜기
         
         :param self:
         :param output_id: 출력 모듈 번호(0)
@@ -530,7 +555,7 @@ class EtherCATManager():
 
     def airknife_off(self, output_id: int, air_num: int):
         """
-        airknife_off
+        에어나이프 끄기
         
         :param self:
         :param output_id: 출력 모듈 번호(0)
