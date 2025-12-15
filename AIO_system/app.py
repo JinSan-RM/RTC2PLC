@@ -6,6 +6,7 @@ import sys
 from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
+from src.ui.page.monitoring_page import MonitoringPage
 from src.utils.logger import log
 
 class App():
@@ -23,6 +24,8 @@ class App():
 
         self.ethercat_manager = EtherCATManager(self)
         self.ethercat_manager.connect()
+        
+        self.camera_manager = MonitoringPage(self)
         
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.on_periodic_update)
@@ -121,18 +124,21 @@ class App():
 # endregion
     def on_auto_start(self):
         # 피더 동작 함수
-        
         # 컨베이어 동작 함수
+        self.modbus_manager.on_automode_start()
         
         # 카메라 동작 함수
+        self.camera_manager.on_start_all()
+        
         
     def on_auto_stop(self):
         # 피더 멈춤 함수
-        
         # 컨베이어 멈춤 함수
+        self.modbus_manager.on_automode_stop()
         
         # 카메라 멈춤 함수
-
+        self.camera_manager.on_stop_all()
+        
     def run(self):
         """애플리케이션 실행"""
         self.ui.show()
