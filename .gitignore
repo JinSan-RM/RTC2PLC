@@ -5,3 +5,6 @@ RGB_streaming
 *env
 env*
 /AIO_system/src/AI/model
+/AIO_system/*env
+/AIO_system/env*
+*.json
