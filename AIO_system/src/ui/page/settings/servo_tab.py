@@ -279,14 +279,14 @@ class ServoTab(QWidget):
 
         _conf = self.app.config["servo_config"][f"servo_{servo_id}"]
 
-        target_position = QLineEdit(f"{_conf['position'][row-1]}")
+        target_position = QLineEdit(f"{_conf['position'][row-1][0]}")
         target_position.setObjectName("input_field")
-        setattr(self, f"servo_{servo_id}_target_pos", target_position)
+        setattr(self, f"servo_{servo_id}_target_pos_{row-1}", target_position)
         parent_layout.addWidget(target_position, row, 1)
 
-        move_speed = QLineEdit("100")
+        move_speed = QLineEdit(f"{_conf['position'][row-1][1]}")
         move_speed.setObjectName("input_field")
-        setattr(self, f"servo_{servo_id}_target_speed", move_speed)
+        setattr(self, f"servo_{servo_id}_target_speed_{row-1}", move_speed)
         parent_layout.addWidget(move_speed, row, 2)
 
         origin_btn = QPushButton("현재 위치 저장")
@@ -297,7 +297,7 @@ class ServoTab(QWidget):
         move_btn = QPushButton("위치로 이동")
         move_btn.setObjectName("control_btn_move")
         move_btn.setMinimumHeight(45)
-        move_btn.clicked.connect(lambda: self.on_move_to_position(servo_id))
+        move_btn.clicked.connect(lambda: self.on_move_to_position(servo_id, row-1))
         parent_layout.addWidget(move_btn, row, 4)
 
     def create_jog_section(self, parent_layout, servo_id):
@@ -411,22 +411,23 @@ class ServoTab(QWidget):
     def on_save_position(self, servo_id, idx):
         _name = "폭 조정" if servo_id == 0 else "높이 조정"
 
-        pos_txt = getattr(self, f"servo_{servo_id}_target_pos")
-        speed_txt = getattr(self, f"servo_{servo_id}_target_speed")
+        pos_txt = getattr(self, f"servo_{servo_id}_target_pos_{idx}")
+        speed_txt = getattr(self, f"servo_{servo_id}_target_speed_{idx}")
         position = pos_txt.text()
         speed = speed_txt.text()
 
-        self.app.config["servo_config"][f"servo_{servo_id}"][idx] = float(position)
+        pos_info = [ float(position), float(speed) ]
+        self.app.config["servo_config"][f"servo_{servo_id}"]["position"][idx] = pos_info
 
-        log(f"{_name} {idx} 저장. 위치: {position}mm, 속도: {speed}mm/s")
+        log(f"{_name} {idx+1} 저장. 위치: {position}mm, 속도: {speed}mm/s")
     
-    def on_move_to_position(self, servo_id):
-        pos_txt = getattr(self, f"servo_{servo_id}_target_pos")
-        speed_txt = getattr(self, f"servo_{servo_id}_target_speed")
+    def on_move_to_position(self, servo_id, idx):
+        pos_txt = getattr(self, f"servo_{servo_id}_target_pos_{idx}")
+        speed_txt = getattr(self, f"servo_{servo_id}_target_speed_{idx}")
         position = pos_txt.text()
         speed = speed_txt.text()
         log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
-        self.app.on_move_to_position(0, int(position*(10**3)))
+        self.app.servo_move_to_position(0, float(position)*(10**3), float(speed)*(10**3))
 
     def save_jog_speed(self, servo_id):
         jog_speed = getattr(self, f"servo_{servo_id}_jog_speed").text()
@@ -458,7 +459,7 @@ class ServoTab(QWidget):
         if is_inch.isChecked():
             log(f"인칭 이동: {direction}")
             _dir = 1 if direction == "right" else -1
-            dist = int(inch_dist.text()) * (10 ** 3)
+            dist = float(inch_dist.text()) * (10 ** 3)
             if dist == 0:
                 log(f"인칭 거리를 설정해주세요")
             else:
@@ -469,32 +470,31 @@ class ServoTab(QWidget):
         if is_jog.isChecked():
             log("조그 이동 정지")
             self.app.servo_stop(servo_id)
-    
-    def update_values(self, _data):
-        for i, ret in enumerate(_data):
-            _pos = getattr(self, f"servo_{i}_pos", None)
-            if _pos is None:
-                continue
-            _v = getattr(self, f"servo_{i}_speed")
-            _err_ind = getattr(self, f"servo_{i}_err_ind")
-            _err = getattr(self, f"servo_{i}_err")
 
-            cur_pos = get_servo_modified_value(ret[2]) / (10 ** 3)
-            cur_v = get_servo_modified_value(ret[3]) / (10 ** 3)
-            err_code = ret[4]
-            warn_code = ret[5]
+    def update_values(self, servo_id: int, _data):
+        _pos = getattr(self, f"servo_{servo_id}_pos", None)
+        if _pos is None:
+            return
+        _v = getattr(self, f"servo_{servo_id}_speed")
+        _err_ind = getattr(self, f"servo_{servo_id}_err_ind")
+        _err = getattr(self, f"servo_{servo_id}_err")
 
-            _pos.setText(f"{cur_pos:.03f}")
-            _v.setText(f"{cur_v:.03f}")
-            if err_code != 0:
-                _err_ind.setText("🔴 오류")
-                _err.setText(f"{err_code:04X}")
-            elif warn_code != 0:
-                _err_ind.setText("🟡 경고")
-                _err.setText(f"{warn_code:04X}")
-            else:
-                _err_ind.setText("⚫ 정상")
-                _err.setText("0x0000")
+        cur_pos = get_servo_modified_value(_data[2]) / (10 ** 3)
+        cur_v = get_servo_modified_value(_data[3]) / (10 ** 3)
+        err_code = _data[4]
+        warn_code = _data[5]
+
+        _pos.setText(f"{cur_pos:.03f}")
+        _v.setText(f"{cur_v:.03f}")
+        if err_code != 0:
+            _err_ind.setText("🔴 오류")
+            _err.setText(f"{err_code:04X}")
+        elif warn_code != 0:
+            _err_ind.setText("🟡 경고")
+            _err.setText(f"{warn_code:04X}")
+        else:
+            _err_ind.setText("⚫ 정상")
+            _err.setText("0x0000")
 
     
     def apply_styles(self):

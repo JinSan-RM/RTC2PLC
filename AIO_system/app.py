@@ -21,7 +21,7 @@ class App():
         self.config = {}
         self.load_config()
 
-        # 자동 운전 관련        
+        # 자동 운전 관련
         self.auto_mode = False
         self._auto_run = False
         self._auto_thread = None
@@ -114,11 +114,11 @@ class App():
 # endregion
 
 # region servo control
-    def on_update_servo_status(self, _data):
+    def on_update_servo_status(self, servo_id: int, _data):
         if hasattr(self.ui, 'settings_page') and self.ui.pages.currentIndex() == 2:
             tab_index = self.ui.settings_page.tabs.currentIndex()
             if tab_index == 0:
-                self.ui.settings_page.tabs.widget(tab_index).update_values(_data)
+                self.ui.settings_page.tabs.widget(tab_index).update_values(servo_id, _data)
 
     def servo_on(self, servo_id: int):
         self.ethercat_manager.servo_onoff(servo_id, True)
@@ -138,22 +138,28 @@ class App():
     def servo_set_origin(self, servo_id: int):
         self.ethercat_manager.servo_set_home(servo_id)
 
-    def servo_move_to_position(self, servo_id: int, pos: int):
-        self.ethercat_manager.servo_move_absolute(servo_id, pos)
+    def servo_move_to_position(self, servo_id: int, pos: float, v: float):
+        self.ethercat_manager.servo_move_absolute(servo_id, pos, v)
 
-    def servo_jog_move(self, servo_id: int, v: int):
+    def servo_jog_move(self, servo_id: int, v: float):
         self.ethercat_manager.servo_move_velocity(servo_id, v)
 
-    def servo_inch_move(self, servo_id: int, dist: int):
-        self.ethercat_manager.servo_move_relative(servo_id, dist)
+    def servo_inch_move(self, servo_id: int, dist: float, v: float = 10000.0):
+        self.ethercat_manager.servo_move_relative(servo_id, dist, v)
 # endregion
 
 # region I/O
-    def on_update_io_status(self, input_data, output_data):
+    def on_update_input_status(self, input_data):
         if hasattr(self.ui, 'logs_page') and self.ui.pages.currentIndex() == 3:
             tab_index = self.ui.logs_page.tabs.currentIndex()
             if tab_index == 0:
-                self.ui.logs_page.tabs.widget(tab_index).update_io_status(input_data, output_data)
+                self.ui.logs_page.tabs.widget(tab_index).update_input_status(input_data)
+
+    def on_update_output_status(self, output_data):
+        if hasattr(self.ui, 'logs_page') and self.ui.pages.currentIndex() == 3:
+            tab_index = self.ui.logs_page.tabs.currentIndex()
+            if tab_index == 0:
+                self.ui.logs_page.tabs.widget(tab_index).update_output_status(output_data)
 
     def airknife_on(self, air_num: int, on_term: int):
         self.ethercat_manager.airknife_on(0, air_num, on_term)
@@ -243,8 +249,9 @@ class App():
 
     def save_config(self):
         try:
-            if CONFIG_PATH and not os.path.exists(CONFIG_PATH):
-                os.makedirs(CONFIG_PATH)
+            dir_name = os.path.dirname(CONFIG_PATH)
+            if dir_name and not os.path.exists(dir_name):
+                os.makedirs(dir_name)
 
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=4)

@@ -151,14 +151,17 @@ INPUT_TX = [
 # 앱 자체적으로 전자 기어비 적용을 위한 부분
 # 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
 # UI에서 입력 시 값 1당 1 μm 를 의미하게 됨
-gear_ratio = 524288 / 10000
+ENCODER_RESOLUTION = 524288 # 인코더 해상도(1회전당 펄스)
+BALL_SCREW_LEAD = 10 # 볼 스크류 1회전당 이동거리(mm)
+UNIT_RATIO = 0.001 # 1 UserUnit당 실거리 비율(0.001mm = 1μm)
+SCALE_FACTOR = (ENCODER_RESOLUTION / BALL_SCREW_LEAD) * UNIT_RATIO
 # 서보로 전달할 값
 def get_servo_unmodified_value(value):
-    return int(value * gear_ratio)
+    return int(round(value*SCALE_FACTOR))
 
 # UI에 출력할 값
 def get_servo_modified_value(value):
-    return int(value / gear_ratio)
+    return value/SCALE_FACTOR
 
 from enum import IntEnum
 # 서보 상태 체크용 bit mask
@@ -176,15 +179,16 @@ def check_mask(s, m):
     low_bit = s & 0x00FF
     return (low_bit & m) == m
 
-from dataclasses import dataclass
-from typing import Callable
+class SERVO_STATE(IntEnum):
+    SERVO_READY = 0
+    SERVO_INIT = 1
+    SERVO_SHUTDOWN = 2
+    SERVO_STOP = 3
+    SERVO_HOMING = 6
+    SERVO_CSP = 8
+    SERVO_CSV = 9
 
-@dataclass
-class EtherCATDevice:
-    name: str
-    vendor_id: int
-    product_code: int
-    config_func: Callable
+SERVO_ACCEL = 2000
 
 # ============================================================
 # endregion
@@ -199,6 +203,7 @@ CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 
 APP_CONFIG = {
     "inverter_config": {
+        # 주파수, 가속 시간, 감속 시간 순
         "inverter_001": [ 20.0, 5.0, 10.0 ],
         "inverter_002": [ 40.0, 5.0, 10.0 ],
         "inverter_003": [ 20.0, 5.0, 10.0 ],
@@ -207,13 +212,28 @@ APP_CONFIG = {
         "inverter_006": [ 30.0, 5.0, 10.0 ],
     },
     "servo_config": {
+        # position: 위치, 속도 쌍으로 각 위치별 정보 저장
         "servo_0": {
-            "position": [ 100, 150, 200, 250, 300, 350, ],
+            "position": [
+                [ 65.0, 5.0 ],
+                [ 85.0, 5.0 ],
+                [ 110.0, 5.0 ],
+                [ 140.0, 5.0 ],
+                [ 180.0, 5.0 ],
+                [ 250.0, 5.0 ],
+            ],
             "jog_speed": 10.0,
             "inch_distance": 1.0,
         },
         "servo_1": {
-            "position": [ 100, 150, 200, 250, 300, 350, ],
+            "position": [
+                [ 150.0, 5.0 ],
+                [ 250.0, 5.0 ],
+                [ 300.0, 5.0 ],
+                [ 350.0, 5.0 ],
+                [ 400.0, 5.0 ],
+                [ 450.0, 5.0 ],
+            ],
             "jog_speed": 10.0,
             "inch_distance": 1.0,
         }
