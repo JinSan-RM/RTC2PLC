@@ -2,6 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QGroupBox, QLineEdit, QFrame, QScrollArea
 )
+from PySide6.QtGui import QDoubleValidator
 from PySide6.QtCore import Qt
 
 from src.utils.config_util import APP_CONFIG
@@ -113,6 +114,8 @@ class ConveyorTab(QWidget):
         # 목표 주파수
         control_layout.addWidget(self.create_label("목표 주파수:"), row, 0)
         freq_input = QLineEdit(f"{_conf[0]:.2f}")
+        freq_input.setValidator(QDoubleValidator(-120.0, 120.0, 2, control_layout))
+        freq_input.setPlaceholderText("-120.0 ~ 120.0 입력 가능")
         freq_input.setObjectName("input_field")
         setattr(self, f"{conv_id}_target_freq", freq_input)
         control_layout.addWidget(freq_input, row, 1)
@@ -127,6 +130,8 @@ class ConveyorTab(QWidget):
         # 가속 시간
         control_layout.addWidget(self.create_label("목표 가속 시간:"), row, 0)
         acc_input = QLineEdit(f"{_conf[1]:.1f}")
+        acc_input.setValidator(QDoubleValidator(0.0, 999.0, 1, control_layout))
+        acc_input.setPlaceholderText("-0.0 ~ 999.0 입력 가능")
         acc_input.setObjectName("input_field")
         setattr(self, f"{conv_id}_target_acc", acc_input)
         control_layout.addWidget(acc_input, row, 1)
@@ -141,6 +146,8 @@ class ConveyorTab(QWidget):
         # 감속 시간
         control_layout.addWidget(self.create_label("목표 감속 시간:"), row, 0)
         dec_input = QLineEdit(f"{_conf[2]:.1f}")
+        dec_input.setValidator(QDoubleValidator(0.0, 999.0, 1, control_layout))
+        dec_input.setPlaceholderText("-0.0 ~ 999.0 입력 가능")
         dec_input.setObjectName("input_field")
         setattr(self, f"{conv_id}_target_dec", dec_input)
         control_layout.addWidget(dec_input, row, 1)
@@ -298,7 +305,6 @@ class ConveyorTab(QWidget):
                 subcontrol-position: top left;
                 padding: 3px 10px;
                 color: #58a6ff;
-                background-color: transparent;
             }
             
             QLabel {

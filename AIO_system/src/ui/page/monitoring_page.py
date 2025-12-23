@@ -4,10 +4,11 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QGroupBox, QFrame, QComboBox
+    QLabel, QPushButton, QGroupBox, QFrame, QComboBox,
+    QLineEdit
 )
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QPen
+from PySide6.QtCore import Qt, QTimer, QRegularExpression
+from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QRegularExpressionValidator
 
 import sys
 import cv2
@@ -98,7 +99,8 @@ class CameraView(QFrame):
                     self.detector = AIPlasticDetectionSystem(
                         confidence_threshold=0.7,
                         img_size=640,
-                        airknife_callback=self.app.airknife_on
+                        airknife_callback=self.app.airknife_on,
+                        app=self.app
                     )
                     self.detector_frame_generator = self.detector.run()
                 
@@ -235,6 +237,40 @@ class MonitoringPage(QWidget):
         self.resolution_combo.setObjectName("combo_box")
         self.resolution_combo.addItems(["1920x1080", "1280x720", "640x480"])
         control_layout.addWidget(self.resolution_combo)
+
+        # 구분선
+        separator1 = QFrame()
+        separator1.setFrameShape(QFrame.VLine)
+        separator1.setStyleSheet("background-color: #30363d;")
+        control_layout.addWidget(separator1)
+
+        # 배출 순서 제어
+        control_layout.addWidget(QLabel("배출 순서 제어:"))
+
+        _saved_seq = self.app.config.get("air_sequence", [])
+        _prev = "".join([str(n) for n in _saved_seq])
+        self.sequence_edit = QLineEdit(f"{_prev}")
+        _rx = QRegularExpression("^[1-3]*$")
+        self.sequence_edit.setValidator(QRegularExpressionValidator(_rx, control_layout))
+        self.sequence_edit.setPlaceholderText("1 ~ 3 의 값을 연속 입력 가능")
+        self.sequence_edit.setObjectName("input_field")
+        self.sequence_edit.setMaximumWidth(300)
+        self.sequence_edit.setAlignment(Qt.AlignLeft)
+        control_layout.addWidget(self.sequence_edit)
+
+        sequence_set_btn = QPushButton("설정")
+        sequence_set_btn.setObjectName("setting_btn")
+        sequence_set_btn.clicked.connect(lambda: self.on_set_sequence())
+        control_layout.addWidget(sequence_set_btn)
+
+        self.toggle_btn = QPushButton("미사용")
+        self.toggle_btn.setObjectName(f"toggle_btn")
+        self.toggle_btn.setCheckable(True)
+        self.toggle_btn.setChecked(False)
+        self.toggle_btn.setMinimumHeight(45)
+        self.toggle_btn.setMinimumWidth(60)
+        self.toggle_btn.clicked.connect(lambda checked: self.on_use_sequence(checked))
+        control_layout.addWidget(self.toggle_btn)
         
         control_layout.addStretch()
         
@@ -389,6 +425,28 @@ class MonitoringPage(QWidget):
             count_label.setText("0")
         self.total_count.setText("0")
         # TODO: 실제 카운터 리셋
+
+    def on_set_sequence(self):
+        if self.app.use_air_sequence:
+            log("배출 제어 순서 사용 도중에는 순서를 변경할 수 없습니다.")
+            return
+        
+        air_pattern = self.sequence_edit.text()
+        self.app.config["air_sequence"] = [int(c) for c in air_pattern] if air_pattern else []
+        self.app.set_air_sequence_index()
+        log(f"배출 제어 순서 저장됨. {self.app.config['air_sequence']}")
+
+    def on_use_sequence(self, onoff):
+        _pattern = self.app.config.get("air_sequence", [])
+        if onoff and not _pattern:
+            log("지정된 배출 제어 순서가 없습니다.")
+            self.toggle_btn.setChecked(False)
+            return
+        
+        state = "사용" if onoff else "미사용"
+        self.toggle_btn.setText(state)
+        self.app.use_air_sequence = onoff
+        log(f"배출 제어 순서 {state}")
     
     def update_values(self, values):
         """모니터링 값 업데이트"""
@@ -542,5 +600,56 @@ class MonitoringPage(QWidget):
             
             #reset_btn:hover {
                 background-color: #8b949e;
+            }
+            
+            #input_field {
+                background-color: #161b22;
+                border: 2px solid #30363d;
+                border-radius: 5px;
+                padding: 5px;
+                color: #c9d1d9;
+                font-size: 13px;
+                min-width: 100px;
+            }
+            
+            #input_field:focus {
+                border-color: #58a6ff;
+            }
+            
+            #setting_btn {
+                background-color: #161b22;
+                color: #c9d1d9;
+                border: 2px solid #30363d;
+                border-radius: 5px;
+                padding: 5px 15px;
+                font-size: 13px;
+            }
+            
+            #setting_btn:hover {
+                background-color: #21262d;
+                border-color: #58a6ff;
+            }
+            
+            #toggle_btn {
+                background-color: #238636;
+                color: white;
+                border: 2px solid #2ea043;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            
+            #toggle_btn:checked {
+                background-color: #238636;
+                border-color: #2ea043;
+            }
+            
+            #toggle_btn:!checked {
+                background-color: #6e7681;
+                border-color: #8b949e;
+            }
+            
+            #toggle_btn:hover {
+                opacity: 0.8;
             }
         """)

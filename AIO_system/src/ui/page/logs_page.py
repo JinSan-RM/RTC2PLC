@@ -104,32 +104,54 @@ class IOCheckTab(QWidget):
         # 스크롤 영역
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        scroll.setStyleSheet("""
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0d1117;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #30363d;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
         
         scroll_content = QWidget()
+        scroll_content.setObjectName("scroll_content")
+        # 컨텐츠 위젯도 투명하게 설정해야 그룹박스 배경색이 돋보임
+        scroll_content.setStyleSheet("#scroll_content { background-color: transparent; }")
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(5)
         
         # Input IO 항목들
         self.inputs = {}
         input_list = [
-            ("입력 접점 00", "I00"),
-            ("입력 접점 01", "I01"),
-            ("입력 접점 02", "I02"),
-            ("입력 접점 03", "I03"),
-            ("입력 접점 04", "I04"),
-            ("입력 접점 05", "I05"),
-            ("입력 접점 06", "I06"),
-            ("입력 접점 07", "I07"),
-            ("입력 접점 08", "I08"),
-            ("입력 접점 09", "I09"),
-            ("입력 접점 10", "I10"),
-            ("입력 접점 11", "I11"),
+            ("수동/자동", "I00"),
+            ("운전", "I01"),
+            ("정지", "I02"),
+            ("알람 리셋", "I03"),
+            ("비상정지", "I04"),
+            ("내륜모터 인버터 알람", "I05"),
+            ("외륜모터 인버터 알람", "I06"),
+            ("컨베이어#1 인버터 알람", "I07"),
+            ("컨베이어#2 인버터 알람", "I08"),
+            ("컨베이어#3 인버터 알람", "I09"),
+            ("컨베이어#4 인버터 알람", "I10"),
+            ("원점 복귀", "I11"),
             ("입력 접점 12", "I12"),
             ("입력 접점 13", "I13"),
             ("입력 접점 14", "I14"),
             ("입력 접점 15", "I15"),
-            ("입력 접점 16", "I16"),
+            ("피더 배출 제품감지센서", "I16"),
             ("입력 접점 17", "I17"),
             ("입력 접점 18", "I18"),
             ("입력 접점 19", "I19"),
@@ -168,41 +190,63 @@ class IOCheckTab(QWidget):
         # 스크롤 영역
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        scroll.setStyleSheet("""
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0d1117;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #30363d;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
         
         scroll_content = QWidget()
+        scroll_content.setObjectName("scroll_content")
+        # 컨텐츠 위젯도 투명하게 설정해야 그룹박스 배경색이 돋보임
+        scroll_content.setStyleSheet("#scroll_content { background-color: transparent; }")
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(5)
         
         # Output IO 항목들
         self.outputs = {}
         output_list = [
-            ("출력 접점 00", "O00"),
-            ("출력 접점 01", "O01"),
-            ("출력 접점 02", "O02"),
-            ("출력 접점 03", "O03"),
-            ("출력 접점 04", "O04"),
-            ("출력 접점 05", "O05"),
-            ("출력 접점 06", "O06"),
-            ("출력 접점 07", "O07"),
-            ("출력 접점 08", "O08"),
-            ("출력 접점 09", "O09"),
-            ("출력 접점 10", "O10"),
-            ("출력 접점 11", "O11"),
-            ("출력 접점 12", "O12"),
-            ("출력 접점 13", "O13"),
-            ("출력 접점 14", "O14"),
-            ("출력 접점 15", "O15"),
-            ("출력 접점 16", "O16"),
-            ("출력 접점 17", "O17"),
-            ("출력 접점 18", "O18"),
-            ("출력 접점 19", "O19"),
-            ("출력 접점 20", "O20"),
-            ("출력 접점 21", "O21"),
-            ("출력 접점 22", "O22"),
-            ("출력 접점 23", "O23"),
-            ("출력 접점 24", "O24"),
-            ("출력 접점 25", "O25"),
+            ("운전 스위치 램프", "O00"),
+            ("정지 스위치 램프", "O01"),
+            ("타워 정상운전 램프", "O02"),
+            ("타워 운전정지 램프", "O03"),
+            ("타워 알람 램프", "O04"),
+            ("타워 버저", "O05"),
+            ("비전 1 조광기 파워", "O06"),
+            ("비전 2 조광기 파워", "O07"),
+            ("내륜모터 인버터 동작", "O08"),
+            ("내륜모터 인버터 리셋", "O09"),
+            ("외륜모터 인버터 동작", "O10"),
+            ("외륜모터 인버터 리셋", "O11"),
+            ("컨베이어#1 인버터 동작", "O12"),
+            ("컨베이어#1 인버터 리셋", "O13"),
+            ("컨베이어#2 인버터 동작", "O14"),
+            ("컨베이어#2 인버터 리셋", "O15"),
+            ("컨베이어#3 인버터 동작", "O16"),
+            ("컨베이어#3 인버터 리셋", "O17"),
+            ("컨베이어#4 인버터 동작", "O18"),
+            ("컨베이어#4 인버터 리셋", "O19"),
+            ("소재 1분리 SOL V/V", "O20"),
+            ("소재 2분리 SOL V/V", "O21"),
+            ("소재 3분리 SOL V/V", "O22"),
+            ("SPARE", "O23"),
+            ("원점 복귀 램프", "O24"),
+            ("알람 리셋 램프", "O25"),
             ("출력 접점 26", "O26"),
             ("출력 접점 27", "O27"),
             ("출력 접점 28", "O28"),

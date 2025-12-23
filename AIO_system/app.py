@@ -7,6 +7,7 @@ import os
 import threading
 import time
 from datetime import datetime, timedelta
+from itertools import cycle
 
 from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
@@ -29,6 +30,10 @@ class App():
         self._stop_event = threading.Event()
         self._feeder_output_time = datetime.now()
         self._current_size = 0
+
+        # 제품 배출 순서 제어
+        self.use_air_sequence = False
+        self.set_air_sequence_index()
         
         self.qt_app = QApplication(sys.argv)
         
@@ -190,9 +195,11 @@ class App():
 
     def reset_alarm(self):
         log("[INFO] alarm reset")
+        # TODO: 알람 리셋
 
     def emergency_stop(self):
         log("[WARNING] !!!EMERGENCY STOP BUTTON PRESSED!!!")
+        # TODO: 비상정지 기능 연결
 
     def all_servo_homing(self):
         log("[INFO] all servo homing")
@@ -261,6 +268,13 @@ class App():
             log(f"[ERROR] config file io error: {ioe}")
         except Exception as e:
             log(f"[ERROR] config file save failed: {e}")
+
+    def set_air_sequence_index(self):
+        _saved_seq = self.config.get("air_sequence", [])
+        if _saved_seq:
+            self.air_index_iter = cycle(_saved_seq)
+        else:
+            self.air_index_iter = None
 
     def run(self):
         """애플리케이션 실행"""

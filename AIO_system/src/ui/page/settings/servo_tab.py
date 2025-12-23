@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QGroupBox, QLineEdit, QRadioButton,
     QButtonGroup, QFrame, QScrollArea
 )
+from PySide6.QtGui import QDoubleValidator
 from PySide6.QtCore import Qt
 
 from src.utils.config_util import get_servo_modified_value
@@ -280,11 +281,15 @@ class ServoTab(QWidget):
         _conf = self.app.config["servo_config"][f"servo_{servo_id}"]
 
         target_position = QLineEdit(f"{_conf['position'][row-1][0]}")
+        target_position.setValidator(QDoubleValidator(-1000.0, 1000.0, 3, parent_layout))
+        target_position.setPlaceholderText("-1000.0 ~ 1000.0 입력 가능")
         target_position.setObjectName("input_field")
         setattr(self, f"servo_{servo_id}_target_pos_{row-1}", target_position)
         parent_layout.addWidget(target_position, row, 1)
 
         move_speed = QLineEdit(f"{_conf['position'][row-1][1]}")
+        move_speed.setValidator(QDoubleValidator(0.0, 1000.0, 3, parent_layout))
+        move_speed.setPlaceholderText("0.0 ~ 1000.0 입력 가능")
         move_speed.setObjectName("input_field")
         setattr(self, f"servo_{servo_id}_target_speed_{row-1}", move_speed)
         parent_layout.addWidget(move_speed, row, 2)
@@ -334,7 +339,9 @@ class ServoTab(QWidget):
         
         settings_layout.addWidget(QLabel("조그 속도:"))
         jog_speed = QLineEdit(f"{_conf['jog_speed']}")
-        jog_speed.setObjectName(f"servo_{servo_id}_jog_speed")
+        jog_speed.setValidator(QDoubleValidator(0.0, 1000.0, 3, settings_layout))
+        jog_speed.setPlaceholderText("0.0 ~ 1000.0 입력 가능")
+        jog_speed.setObjectName(f"input_field")
         jog_speed.setMaximumWidth(100)
         jog_speed.returnPressed.connect(lambda: self.save_jog_speed(servo_id))
         setattr(self, f"servo_{servo_id}_jog_speed", jog_speed)
@@ -345,7 +352,9 @@ class ServoTab(QWidget):
         
         settings_layout.addWidget(QLabel("인칭 거리:"))
         inch_distance = QLineEdit(f"{_conf['inch_distance']}")
-        inch_distance.setObjectName(f"servo_{servo_id}_inch_dist")
+        inch_distance.setValidator(QDoubleValidator(0.0, 1000.0, 3, settings_layout))
+        inch_distance.setPlaceholderText("0.0 ~ 1000.0 입력 가능")
+        inch_distance.setObjectName(f"input_field")
         inch_distance.setMaximumWidth(100)
         inch_distance.returnPressed.connect(lambda: self.save_inch_distance(servo_id))
         setattr(self, f"servo_{servo_id}_inch_dist", inch_distance)

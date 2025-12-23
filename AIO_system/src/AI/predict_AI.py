@@ -100,8 +100,10 @@ class AIPlasticDetectionSystem:
         model_path: str = None,
         confidence_threshold: float = 0.7,
         img_size: int = 640,
-        airknife_callback=None
+        airknife_callback=None,
+        app=None
     ):
+        self.app = app
         self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
@@ -356,11 +358,19 @@ class AIPlasticDetectionSystem:
                 # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작
                 if len(detected_objects) > 0:
                     # log(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
-                    for box in self.box_manager.boxes:
+                    if self.app.use_air_sequence:
+                        box_id = int(next(self.app.air_index_iter))
+                        box = self.box_manager.boxes[box_id]
                         # log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
                         if box.is_active:
                             log(f"blow action")
                             self.send_airknife_signal(air_num=box.box_id, on_term=1000)
+                    else:
+                        for box in self.box_manager.boxes:
+                            # log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                            if box.is_active:
+                                log(f"blow action")
+                                self.send_airknife_signal(air_num=box.box_id, on_term=1000)
 
                 t4 = time.time()
                 timing_inference.append((t4 - t3) * 1000)

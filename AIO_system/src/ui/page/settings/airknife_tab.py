@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFrame
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIntValidator
 
 from src.utils.config_util import APP_CONFIG
 from src.utils.logger import log
@@ -36,9 +37,31 @@ class AirKnifeTab(QWidget):
         # 스크롤 영역
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        scroll.setStyleSheet("""
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0d1117;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #30363d;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
         
         scroll_content = QWidget()
+        scroll_content.setObjectName("scroll_content")
+        # 컨텐츠 위젯도 투명하게 설정해야 그룹박스 배경색이 돋보임
+        scroll_content.setStyleSheet("#scroll_content { background-color: transparent; }")
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setSpacing(10)
         
@@ -90,6 +113,8 @@ class AirKnifeTab(QWidget):
         # 분사 타이밍 설정
         group_layout.addWidget(QLabel("분사 타이밍:"))
         timing = QLineEdit(f"{_conf['timing']}")
+        timing.setValidator(QIntValidator(0, 100000, group_layout))
+        timing.setPlaceholderText("0 ~ 100000 입력 가능")
         timing.setObjectName("input_field")
         timing.setMaximumWidth(70)
         timing.setAlignment(Qt.AlignRight)
@@ -100,6 +125,8 @@ class AirKnifeTab(QWidget):
         # 분사 시간 설정
         group_layout.addWidget(QLabel("분사 시간:"))
         duration = QLineEdit(f"{_conf['duration']}")
+        duration.setValidator(QIntValidator(0, 100000, group_layout))
+        duration.setPlaceholderText("0 ~ 100000 입력 가능")
         duration.setObjectName("input_field")
         duration.setMaximumWidth(70)
         duration.setAlignment(Qt.AlignRight)
@@ -260,8 +287,10 @@ class AirKnifeTab(QWidget):
             }
             
             QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 3px 10px;
                 color: #58a6ff;
-                padding: 2px 8px;
             }
             
             QLabel {
