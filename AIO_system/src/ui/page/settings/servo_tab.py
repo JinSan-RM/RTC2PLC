@@ -284,6 +284,7 @@ class ServoTab(QWidget):
         target_position.setValidator(QDoubleValidator(-1000.0, 1000.0, 3, parent_layout))
         target_position.setPlaceholderText("-1000.0 ~ 1000.0 입력 가능")
         target_position.setObjectName("input_field")
+        target_position.returnPressed.connect(lambda: self.on_save_position(servo_id, row-1))
         setattr(self, f"servo_{servo_id}_target_pos_{row-1}", target_position)
         parent_layout.addWidget(target_position, row, 1)
 
@@ -291,6 +292,7 @@ class ServoTab(QWidget):
         move_speed.setValidator(QDoubleValidator(0.0, 1000.0, 3, parent_layout))
         move_speed.setPlaceholderText("0.0 ~ 1000.0 입력 가능")
         move_speed.setObjectName("input_field")
+        move_speed.returnPressed.connect(lambda: self.on_save_position(servo_id, row-1))
         setattr(self, f"servo_{servo_id}_target_speed_{row-1}", move_speed)
         parent_layout.addWidget(move_speed, row, 2)
 

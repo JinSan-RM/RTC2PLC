@@ -256,6 +256,7 @@ class MonitoringPage(QWidget):
         self.sequence_edit.setObjectName("input_field")
         self.sequence_edit.setMaximumWidth(300)
         self.sequence_edit.setAlignment(Qt.AlignLeft)
+        self.sequence_edit.returnPressed.connect(lambda: self.on_set_sequence())
         control_layout.addWidget(self.sequence_edit)
 
         sequence_set_btn = QPushButton("설정")
