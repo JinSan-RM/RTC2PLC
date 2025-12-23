@@ -102,7 +102,7 @@ class AIPlasticDetectionSystem:
         img_size: int = 640,
         airknife_callback=None
     ):
-        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\251012_yolov10_plastic_OD_model.pt"
+        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
         if self.model is None:
@@ -116,8 +116,8 @@ class AIPlasticDetectionSystem:
         self.sorting_system = PlasticSortingSystem()
         
         self.box_manager = ConveyorBoxManager([
-            ConveyorBoxZone(box_id=1, x=300, y=100, width=500, height=200),
-            ConveyorBoxZone(box_id=2, x=300, y=500, width=500, height=200),
+            ConveyorBoxZone(box_id=1, x=550, y=150, width=200, height=550),
+            # ConveyorBoxZone(box_id=2, x=300, y=500, width=500, height=200),
         ])
         
         self.fps_counter = 0
