@@ -17,12 +17,9 @@ class ModbusManager():
             self.config = MODBUS_RTU_CONFIG
 
             self.stop_event = threading.Event()
-
             self.tasks: queue.Queue[Dict] = queue.Queue()
-            
-            # self.slave_ids = self.config['slave_ids']
             self.client = None
-            
+
             self._initialized = True
 
     def connect(self):
@@ -81,7 +78,7 @@ class ModbusManager():
         while not self.stop_event.is_set():
             self.read_monitor_values()
             with self._lock:
-                while self.tasks:
+                while not self.tasks.empty():
                     task = self.tasks.get()
                     task[0](*task[1])
 
@@ -220,7 +217,7 @@ class ModbusManager():
                 ret[1] = ret[1] * 0.1
                 ret[2] = ret[2] * 0.1
                 ret[3] = ret[3] * 0.01
-                ret[6] = ret[6] * 0.1
+                ret[4] = ret[4] * 0.1
 
                 _data[_name] = ret
 

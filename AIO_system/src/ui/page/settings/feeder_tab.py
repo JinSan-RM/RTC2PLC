@@ -75,6 +75,12 @@ class FeederTab(QWidget):
         
         # 감속 시간
         self.add_value_display(status_layout, "감속 시간", f"{_conf[2]:.1f}", "s", f"{motor_id}_dec")
+
+        # 출력 전류
+        self.add_value_display(status_layout, "출력 전류", "0.0", "A", f"{motor_id}_crnt")
+
+        # 출력 전압
+        self.add_value_display(status_layout, "출력 전압", "0.0", "V", f"{motor_id}_vltg")
         
         status_layout.addStretch()
         motor_main_layout.addLayout(status_layout)
@@ -297,9 +303,13 @@ class FeederTab(QWidget):
                     continue
                 _acc = self.findChild(QLabel, f"{_id}_acc")
                 _dec = self.findChild(QLabel, f"{_id}_dec")
+                _crnt = self.findChild(QLabel, f"{_id}_crnt")
+                _vltg = self.findChild(QLabel, f"{_id}_vltg")
                 _freq.setText(f"{_list[3]:.2f}")
                 _acc.setText(f"{_list[0]:.1f}")
                 _dec.setText(f"{_list[1]:.1f}")
+                _crnt.setText(f"{_list[2]:.1f}")
+                _vltg.setText(f"{_list[4]:.1f}")
     
     def on_set_size(self, size):
         self.app.on_on_log(f"배출물 크기 설정: {size}")

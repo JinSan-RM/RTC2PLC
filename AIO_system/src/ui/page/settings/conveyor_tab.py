@@ -99,6 +99,8 @@ class ConveyorTab(QWidget):
         self.add_value_display(status_layout, "현재 주파수", f"{_conf[0]:.2f}", "Hz", f"{conv_id}_freq")
         self.add_value_display(status_layout, "가속 시간", f"{_conf[1]:.1f}", "s", f"{conv_id}_acc")
         self.add_value_display(status_layout, "감속 시간", f"{_conf[2]:.1f}", "s", f"{conv_id}_dec")
+        self.add_value_display(status_layout, "출력 전류", "0.0", "A", f"{conv_id}_crnt")
+        self.add_value_display(status_layout, "출력 전압", "0.0", "V", f"{conv_id}_vltg")
         
         status_layout.addStretch()
         conv_main_layout.addLayout(status_layout)
@@ -284,9 +286,13 @@ class ConveyorTab(QWidget):
                     continue
                 _acc = getattr(self, f"{_id}_acc")
                 _dec = getattr(self, f"{_id}_dec")
+                _crnt = getattr(self, f"{_id}_crnt")
+                _vltg = getattr(self, f"{_id}_vltg")
                 _freq.setText(f"{_list[3]:.2f}")
                 _acc.setText(f"{_list[0]:.1f}")
                 _dec.setText(f"{_list[1]:.1f}")
+                _crnt.setText(f"{_list[2]:.1f}")
+                _vltg.setText(f"{_list[4]:.1f}")
     
     def apply_styles(self):
         """스타일시트 적용 (FeederTab과 디자인 통일)"""
