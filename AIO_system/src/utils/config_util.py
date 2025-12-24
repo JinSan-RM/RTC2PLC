@@ -179,6 +179,7 @@ def check_mask(s, m):
     low_bit = s & 0x00FF
     return (low_bit & m) == m
 
+# 서보 state
 class SERVO_STATE(IntEnum):
     SERVO_READY = 0
     SERVO_INIT = 1
@@ -188,7 +189,11 @@ class SERVO_STATE(IntEnum):
     SERVO_CSP = 8
     SERVO_CSV = 9
 
+# 서보 위치 이동 가속도
 SERVO_ACCEL = 2000
+
+# 위치 값이 10 펄스 이내로 들어오면 위치 도달로 추정
+SERVO_IN_POS_WIDTH = get_servo_modified_value(10)
 
 # ============================================================
 # endregion

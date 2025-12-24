@@ -269,7 +269,7 @@ class EtherCATManager():
 
         # 1. 남은 거리 계산
         dist = target_pos - current_pos
-        direction = 1 if dist > 0 else -1
+        direction = dist // abs(dist)
 
         # 2. 감속 시작 시점 계산 (v^2 = 2as 공식 활용)
         stopping_dist = (current_vel ** 2) / (2 * SERVO_ACCEL)
@@ -278,27 +278,31 @@ class EtherCATManager():
         if abs(dist) <= stopping_dist:
             # 감속 구간
             current_vel -= SERVO_ACCEL * dt * direction
-            if direction * current_vel < 0:
-                current_vel = 0
+            current_vel = max(0, direction * current_vel) * direction
         else:
             # 가속 구간
-            current_vel += SERVO_ACCEL * dt
+            current_vel += SERVO_ACCEL * dt * direction
             # 속도 제한
-            current_vel = max(-target_vel, min(target_vel, current_vel))
+            current_vel = min(target_vel, abs(current_vel)) * direction
 
         # 4. 차기 위치 계산 및 전송
-        ds = current_vel * dt
-        current_pos += ds
+        current_pos += current_vel * dt
+
+        # 목표 위치에 거의 다 왔을 경우 목표 위치 값으로 고정 이동
+        if abs(target_pos - current_pos) < (target_vel * dt * 0.5):
+            current_pos = target_pos
+            current_vel = 0
 
         # _set_servo_rx_pdo 내에서 lock 처리 및 스케일 연산 처리 하고 있음
         self._set_servo_rx_pdo(servo, 0x000F, 8, current_pos)
 
+        # 다음 업데이트 주기에 사용할 수 있도록 현재 계산된 값 저장
         with servo.lock:
             servo.variables['current_pos'] = current_pos
             servo.variables['current_vel'] = current_vel
 
         # 도달 판정시 종료
-        if abs(target_pos - current_pos) < (target_vel * dt * 0.5):
+        if abs(target_pos - current_pos) < SERVO_IN_POS_WIDTH:
             with servo.lock:
                 servo.variables['state'] = SERVO_STATE.SERVO_READY
     
@@ -311,7 +315,7 @@ class EtherCATManager():
         cur_pos = int(round(get_servo_modified_value(int.from_bytes(cur_pos, 'little', signed=True))))
 
         homing_mask = 0x1400 # 12번과 10번 비트가 1인 경우 원점 복귀 완료
-        if (cur_state & homing_mask) == homing_mask and cur_pos == 0:
+        if (cur_state & homing_mask) == homing_mask and abs(cur_pos) < SERVO_IN_POS_WIDTH:
             with servo.lock:
                 servo.variables['state'] = SERVO_STATE.SERVO_READY
 
