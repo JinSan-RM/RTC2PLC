@@ -395,7 +395,7 @@ class EtherCATManager():
 
             # 센서 1~3(POT, NOT, HOME) A->B접점 방식 변경
             for i in range(3):
-                slave.sdo_write(0x2200+i, 0, struct.pack('<H', 0x8001))
+                slave.sdo_write(0x2200+i, 0, struct.pack('<H', 0x8001+i))
 
             # homing 방법 설정: 역방향 운전하면서 원점 스위치에 의해 원점 복귀
             # home 오프셋(0x607C) 지정해야 할지? 지정하는 경우 원점 스위치 on 시 오프셋 만큼 이동하여 원점 잡음
