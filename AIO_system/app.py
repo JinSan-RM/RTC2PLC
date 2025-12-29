@@ -65,22 +65,21 @@ class App():
     def _auto_loop(self):
         if not self.auto_mode or not self._auto_run:
             return
-        
+
         while not self._stop_event.is_set():
+            # 피더 미배출 체크
+            cur_size = self._current_size
+            check_sec = FEEDER_TIME_1 + ((cur_size // 5) * FEEDER_TIME_2)
+            current_time = datetime.now()
             with self._lock:
-                # 피더 미배출 체크
-                check_sec = FEEDER_TIME_2 if self._current_size == 5 else FEEDER_TIME_1
-                current_time = datetime.now()
                 check_time = self._feeder_output_time + timedelta(seconds=check_sec)
-                if current_time > check_time:
-                    # 배출물 사이즈 변경
-                    # TODO: 제품 감지 박스 연동, 서보 위치 이동
-                    cur_size = self._current_size
-                    if self._current_size == 5:
-                        self._current_size = 0
-                    else:
-                        self._current_size += 1
-                    log(f"[INFO] feeder output size level changed {cur_size+1} to {self._current_size+1}")
+
+            if current_time > check_time:
+                # 배출물 사이즈 변경
+                # TODO: 제품 감지 박스 연동, 서보 위치 이동
+                self._current_size = (cur_size + 1) % 6
+
+                log(f"[INFO] feeder output size level changed {cur_size+1} to {self._current_size+1}")
 
             time.sleep(0.033)
 

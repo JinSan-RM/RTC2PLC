@@ -152,7 +152,7 @@ INPUT_TX = [
 # 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
 # UI에서 입력 시 값 1당 1 μm 를 의미하게 됨
 ENCODER_RESOLUTION = 524288 # 인코더 해상도(1회전당 펄스)
-BALL_SCREW_LEAD = 10 # 볼 스크류 1회전당 이동거리(mm)
+BALL_SCREW_LEAD = 5 # 볼 스크류 1회전당 이동거리(mm)
 UNIT_RATIO = 0.001 # 1 UserUnit당 실거리 비율(0.001mm = 1μm)
 SCALE_FACTOR = (ENCODER_RESOLUTION / BALL_SCREW_LEAD) * UNIT_RATIO
 # 서보로 전달할 값
@@ -259,8 +259,8 @@ APP_CONFIG = {
     },
 }
 
-FEEDER_TIME_1 = 20
-FEEDER_TIME_2 = 30
+FEEDER_TIME_1 = 20 # 피더 제품 미배출 기본 대기 시간
+FEEDER_TIME_2 = 10 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간
 
 # ============================================================
 # endregion
