@@ -50,27 +50,28 @@ class IOIndicator(QFrame):
     
     def set_state(self, is_on):
         """상태 설정"""
-        self.is_on = is_on
-        if is_on:
-            self.led.setText("🟢")
-            # self.led.setObjectName("led_on")
-            # self.setStyleSheet("""
-            #     #io_indicator {
-            #         background-color: #1a2e1a;
-            #         border: 2px solid #2ea043;
-            #         border-radius: 5px;
-            #     }
-            # """)
-        else:
-            self.led.setText("⚫")
-            # self.led.setObjectName("led_off")
-            # self.setStyleSheet("""
-            #     #io_indicator {
-            #         background-color: #161b22;
-            #         border: 2px solid #30363d;
-            #         border-radius: 5px;
-            #     }
-            # """)
+        if self.is_on ^ is_on:
+            if is_on:
+                self.led.setText("🟢")
+                # self.led.setObjectName("led_on")
+                # self.setStyleSheet("""
+                #     #io_indicator {
+                #         background-color: #1a2e1a;
+                #         border: 2px solid #2ea043;
+                #         border-radius: 5px;
+                #     }
+                # """)
+            else:
+                self.led.setText("⚫")
+                # self.led.setObjectName("led_off")
+                # self.setStyleSheet("""
+                #     #io_indicator {
+                #         background-color: #161b22;
+                #         border: 2px solid #30363d;
+                #         border-radius: 5px;
+                #     }
+                # """)
+            self.is_on = is_on
 
 
 class IOCheckTab(QWidget):

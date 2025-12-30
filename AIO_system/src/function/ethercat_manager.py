@@ -187,7 +187,7 @@ class EtherCATManager():
             self.master.send_processdata()
             self.recv = self.master.receive_processdata(timeout=100_000)
             if not self.recv == self.master.expected_wkc:
-                log("[WARNING] incorrect wkc")
+                log(f"[WARNING] incorrect wkc. recv: {self.recv} expected: {self.master.expected_wkc}")
 
             for servo in self.servo_drives:
                 with servo.lock:
