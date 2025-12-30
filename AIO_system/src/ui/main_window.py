@@ -2,8 +2,10 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QPushButton, QLabel, QFrame, QTextEdit, 
 )
-from PySide6.QtCore import Qt, QDateTime, QTimer
+from PySide6.QtCore import Qt, QDateTime, QTimer, Signal
 from PySide6.QtGui import QFont
+
+from typing import ClassVar
 
 from src.ui.page.home_page import HomePage
 from src.ui.page.monitoring_page import MonitoringPage
@@ -15,11 +17,14 @@ import inspect
 import platform
 
 class MainWindow(QMainWindow):
+    log_updated: ClassVar[Signal] = Signal(str)
     
     def __init__(self, app):
         super().__init__()
         self.app = app
         self.init_ui()
+
+        self.log_updated.connect(self.logs_page.add_log)
         
         Logger.set_callback(self.add_log_to_ui)
         # 시간 업데이트 타이머
@@ -297,7 +302,8 @@ class MainWindow(QMainWindow):
     def add_log_to_ui(self, log_msg):
         """UI에 로그 추가"""
         if hasattr(self, 'logs_page'):
-            self.logs_page.add_log(log_msg)
+            # self.logs_page.add_log(log_msg)
+            self.log_updated.emit(log_msg)
 
 if __name__ == "__main__":
     import sys
