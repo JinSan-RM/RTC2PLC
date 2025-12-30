@@ -195,6 +195,16 @@ SERVO_ACCEL = 2000
 # 위치 값이 10 펄스 이내로 들어오면 위치 도달로 추정
 SERVO_IN_POS_WIDTH = get_servo_modified_value(10)
 
+# 입력 체크용
+class INPUT_BIT(IntEnum):
+    MODE_SELECT = 1 << 0
+    AUTO_RUN = 1 << 1
+    AUTO_STOP = 1 << 2
+    RESET_ALARM = 1 << 3
+    EMERGENCY_STOP = 1 << 4
+    SERVO_HOMING = 1 << 11
+    FEEDER_OUTPUT = 1 << 16
+
 # ============================================================
 # endregion
 # ============================================================

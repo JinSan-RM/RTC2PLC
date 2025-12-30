@@ -24,7 +24,7 @@ class App():
 
         # 자동 운전 관련
         self.auto_mode = False
-        self._auto_run = False
+        self.auto_run = False
         self._auto_thread = None
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -63,7 +63,7 @@ class App():
             self.ui.monitoring_page.update_values(_list)
 
     def _auto_loop(self):
-        if not self.auto_mode or not self._auto_run:
+        if not self.auto_mode or not self.auto_run:
             return
 
         while not self._stop_event.is_set():
@@ -153,17 +153,17 @@ class App():
 # endregion
 
 # region I/O
-    def on_update_input_status(self, input_data):
+    def on_update_input_status(self, input_id: int, total_input: int):
         if hasattr(self.ui, 'logs_page') and self.ui.pages.currentIndex() == 3:
             tab_index = self.ui.logs_page.tabs.currentIndex()
             if tab_index == 0:
-                self.ui.logs_page.tabs.widget(tab_index).update_input_status(input_data)
+                self.ui.logs_page.tabs.widget(tab_index).update_input_status(input_id, total_input)
 
-    def on_update_output_status(self, output_data):
+    def on_update_output_status(self, output_id: int, total_output: int):
         if hasattr(self.ui, 'logs_page') and self.ui.pages.currentIndex() == 3:
             tab_index = self.ui.logs_page.tabs.currentIndex()
             if tab_index == 0:
-                self.ui.logs_page.tabs.widget(tab_index).update_output_status(output_data)
+                self.ui.logs_page.tabs.widget(tab_index).update_output_status(output_id, total_output)
 
     def airknife_on(self, air_num: int, on_term: int):
         self.ethercat_manager.airknife_on(0, air_num, on_term)
@@ -178,7 +178,7 @@ class App():
         log(f"[INFO] set {mode} mode")
 
     def auto_mode_run(self):
-        self._auto_run = True
+        self.auto_run = True
         self._auto_thread = threading.Thread(target=self._auto_loop)
         self._auto_thread.start()
         log("[INFO] auto mode run")
@@ -190,7 +190,7 @@ class App():
             self._auto_thread.join(timeout=5)
             if self._auto_thread.is_alive():
                 log("[WARNING] auto thread did not terminate properly")
-        self._auto_run = False
+        self.auto_run = False
 
     def reset_alarm(self):
         log("[INFO] alarm reset")
@@ -204,7 +204,7 @@ class App():
         log("[INFO] all servo homing")
 
     def feeder_output(self):
-        if self.auto_mode and self._auto_run:
+        if self.auto_mode and self.auto_run:
             with self._lock:
                 self._feeder_output_time = datetime.now()
             log("[INFO] feeder output checked")

@@ -37,13 +37,13 @@ class EtherCATManager():
             self.tasks = []
             self.prev_input = []
             self.input_bit_functions = {
-                0: self.mode_select,
-                1: self.auto_mode_run,
-                2: self.auto_mode_stop,
-                3: self.reset_alarm,
-                4: self.emergency_stop,
-                11: self.all_servo_homing,
-                16: self.feeder_output,
+                INPUT_BIT.MODE_SELECT: self.mode_select,
+                INPUT_BIT.AUTO_RUN: self.auto_mode_run,
+                INPUT_BIT.AUTO_STOP: self.auto_mode_stop,
+                INPUT_BIT.RESET_ALARM: self.reset_alarm,
+                INPUT_BIT.EMERGENCY_STOP: self.emergency_stop,
+                INPUT_BIT.SERVO_HOMING: self.all_servo_homing,
+                INPUT_BIT.FEEDER_OUTPUT: self.feeder_output,
             }
 
             self._initialized = True
@@ -358,9 +358,18 @@ class EtherCATManager():
             time.sleep(ETHERCAT_DELAY)
 
     def _input_worker(self, input_id: int):
+        module = self.input_modules[input_id]
         while not self.stop_event.is_set():
             # update status
-            self.update_input(input_id)
+            total_input = self.update_input(input_id)
+            prev_input = module.variables.get('prev_input', 0)
+            _changed = prev_input ^ total_input
+            if _changed != 0:
+                for _bit_mask in INPUT_BIT:
+                    if _changed & _bit_mask:
+                        is_on = bool(total_input&_bit_mask)
+                        self.input_bit_functions[_bit_mask](is_on)
+                module.variables['prev_input'] = total_input
 
             time.sleep(ETHERCAT_DELAY)
 
@@ -664,25 +673,22 @@ class EtherCATManager():
 
 # region IO functions
     # IO 기능
-    def update_input(self, input_id: int):
-        input_data = []
+    def update_input(self, input_id: int) -> int:
         module = self.input_modules[input_id]
         with module.lock:
             temp = module.input
         total_input = int.from_bytes(temp, 'little')
-        input_data.append(total_input)
 
-        self.app.on_update_input_status(input_data)
+        self.app.on_update_input_status(input_id, total_input)
+        return total_input
 
     def update_output(self, output_id: int):
-        output_data = []
         module = self.output_modules[output_id]
         with module.lock:
             temp = module.output
         total_output = int.from_bytes(temp, 'little')
-        output_data.append(total_output)
 
-        self.app.on_update_output_status(output_data)
+        self.app.on_update_output_status(output_id, total_output)
 
     # 비트 쓰기
     def io_write_bit(self, output_id: int, offset_dict: dict[int, bool]):
@@ -757,14 +763,18 @@ class EtherCATManager():
             log(f"[ERROR] airknife off failed: {e}")
 
     def mode_select(self, is_on: bool):
-        self.app.set_auto_mode(is_on)
+        if self.app.auto_mode ^ is_on:
+            self.auto_mode_stop(True)
+            _dict = { 0: is_on, 1: is_on }
+            self.io_write_bit(0, _dict)
+            self.app.set_auto_mode(is_on)
 
     def auto_mode_run(self, is_on: bool):
         if not self.app.auto_mode:
             return
         
-        if is_on:
-            _dict = { 0: True, 1: False, 2: True, 3: False }
+        if not self.app.auto_run and is_on:
+            _dict = { 2: True, 3: False }
             self.io_write_bit(0, _dict)
             self.app.auto_mode_run()
 
@@ -772,8 +782,8 @@ class EtherCATManager():
         if not self.app.auto_mode:
             return
         
-        if is_on:
-            _dict = { 0: False, 1: True, 2: False, 3: True }
+        if self.app.auto_run and is_on:
+            _dict = { 2: False, 3: True }
             self.io_write_bit(0, _dict)
             self.app.auto_mode_stop()
         
