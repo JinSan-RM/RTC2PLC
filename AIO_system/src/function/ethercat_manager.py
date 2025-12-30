@@ -3,9 +3,9 @@ import threading
 import time
 import struct
 
-from typing import List, Dict, Optional, Callable
+from typing import Callable
 from datetime import datetime, timedelta
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from src.utils.config_util import *
 from src.utils.logger import log
@@ -13,12 +13,12 @@ from src.utils.logger import log
 @dataclass
 class SlaveInfo:
     slave: pysoem.CdefSlave
-    input: Optional[bytearray] = None
-    output: Optional[bytearray] = None
-    worker: Optional[threading.Thread] = None
-    lock = threading.Lock()
-    tasks = []
-    variables = {}
+    input: bytearray | None = None
+    output: bytearray | None = None
+    worker: threading.Thread | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    tasks: list = field(default_factory=list)
+    variables: dict = field(default_factory=dict)
 
 class EtherCATManager():
     _initialized = False
@@ -54,9 +54,9 @@ class EtherCATManager():
             if not self.master.config_init() > 0:
                 raise Exception("[WARNING] EtherCAT Slaves not found")
 
-            self.servo_drives: List[SlaveInfo] = []
-            self.input_modules: List[SlaveInfo] = []
-            self.output_modules: List[SlaveInfo] = []
+            self.servo_drives: list[SlaveInfo] = []
+            self.input_modules: list[SlaveInfo] = []
+            self.output_modules: list[SlaveInfo] = []
             for slave in self.master.slaves:
                 if slave.man == LS_VENDOR_ID:
                     # config_func는 마스터의 config_map 함수 실행 시 실행됨 -> PDO 매핑을 반드시 해야 함
@@ -388,14 +388,14 @@ class EtherCATManager():
         slave = self.master.slaves[slave_pos]
         try:
             # 회전 방향 변경(0: ccw, 1: cw)
-            slave.sdo_write(0x2004, 0, struct.pack('<H', 1))
+            # slave.sdo_write(0x2004, 0, struct.pack('<H', 1))
 
             # 위치 오차 범위 설정: 초기값이 매뉴얼과 다르게 적은 값으로 들어가 있어서 설정해줘야 함
             slave.sdo_write(0x6065, 0, struct.pack('<I', 5242880))
 
             # 센서 1~3(POT, NOT, HOME) A->B접점 방식 변경
-            for i in range(3):
-                slave.sdo_write(0x2200+i, 0, struct.pack('<H', 0x8001+i))
+            # for i in range(3):
+            #     slave.sdo_write(0x2200+i, 0, struct.pack('<H', 0x8001+i))
 
             # homing 방법 설정: 역방향 운전하면서 원점 스위치에 의해 원점 복귀
             # home 오프셋(0x607C) 지정해야 할지? 지정하는 경우 원점 스위치 on 시 오프셋 만큼 이동하여 원점 잡음
@@ -685,7 +685,7 @@ class EtherCATManager():
         self.app.on_update_output_status(output_data)
 
     # 비트 쓰기
-    def io_write_bit(self, output_id: int, offset_dict: Dict[int, bool]):
+    def io_write_bit(self, output_id: int, offset_dict: dict[int, bool]):
         """
         offset번째 비트의 값을 0/1로 변경
         
@@ -693,7 +693,7 @@ class EtherCATManager():
         :param output_id: 출력 모듈 번호(0)
         :type output_id: int
         :param offset_dict: 변경할 비트 인덱스(0~31)와 데이터의 딕셔너리
-        :type offset_dict: Dict[int, bool]
+        :type offset_dict: dict[int, bool]
         """
         for _offset, _ in offset_dict.items():
             if _offset > 31 or _offset < 0:

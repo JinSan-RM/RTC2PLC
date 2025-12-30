@@ -152,8 +152,8 @@ INPUT_TX = [
 # 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
 # UI에서 입력 시 값 1당 1 μm 를 의미하게 됨
 ENCODER_RESOLUTION = 524288 # 인코더 해상도(1회전당 펄스)
-BALL_SCREW_LEAD = 5 # 볼 스크류 1회전당 이동거리(mm)
-UNIT_RATIO = 0.001 # 1 UserUnit당 실거리 비율(0.001mm = 1μm)
+BALL_SCREW_LEAD = 4*3 # 볼 스크류 1회전당 이동거리(mm)
+UNIT_RATIO = 0.01
 SCALE_FACTOR = (ENCODER_RESOLUTION / BALL_SCREW_LEAD) * UNIT_RATIO
 # 서보로 전달할 값
 def get_servo_unmodified_value(value):

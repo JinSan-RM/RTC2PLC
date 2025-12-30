@@ -1,5 +1,4 @@
 from pymodbus.client import ModbusSerialClient
-from typing import Dict, List, Optional
 import queue
 import threading
 import time
@@ -17,7 +16,7 @@ class ModbusManager():
             self.config = MODBUS_RTU_CONFIG
 
             self.stop_event = threading.Event()
-            self.tasks: queue.Queue[Dict] = queue.Queue()
+            self.tasks: queue.Queue[dict] = queue.Queue()
             self.client = None
 
             self._initialized = True
@@ -87,7 +86,7 @@ class ModbusManager():
 # region r/w register
     # G100 인버터는 코일(비트) 읽기/쓰기는 지원하지 않으므로 해당하는 함수들은 구현하지 않음
 
-    def read_holding_register(self, host_name: str, register_address: int) -> Optional[int]:
+    def read_holding_register(self, host_name: str, register_address: int) -> int | None:
         """
             홀딩 레지스터 읽기
 
@@ -145,7 +144,7 @@ class ModbusManager():
             log(f"register writing failed (Name: {host_name}, Register: {register_address}, Value: {value}): {e}")
             return False
 
-    def read_multiple_registers(self, host_name: str, start_address: int, count: int) -> Optional[List[int]]:
+    def read_multiple_registers(self, host_name: str, start_address: int, count: int) -> list[int] | None:
         """
             다중 레지스터 읽기
 
@@ -175,7 +174,7 @@ class ModbusManager():
             log(f"reading multiple registers failed (Name: {host_name}, Start: {start_address}, Count: {count}): {e}")
             return None
 
-    def write_multiple_registers(self, host_name: str, start_address: int, values: List[int]) -> bool:
+    def write_multiple_registers(self, host_name: str, start_address: int, values: list[int]) -> bool:
         """
             다중 레지스터 쓰기
 
