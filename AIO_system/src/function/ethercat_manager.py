@@ -188,6 +188,7 @@ class EtherCATManager():
             self.recv = self.master.receive_processdata(timeout=100_000)
             if not self.recv == self.master.expected_wkc:
                 log(f"[WARNING] incorrect wkc. recv: {self.recv} expected: {self.master.expected_wkc}")
+                continue
 
             for servo in self.servo_drives:
                 with servo.lock:
@@ -201,38 +202,31 @@ class EtherCATManager():
 
     @staticmethod
     def _check_slave(slave, pos):
-        app = EtherCATManager.app
         if slave.state == (pysoem.SAFEOP_STATE + pysoem.STATE_ERROR):
-            if app:
-                app.on_log(f"[ERROR] slave {pos} is in SAFE_OP + ERROR, attempting ack.")
+            log(f"[ERROR] slave {pos} is in SAFE_OP + ERROR, attempting ack.")
             slave.state = pysoem.SAFEOP_STATE + pysoem.STATE_ACK
             slave.write_state()
         elif slave.state == pysoem.SAFEOP_STATE:
-            if app:
-                app.on_log(f"WARNING : slave {pos} is in SAFE_OP, try change to OPERATIONAL.")
+            log(f"WARNING : slave {pos} is in SAFE_OP, try change to OPERATIONAL.")
             slave.state = pysoem.OP_STATE
             slave.write_state()
         elif slave.state > pysoem.NONE_STATE:
             if slave.reconfig():
                 slave.is_lost = False
-                if app:
-                    app.on_log(f"MESSAGE : slave {pos} reconfigured")
+                log(f"MESSAGE : slave {pos} reconfigured")
         elif not slave.is_lost:
             slave.state_check(pysoem.OP_STATE)
             if slave.state == pysoem.NONE_STATE:
                 slave.is_lost = True
-                if app:
-                    app.on_log(f"ERROR : slave {pos} lost")
+                log(f"ERROR : slave {pos} lost")
         if slave.is_lost:
             if slave.state == pysoem.NONE_STATE:
                 if slave.recover():
                     slave.is_lost = False
-                    if app:
-                        app.on_log(f"MESSAGE : slave {pos} recovered")
+                    log(f"MESSAGE : slave {pos} recovered")
             else:
                 slave.is_lost = False
-                if app:
-                    app.on_log(f"MESSAGE : slave {pos} found")
+                log(f"MESSAGE : slave {pos} found")
     
     # 슬레이브 상태 체크 스레드
     def _check_slave_loop(self):

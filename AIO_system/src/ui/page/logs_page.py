@@ -48,7 +48,7 @@ class IOIndicator(QFrame):
         addr_label.setStyleSheet("color: #8b949e; font-size: 11px;")
         layout.addWidget(addr_label)
     
-    def set_state(self, is_on):
+    def set_state(self, is_on: bool):
         """상태 설정"""
         if self.is_on ^ is_on:
             if is_on:
@@ -269,7 +269,7 @@ class IOCheckTab(QWidget):
         
         parent_layout.addWidget(output_group)
     
-    def update_io_state(self, io_address, is_on):
+    def update_io_state(self, io_address: str, is_on: bool):
         """IO 상태 업데이트"""
         if io_address in self.inputs:
             self.inputs[io_address].set_state(is_on)
