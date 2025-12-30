@@ -308,16 +308,30 @@ class EtherCATManager():
     
     # 원점 복귀 완료 시 state를 READY로 전환
     def _homing_check(self, servo: SlaveInfo):
-        with servo.lock:
-            cur_state = servo.input[0:2]
-            cur_pos = servo.input[3:7]
-        cur_state = int.from_bytes(cur_state, 'little')
-        cur_pos = int(round(get_servo_modified_value(int.from_bytes(cur_pos, 'little', signed=True))))
-
-        homing_mask = 0x1400 # 12번과 10번 비트가 1인 경우 원점 복귀 완료
-        if (cur_state & homing_mask) == homing_mask and abs(cur_pos) < SERVO_IN_POS_WIDTH:
+        try:
             with servo.lock:
-                servo.variables['state'] = SERVO_STATE.SERVO_READY
+                cur_state = servo.input[0:2]
+                cur_pos = servo.input[3:7]
+            cur_state = int.from_bytes(cur_state, 'little')
+            cur_pos = int(round(get_servo_modified_value(int.from_bytes(cur_pos, 'little', signed=True))))
+
+            homing_mask = 0x1400 # 12번과 10번 비트가 1인 경우 원점 복귀 완료
+            if (cur_state & homing_mask) == homing_mask and abs(cur_pos) < SERVO_IN_POS_WIDTH:
+                with servo.lock:
+                    servo.variables['state'] = SERVO_STATE.SERVO_READY
+        except Exception as e:
+            log(f"[ERROR] homing check failed: {e}")
+
+    def _run_tasks(self, slave: SlaveInfo):
+        try:
+            current_time = datetime.now()
+            with slave.lock:
+                for i, task in enumerate(slave.tasks):
+                    if current_time > task[0]:
+                        task[1](*task[2])
+                        del slave.tasks[i]
+        except Exception as e:
+            log(f"[ERROR] run slave tasks failed: {e}")
 
     def _servo_worker(self, index: int):
         servo = self.servo_drives[index]
@@ -348,20 +362,12 @@ class EtherCATManager():
                 self._calc_move_pos(servo)
 
             # run tasks with delay
-            current_time = datetime.now()
-            with servo.lock:
-                for i, task in enumerate(servo.tasks):
-                    if current_time > task[0]:
-                        task[1](*task[2])
-                        del servo.tasks[i]
+            self._run_tasks(servo)
 
             time.sleep(ETHERCAT_DELAY)
 
-    def _input_worker(self, input_id: int):
-        module = self.input_modules[input_id]
-        while not self.stop_event.is_set():
-            # update status
-            total_input = self.update_input(input_id)
+    def _input_bit_check(self, module: SlaveInfo, total_input: int):
+        try:
             prev_input = module.variables.get('prev_input', 0)
             _changed = prev_input ^ total_input
             if _changed != 0:
@@ -370,9 +376,18 @@ class EtherCATManager():
                         is_on = bool(total_input&_bit_mask)
                         self.input_bit_functions[_bit_mask](is_on)
                 module.variables['prev_input'] = total_input
+        except Exception as e:
+            log(f"[ERROR] input bit check failed: {e}")
+
+    def _input_worker(self, input_id: int):
+        module = self.input_modules[input_id]
+        while not self.stop_event.is_set():
+            # update status
+            total_input = self.update_input(input_id)
+            self._input_bit_check(module, total_input)
 
             time.sleep(ETHERCAT_DELAY)
-
+    
     def _output_worker(self, output_id: int):
         module = self.output_modules[output_id]
         while not self.stop_event.is_set():
@@ -380,12 +395,7 @@ class EtherCATManager():
             self.update_output(output_id)
 
             # run tasks with delay
-            current_time = datetime.now()
-            with module.lock:
-                for i, task in enumerate(module.tasks):
-                    if current_time > task[0]:
-                        task[1](*task[2])
-                        del module.tasks[i]
+            self._run_tasks(module)
 
             time.sleep(ETHERCAT_DELAY)
 
@@ -763,43 +773,61 @@ class EtherCATManager():
             log(f"[ERROR] airknife off failed: {e}")
 
     def mode_select(self, is_on: bool):
-        if self.app.auto_mode ^ is_on:
-            self.auto_mode_stop(True)
-            _dict = { 0: is_on, 1: is_on }
-            self.io_write_bit(0, _dict)
-            self.app.set_auto_mode(is_on)
+        try:
+            if self.app.auto_mode ^ is_on:
+                self.auto_mode_stop(True)
+                _dict = { 0: is_on, 1: is_on }
+                self.io_write_bit(0, _dict)
+                self.app.set_auto_mode(is_on)
+        except Exception as e:
+            log(f"[ERROR] mode selection failed: {e}")
 
     def auto_mode_run(self, is_on: bool):
         if not self.app.auto_mode:
             return
         
-        if not self.app.auto_run and is_on:
-            _dict = { 2: True, 3: False }
-            self.io_write_bit(0, _dict)
-            self.app.auto_mode_run()
+        try:
+            if not self.app.auto_run and is_on:
+                _dict = { 2: True, 3: False }
+                self.io_write_bit(0, _dict)
+                self.app.auto_mode_run()
+        except Exception as e:
+            log(f"[ERROR] automode start failed: {e}")
 
     def auto_mode_stop(self, is_on: bool):
         if not self.app.auto_mode:
             return
         
-        if self.app.auto_run and is_on:
-            _dict = { 2: False, 3: True }
-            self.io_write_bit(0, _dict)
-            self.app.auto_mode_stop()
+        try:
+            if self.app.auto_run and is_on:
+                _dict = { 2: False, 3: True }
+                self.io_write_bit(0, _dict)
+                self.app.auto_mode_stop()
+        except Exception as e:
+            log(f"[ERROR] automode stop failed: {e}")
         
     def reset_alarm(self, is_on: bool):
-        if is_on:
-            _dict = { 4: False, 5: False }
-            self.io_write_bit(0, _dict)
-            self.app.reset_alarm()
+        try:
+            if is_on:
+                _dict = { 4: False, 5: False }
+                self.io_write_bit(0, _dict)
+                self.app.reset_alarm()
+        except Exception as e:
+            log(f"[ERROR] alarm reset failed: {e}")
 
     def emergency_stop(self, is_on: bool):
-        if is_on:
-            self.app.emergency_stop()
+        try:
+            if is_on:
+                self.app.emergency_stop()
+        except Exception as e:
+            log(f"[ERROR] emergency stop failed: {e}")
     
     def all_servo_homing(self, is_on: bool):
-        if is_on:
-            self.app.all_servo_homing()
+        try:
+            if is_on:
+                self.app.all_servo_homing()
+        except Exception as e:
+            log(f"[ERROR] all servo homing failed: {e}")
     
     def feeder_output(self, is_on: bool):
         if is_on:
