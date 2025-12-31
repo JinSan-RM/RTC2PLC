@@ -88,7 +88,8 @@ class App():
         if hasattr(self.ui, 'settings_page') and self.ui.pages.currentIndex() == 2:
             tab_index = self.ui.settings_page.tabs.currentIndex()
             if tab_index == 1 or tab_index == 2:
-                self.ui.settings_page.tabs.widget(tab_index).update_values(_data)
+                # self.ui.settings_page.tabs.widget(tab_index).update_values(_data)
+                self.ui.inverter_updated.emit(_data)
 
     def on_set_freq(self, motor_id: str, value: float):
         log(f"Setting frequency for {motor_id} to {value} Hz")
@@ -122,7 +123,8 @@ class App():
         if hasattr(self.ui, 'settings_page') and self.ui.pages.currentIndex() == 2:
             tab_index = self.ui.settings_page.tabs.currentIndex()
             if tab_index == 0:
-                self.ui.settings_page.tabs.widget(tab_index).update_values(servo_id, _data)
+                # self.ui.settings_page.tabs.widget(tab_index).update_values(servo_id, _data)
+                self.ui.servo_updated.emit(servo_id, _data)
 
     def servo_on(self, servo_id: int):
         self.ethercat_manager.servo_onoff(servo_id, True)
@@ -157,20 +159,23 @@ class App():
         if hasattr(self.ui, 'logs_page') and self.ui.pages.currentIndex() == 3:
             tab_index = self.ui.logs_page.tabs.currentIndex()
             if tab_index == 0:
-                self.ui.logs_page.tabs.widget(tab_index).update_input_status(input_id, total_input)
+                # self.ui.logs_page.tabs.widget(tab_index).update_input_status(input_id, total_input)
+                self.ui.input_updated.emit(input_id, total_input)
 
     def on_update_output_status(self, output_id: int, total_output: int):
         if hasattr(self.ui, 'logs_page') and self.ui.pages.currentIndex() == 3:
             tab_index = self.ui.logs_page.tabs.currentIndex()
             if tab_index == 0:
-                self.ui.logs_page.tabs.widget(tab_index).update_output_status(output_id, total_output)
+                # self.ui.logs_page.tabs.widget(tab_index).update_output_status(output_id, total_output)
+                self.ui.output_updated.emit(output_id, total_output)
 
     def airknife_on(self, air_num: int, on_term: int):
         self.ethercat_manager.airknife_on(0, air_num, on_term)
 
     def on_airknife_off(self, air_num: int):
         if hasattr(self.ui, 'settings_page'):
-            self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
+            # self.ui.settings_page.tabs.widget(3).on_airknife_off(air_num)
+            self.ui.airknife_updated.emit(air_num)
 
     def set_auto_mode(self, is_on: bool):
         self.auto_mode = is_on

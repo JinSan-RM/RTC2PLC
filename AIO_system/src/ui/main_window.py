@@ -17,14 +17,27 @@ import inspect
 import platform
 
 class MainWindow(QMainWindow):
+    # UI 업데이트 간접 호출
     log_updated: ClassVar[Signal] = Signal(str)
+    servo_updated: ClassVar[Signal] = Signal(int, object)
+    inverter_updated: ClassVar[Signal] = Signal(object)
+    airknife_updated: ClassVar[Signal] = Signal(int)
+    input_updated: ClassVar[Signal] = Signal(int, int)
+    output_updated: ClassVar[Signal] = Signal(int, int)
     
     def __init__(self, app):
         super().__init__()
         self.app = app
         self.init_ui()
 
+        # UI 업데이트 함수와 연결
         self.log_updated.connect(self.logs_page.add_log)
+        self.servo_updated.connect(self.settings_page.servo_tab.update_values)
+        self.inverter_updated.connect(self.settings_page.feeder_tab.update_values)
+        self.inverter_updated.connect(self.settings_page.conveyor_tab.update_values)
+        self.airknife_updated.connect(self.settings_page.airknife_tab.on_airknife_off)
+        self.input_updated.connect(self.logs_page.io_tab.update_input_status)
+        self.output_updated.connect(self.logs_page.io_tab.update_output_status)
         
         Logger.set_callback(self.add_log_to_ui)
         # 시간 업데이트 타이머
@@ -201,6 +214,12 @@ class MainWindow(QMainWindow):
     
    
     def closeEvent(self, a0):
+        self.log_updated.disconnect()
+        self.servo_updated.disconnect()
+        self.inverter_updated.disconnect()
+        self.airknife_updated.disconnect()
+        self.input_updated.disconnect()
+        self.output_updated.disconnect()
         self.app.quit()
         # return super().closeEvent(a0)
         
