@@ -32,12 +32,12 @@ class CameraThread(QThread):
     
     def run(self):
         """스레드 실행"""
-        log(f"🎬 카메라 {self.camera_index + 1} 스레드 시작")
+        log(f"카메라 {self.camera_index + 1} 스레드 시작")
         self.running = True
         
         try:
             # AI 시스템 초기화
-            log(f"📦 카메라 {self.camera_index + 1} AI 시스템 초기화 중...")
+            log(f"카메라 {self.camera_index + 1} AI 시스템 초기화 중...")
             self.detector = AIPlasticDetectionSystem(
                 confidence_threshold=self.confidence_threshold,
                 img_size=self.img_size,
@@ -45,11 +45,11 @@ class CameraThread(QThread):
                 app=self.app,
                 camera_index=self.camera_index  # 카메라 인덱스 전달
             )
-            log(f"✅ 카메라 {self.camera_index + 1} AI 시스템 초기화 완료")
+            log(f"카메라 {self.camera_index + 1} AI 시스템 초기화 완료")
             
         except Exception as e:
             error_msg = f"카메라 {self.camera_index + 1} 초기화 실패: {e}"
-            log(f"❌ {error_msg}")
+            log(f"{error_msg}")
             import traceback
             traceback.print_exc()
             self.error_occurred.emit(error_msg)
@@ -57,7 +57,7 @@ class CameraThread(QThread):
         
         try:
             # run() 제너레이터 실행
-            log(f"▶️ 카메라 {self.camera_index + 1} 프레임 처리 시작")
+            log(f"카메라 {self.camera_index + 1} 프레임 처리 시작")
             frame_generator = self.detector.run()
             frame_count = 0
             
@@ -70,22 +70,20 @@ class CameraThread(QThread):
                     self.frame_ready.emit(frame)
                     frame_count += 1
                     
-                    # 100 프레임마다 로그
-                    if frame_count % 100 == 0:
-                        log(f"📊 카메라 {self.camera_index + 1}: {frame_count} 프레임 처리 (FPS: {self.detector.current_fps})")
+
             
             log(f"✅ 카메라 {self.camera_index + 1} 정상 종료")
             
         except Exception as e:
             error_msg = f"카메라 {self.camera_index + 1} 실행 오류: {e}"
-            log(f"❌ {error_msg}")
+            log(f"{error_msg}")
             import traceback
             traceback.print_exc()
             self.error_occurred.emit(error_msg)
         finally:
-            log(f"🛑 카메라 {self.camera_index + 1} 스레드 종료")
+            log(f"카메라 {self.camera_index + 1} 스레드 종료")
     
     def stop(self):
         """스레드 정지"""
-        log(f"⏹ 카메라 {self.camera_index + 1} 정지 요청")
+        log(f"카메라 {self.camera_index + 1} 정지 요청")
         self.running = False
