@@ -193,6 +193,13 @@ class CameraView(QFrame):
         else:
             self.status.setText("🔴 연결 끊김")
             self.status.setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold;")
+    
+    def on_error(self, error_msg):
+        """에러 처리"""
+        log(f"{self.camera_name} 오류: {error_msg}")
+        self.image_label.setText(f"❌ 오류:\n{error_msg}")
+        self.is_running = False
+        self.update_status(False)
 
 
 class MonitoringPage(QWidget):
