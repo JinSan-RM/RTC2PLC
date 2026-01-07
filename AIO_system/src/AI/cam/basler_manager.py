@@ -29,6 +29,12 @@ class BaslerCameraManager:
                 if self.camera_index >= len(devices):
                     return False
                 self.camera = pylon.InstantCamera(tlFactory.CreateDevice(devices[self.camera_index]))
+                
+                device = devices[self.camera_index]
+                log(f"선택된 카메라: {device.GetModelName()} - {device.GetSerialNumber()}")
+                log(f"  • IP 주소: {device.GetIpAddress()}")
+                log(f"  • 맥 주소: {device.GetMacAddress()}")
+                self.camera = pylon.InstantCamera(tlFactory.CreateDevice(device))
             
             self.camera.Open()
             self.setup_camera_parameters()
@@ -132,9 +138,16 @@ class BaslerCameraManager:
             log("  ✓ MaxNumBuffer = 10")
 
             # 2) PixelFormat RAW 설정
-            self.camera.PixelFormat.SetValue("BayerBG8")
-            log("  ✓ PixelFormat = BayerBG8 (RAW)")
-
+            try:
+                if self.camera.PixelFormat.IsWritable():
+                    self.camera.PixelFormat.SetValue("BayerBG8")
+                    log("PixelFormat = BayerBG8 (RAW)")
+                else:
+                    current_format = self.camera.PixelFormat.GetValue()
+                    log(f" PixelFormat 변경 불가, 현재 값: {current_format}")
+            except Exception as e:
+                log(f"PixelFormat 설정 실패: {e}")
+                
             # 3) 해상도
             self.camera.Width.Value = min(1280, self.camera.Width.Max)
             self.camera.Height.Value = min(720, self.camera.Height.Max)

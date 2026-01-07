@@ -101,9 +101,11 @@ class AIPlasticDetectionSystem:
         confidence_threshold: float = 0.7,
         img_size: int = 640,
         airknife_callback=None,
-        app=None
+        app=None,
+        camera_index: int = 0
     ):
         self.app = app
+        camera_index = camera_index
         self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
@@ -113,7 +115,7 @@ class AIPlasticDetectionSystem:
         
         self.confidence_threshold = confidence_threshold
         self.img_size = img_size
-        self.camera_manager = BaslerCameraManager()
+        self.camera_manager = BaslerCameraManager(camera_index=camera_index)
         self.line_counter = None
         self.sorting_system = PlasticSortingSystem()
         

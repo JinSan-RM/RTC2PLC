@@ -8,27 +8,31 @@ from PySide6.QtWidgets import (
     QLineEdit
 )
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
-from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QRegularExpressionValidator
+from PySide6.QtGui import QPixmap, QImage, QRegularExpressionValidator
 
 import sys
 import cv2
 import numpy as np
 
 from src.AI.predict_AI import AIPlasticDetectionSystem
+from src.AI.cam.camera_thread import CameraThread
 from src.utils.logger import log
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     
-    def __init__(self, camera_id, camera_name, app):
+    def __init__(self, camera_id, camera_name, camera_index, app):
         super().__init__()
         self.app = app
         self.camera_id = camera_id
         self.camera_name = camera_name
+        self.camera_index = camera_index
         self.detector = None
         self.detector_frame_generator = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         
+        
+        self.camera_thread = None
         self.is_running = False # 카메라 동작 상태
         
         self.init_ui()
@@ -91,68 +95,95 @@ class CameraView(QFrame):
         layout.addLayout(info_layout)
         
     def start_camera(self):
-        "카메라 시작 기능"
-        if not self.is_running:
-            try:
-                # Detector 초기화
-                if self.detector is None:
-                    self.detector = AIPlasticDetectionSystem(
-                        confidence_threshold=0.7,
-                        img_size=640,
-                        airknife_callback=self.app.airknife_on,
-                        app=self.app
-                    )
-                    self.detector_frame_generator = self.detector.run()
-                
-                self.timer.start(33)
-                self.is_running = True
-                self.update_status(True)
-                log(f"{self.camera_name} 시작")
-            except Exception as e:
-                log(f"카메라 시작 오류 : {e}")
-                self.timer.stop()
-                self.is_running = False
-                self.update_status(False)
-                
-    def stop_camera(self):
+        """카메라 시작"""
         if self.is_running:
-            self.timer.stop()
+            log(f"{self.camera_name} 이미 실행 중")
+            return
+        
+        try:
+            log(f"{self.camera_name} 시작 (인덱스: {self.camera_index})")
+            
+            # CameraThread 생성
+            self.camera_thread = CameraThread(
+                camera_index=self.camera_index,
+                confidence_threshold=0.7,
+                img_size=640,
+                airknife_callback=self.app.airknife_on,
+                app=self.app
+            )
+            
+            # 시그널 연결
+            self.camera_thread.frame_ready.connect(self.update_frame)
+            self.camera_thread.error_occurred.connect(self.on_error)
+            
+            # 스레드 시작
+            self.camera_thread.start()
+            
+            self.is_running = True
+            self.update_status(True)
+            log(f"{self.camera_name} 시작 완료")
+            
+        except Exception as e:
+            log(f"카메라 시작 오류: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_running = False
             self.update_status(False)
-            self.image_label.setText("카메라 정지")
-            log(f"{self.camera_name} 정지")
-    
                 
-    def update_frame(self):
-        """카메라 프레임 업데이트"""
+    def stop_camera(self):
+        """카메라 정지"""
         if not self.is_running:
             return
         
         try:
-            # predict_AI.py의 run()해서 프레임 가져오기
-            frame = next(self.detector_frame_generator)
+            log(f"{self.camera_name} 정지 중...")
             
-            if frame is not None:
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                h, w, ch = rgb_frame.shape
-                bytes_per_line = ch * w
-                qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-                pixmap = QPixmap.fromImage(qt_image)
+            if self.camera_thread:
+                self.camera_thread.stop()
+                self.camera_thread.wait(5000)  # 최대 5초 대기
                 
-                # QLabel의 크기에 맞춰서 스케일링
-                scaled_pixmap = pixmap.scaled(
-                    self.image_label.size(),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
-                
-                self.image_label.setPixmap(scaled_pixmap)
-        except StopIteration:
-            # 제너레이터 종료
-            self.timer.stop()
-            log("카메라 프레임 업데이트 종료")
+                if self.camera_thread.isRunning():
+                    log(f"{self.camera_name} 강제 종료")
+                    self.camera_thread.terminate()
+                    self.camera_thread.wait(1000)
+            
+            self.is_running = False
+            self.update_status(False)
+            self.image_label.setText("📷 카메라 대기 중...")
+            self.image_label.setPixmap(QPixmap())
+            log(f"{self.camera_name} 정지 완료")
+            
         except Exception as e:
-            log(f"카메라 프레임 업데이트 오류: {e}")
+            log(f"카메라 정지 오류: {e}")
+                
+    def update_frame(self, frame):
+        """프레임 업데이트 (시그널로 호출됨)"""
+        try:
+
+            
+            # BGR -> RGB 변환
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_frame.shape
+            bytes_per_line = ch * w
+            qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(qt_image)
+            
+            # 스케일링
+            scaled_pixmap = pixmap.scaled(
+                self.image_label.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            
+            self.image_label.setPixmap(scaled_pixmap)
+            
+            # FPS 업데이트
+            if self.camera_thread and self.camera_thread.detector:
+                fps = self.camera_thread.detector.current_fps
+                self.fps_label.setText(f"FPS: {fps}")
+            
+        except Exception as e:
+            log(f"프레임 업데이트 오류: {e}")
     
     def update_status(self, connected):
         """상태 업데이트"""
@@ -289,14 +320,19 @@ class MonitoringPage(QWidget):
         
         # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
-            ("RGB 카메라 1", 0, 0),
-            # ("RGB 카메라 2", 0, 1),
+            ("RGB 카메라 1", 0, 0, 0),
+            ("RGB 카메라 2", 1, 0, 1),
             # ("RGB 카메라 3", 1, 0),
             # ("RGB 카메라 4", 1, 1),
         ]
-        
-        for name, row, col in cameras:
-            cam = CameraView(f"rgb_{row}{col}", name, app=self.app)
+
+        for name, row, col, camera_index in cameras:
+            cam = CameraView(
+                camera_id=f"rgb_{row}{col}", 
+                camera_name=name,
+                camera_index=camera_index,
+                app=self.app
+            )
             rgb_layout.addWidget(cam, row, col)
             self.rgb_cameras.append(cam)
         
