@@ -354,7 +354,7 @@ class MonitoringPage(QWidget):
         # 카메라 뷰
         camera_layout = QHBoxLayout()
         
-        self.hyper_camera = CameraView("hyperspectral", "Specim FX17",app=self.app)
+        self.hyper_camera = CameraView("hyperspectral", "Specim FX17",camera_index=0,app=self.app)
         self.hyper_camera.setMinimumSize(600, 400)
         camera_layout.addWidget(self.hyper_camera)
         
