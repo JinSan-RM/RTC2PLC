@@ -387,6 +387,8 @@ class LogTab(QWidget):
     def add_log(self, message, level="info"):
         """로그 추가"""
         timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+
+        level = level.lower()
         
         # 레벨별 색상
         colors = {

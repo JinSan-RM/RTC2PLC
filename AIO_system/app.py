@@ -17,6 +17,8 @@ from src.utils.config_util import CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER
 from src.utils.logger import log
 from src.AI.temp_algorithm import ServoPositionBasedAirControl
 
+import faulthandler
+
 
 class App():
     def __init__(self):
@@ -298,5 +300,15 @@ class App():
         self.ethercat_manager.disconnect()
 
 if __name__ == '__main__':
+    # 시스템 레벨의 에러 발생 시 파일에 로그 남김
+    try:
+        log_dir = ".\\log"
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        f = open(log_dir + "\\crash_log.txt", 'w')
+        faulthandler.enable(file=f)
+    except Exception as e:
+        log(f"[ERROR] make crash log file failed: {e}")
+
     app = App()
     app.run()

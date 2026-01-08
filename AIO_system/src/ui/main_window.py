@@ -18,7 +18,7 @@ import platform
 
 class MainWindow(QMainWindow):
     # UI 업데이트 간접 호출
-    log_updated: ClassVar[Signal] = Signal(str)
+    log_updated: ClassVar[Signal] = Signal(str, str)
     servo_updated: ClassVar[Signal] = Signal(int, object)
     inverter_updated: ClassVar[Signal] = Signal(object)
     airknife_updated: ClassVar[Signal] = Signal(int)
@@ -318,11 +318,11 @@ class MainWindow(QMainWindow):
             }
         """)
     
-    def add_log_to_ui(self, log_msg):
+    def add_log_to_ui(self, log_msg, level):
         """UI에 로그 추가"""
         if hasattr(self, 'logs_page'):
             # self.logs_page.add_log(log_msg)
-            self.log_updated.emit(log_msg)
+            self.log_updated.emit(log_msg, level)
 
 if __name__ == "__main__":
     import sys
