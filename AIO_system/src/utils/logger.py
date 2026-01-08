@@ -1,6 +1,7 @@
 from PySide6.QtCore import QDateTime
 import inspect
 import platform
+import re
 
 class Logger:
     """싱글톤 로거 클래스"""
@@ -36,13 +37,19 @@ class Logger:
         timestamp = QDateTime.currentDateTime().toString("HH:mm:ss.zzz")
         
         # 포맷팅
+        level = re.search(r'\[([^\]]*)\]', message)
+        if level is None:
+            level = "INFO"
+            message = f"[{level}] {message}"
+        else:
+            level = level.group(1)
         log_msg = f"[{timestamp}] [{filename}:{lineno} {funcname}()] {message}"
         print(log_msg)
         
         # UI 콜백 호출
         if cls._log_callback:
             try:
-                cls._log_callback(log_msg)
+                cls._log_callback(log_msg, level)
             except Exception as e:
                 print(f"로그 콜백 오류: {e}")
         
