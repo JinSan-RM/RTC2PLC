@@ -288,7 +288,7 @@ CAMERA_CONFIGS = {
             'y': 0,
             'width': 1000,
             'height': 1080
-        }
+        },
         'boxes': [
             {
                 'box_id': 1,
@@ -317,7 +317,7 @@ CAMERA_CONFIGS = {
             'y': 0,
             'width': 1000,
             'height': 1080
-        }
+        },
         'boxes': [
             {
                 'box_id': 3,
