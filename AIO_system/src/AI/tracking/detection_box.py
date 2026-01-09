@@ -23,7 +23,11 @@ class ConveyorBoxZone:
     객체의 중앙점이 박스안에 들어오면 AirKnife에 부는 형태로 카운팅
     """
     
-    def __init__(self, box_id: int, x: int, y: int, width: int, height: int, target_classes: List[str] = ['PET', 'PE', 'PP', 'PS']):
+    def __init__(self, box_id: int, x: int, y: int,
+                width: int, height: int,
+                target_classes: List[str] = ['PET', 'PE', 'PP', 'PS'],
+                ):
+        
         self.box_id = box_id
         self.x = x
         self.y = y
@@ -39,11 +43,9 @@ class ConveyorBoxZone:
         self.tracked_objects = set()  # 현재 박스 안에 있는 객체들
         self.class_counts = {cls: 0 for cls in target_classes}
         self.detected_objects = set()  # 이미 카운트된 객체들
-        
-        # self.class_counts = {
-        #     'PET': 0, 'PE': 0, 'PP': 0, 'PS': 0
-        # }
+
         self.is_active = False  # 현재 물체가 있는지
+        
         
     def is_inside(self, center: Tuple[int, int]) -> bool:
         """중심점이 박스 안에 있는지 확인"""

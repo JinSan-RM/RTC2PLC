@@ -11,6 +11,7 @@ from .tracking.detection_box import ConveyorBoxZone, ConveyorBoxManager
 from .model_load import load_yolov11
 from .cam.basler_manager import BaslerCameraManager
 from src.utils.logger import log
+from src.utils.config_util import CAMERA_CONFIGS
 
 @dataclass
 class DetectedObject:
@@ -105,7 +106,7 @@ class AIPlasticDetectionSystem:
         camera_index: int = 0
     ):
         self.app = app
-        camera_index = camera_index
+        self.camera_index = camera_index
         self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
@@ -119,10 +120,15 @@ class AIPlasticDetectionSystem:
         self.line_counter = None
         self.sorting_system = PlasticSortingSystem()
         
-        self.box_manager = ConveyorBoxManager([
-            ConveyorBoxZone(box_id=1, x=550, y=150, width=200, height=550),
-            # ConveyorBoxZone(box_id=2, x=300, y=500, width=500, height=200),
-        ])
+        # 카메라 별 설정 로드
+        self.config = CAMERA_CONFIGS.get(camera_index, {})
+        
+        self.box_manager = self._create_box_manager()
+        # self.box_manager = ConveyorBoxManager([
+        #     ConveyorBoxZone(box_id=1, x=550, y=150, width=200, height=550),
+        #     # ConveyorBoxZone(box_id=2, x=300, y=500, width=500, height=200),
+        # ])
+        
         
         self.fps_counter = 0
         self.fps_start_time = time.time()
@@ -140,6 +146,24 @@ class AIPlasticDetectionSystem:
         if hasattr(self.model, 'names'):
             self.CLASS_NAMES = [self.model.names[i].upper() for i in range(len(self.model.names))]
             log(f"모델 클래스: {self.CLASS_NAMES}")
+    
+    def _create_box_manager(self):
+        """카메라별 박스 생성 - 각 박스에 AirKnife 콜백 연결"""
+        boxes = []
+        for box_cfg in self.config.get('boxes', []):
+            box = ConveyorBoxZone(
+                box_id=box_cfg['box_id'],
+                x=box_cfg['x'],
+                y=box_cfg['y'],
+                width=box_cfg['width'],
+                height=box_cfg['height'],
+                target_classes=box_cfg['target_classes'],
+                airknife_callback=self.airknife_callback,
+                airknife_id=box_cfg.get('airknife_id')
+            )
+            boxes.append(box)
+        log(f"카메라 {self.camera_index}: {len(boxes)}개 박스 생성")
+        return ConveyorBoxManager(boxes)
     
     def detect(self, frame: np.ndarray) -> List[DetectedObject]:
         """YOLOv11을 사용한 객체 감지 + 추적 (GPU 가속)"""
@@ -398,7 +422,7 @@ class AIPlasticDetectionSystem:
                 # 100프레임마다 타이밍 통계 출력
                 if frame_count == 100:
                     log("\n" + "="*70)
-                    log("⏱️  타이밍 분석 (100 프레임 평균)")
+                    log("타이밍 분석 (100 프레임 평균)")
                     log("="*70)
                     log(f"{'구간':<20} {'평균(ms)':<15} {'예상 FPS':<15}")
                     log("-"*70)
@@ -411,9 +435,9 @@ class AIPlasticDetectionSystem:
                     # 병목 진단
                     grab_avg = np.mean(timing_grab)
                     if grab_avg > 50:
-                        log(f"⚠️  병목: 프레임 획득 ({grab_avg:.1f}ms)")
-                        log("   → Basler 카메라 FPS 설정 확인 필요")
-                        log("   → Pylon Viewer로 카메라 FPS 설정 확인")
+                        log(f"병목: 프레임 획득 ({grab_avg:.1f}ms)")
+                        log("Basler 카메라 FPS 설정 확인 필요")
+                        log("Pylon Viewer로 카메라 FPS 설정 확인")
                     
                     # 타이밍 리셋
                     timing_grab.clear()
