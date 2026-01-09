@@ -105,7 +105,6 @@ class CameraView(QFrame):
             
             # CameraThread 생성
             self.camera_thread = CameraThread(
-                camera_num = camera_num,
                 camera_index=self.camera_index,
                 confidence_threshold=0.7,
                 img_size=640,
