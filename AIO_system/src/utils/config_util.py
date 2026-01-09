@@ -283,6 +283,12 @@ FEEDER_TIME_2 = 10 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간
 CAMERA_CONFIGS = {
     0: {  # 카메라 1
         'camera_ip': '192.168.1.100',
+        'roi':{
+            'x': 200,
+            'y': 0,
+            'width': 1000,
+            'height': 1080
+        }
         'boxes': [
             {
                 'box_id': 1,
@@ -306,6 +312,12 @@ CAMERA_CONFIGS = {
     },
     1: {  # 카메라 2
         'camera_ip': '192.168.1.101',
+        'roi':{
+            'x': 200,
+            'y': 0,
+            'width': 1000,
+            'height': 1080
+        }
         'boxes': [
             {
                 'box_id': 3,

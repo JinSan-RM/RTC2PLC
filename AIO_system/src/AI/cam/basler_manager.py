@@ -27,11 +27,12 @@ def get_camera_count() -> int:
 class BaslerCameraManager:
     """Basler 산업용 카메라 관리"""
     
-    def __init__(self, camera_index: int = 0):
+    def __init__(self, camera_index: int = 0, roi:dict = None):
         self.camera = None
         self.converter = None
         self.camera_index = camera_index
         self.is_connected = False
+        self.roi = roi
     
     def initialize(self, camera_ip: str = None) -> bool:
         try:
@@ -93,61 +94,105 @@ class BaslerCameraManager:
             except Exception as e:
                 log(f"PixelFormat 설정 실패: {e}")
                 
-            # 3) 해상도
-            self.camera.Width.Value = min(1280, self.camera.Width.Max)
-            self.camera.Height.Value = min(720, self.camera.Height.Max)
-            log(f"  ✓ 해상도: {self.camera.Width.Value}x{self.camera.Height.Value}")
+            # 3) 해상도 및 ROI 값 설정
+            if self.roi:
+                try:
+                    # ROI 오프셋 설정 ( 카메라 화면 크기 )
+                    offset_x = self.roi.get('x', 0)
+                    offset_y = self.roi.get('y', 0)
+                    width = self.roi.get('width', 1280)
+                    height = self.rio.get('height', 1080)
+                    
+                    if hasattr(self.camera, 'OffsetX') and self.camera.OffsetX.IsWritable():
+                        increment = self.camera.OffsetX.GetInc()
+                        offset_x = (offset_x // increment) * increment
+                        self.camera.OffsetX.SetValue(offset_x)
+                        log(f"OffsetX = {offset_x}")
 
+                    if hasattr(self.camera, 'OffsetY') and self.camera.OffsetY.IsWritable():
+                        increment = self.camera.OffsetY.GetInc()
+                        offset_y = (offset_y // increment) * increment
+                        self.camera.OffsetY.SetValue(offset_y)
+                        log(f"OffsetY = {offset_y}")
+                    
+                    # Width/Height 증분 단위 맞추기
+                    if self.camera.Width.IsWritable():
+                        increment = self.camera.Width.GetInc()
+                        width = (width // increment) * increment
+                        width = min(width, self.camera.Width.Max - offset_x)
+                        self.camera.Width.SetValue(width)
+                        log(f"Width = {width}")
+                    
+                    if self.camera.Height.IsWritable():
+                        increment = self.camera.Height.GetInc()
+                        height = (height // increment) * increment
+                        height = min(height, self.camera.Height.Max - offset_y)
+                        self.camera.Height.SetValue(height)
+                        log(f"Height = {height}")
+                    
+                    log(f" ROI 설정 완료: ({offset_x}, {offset_y}) - {width}x{height}")
+                    
+                except Exception as e:
+                    log(f"ROI 설정 실패: {e}")
+                    # ROI 실패 시 기본 해상도로 폴백
+                    self.camera.Width.SetValue(min(1280, self.camera.Width.Max))
+                    self.camera.Height.SetValue(min(720, self.camera.Height.Max))
+            else:
+                # ROI 없으면 기본 해상도
+                self.camera.Width.SetValue(min(1280, self.camera.Width.Max))
+                self.camera.Height.SetValue(min(720, self.camera.Height.Max))
+                log(f"해상도: {self.camera.Width.Value}x{self.camera.Height.Value}")
+                
             # 4) 자동 노출 끄기
             self.camera.ExposureAuto.SetValue("Off")
-            log("  ✓ ExposureAuto: Off")
+            log("ExposureAuto: Off")
             try:
                 target_fps = 60
                 exposure_us = int(1_000_000 / target_fps)
                 exposure_us = max(self.camera.ExposureTimeRaw.Min, 
                                 min(exposure_us, self.camera.ExposureTimeRaw.Max))
                 self.camera.ExposureTimeRaw.SetValue(exposure_us)
-                log(f"  ✓ ExposureTimeRaw = {exposure_us} us (≈{1_000_000/exposure_us:.1f} FPS 제한)")
+                log(f"ExposureTimeRaw = {exposure_us} us (≈{1_000_000/exposure_us:.1f} FPS 제한)")
             except Exception as e:
-                log(f"  ⚠ ExposureTime 설정 실패: {e}")
+                log(f"ExposureTime 설정 실패: {e}")
 
             # GainAuto 끄기
             try:
                 if hasattr(self.camera, "GainAuto"):
                     self.camera.GainAuto.SetValue("Off")
-                    log("  ✓ GainAuto: Off")
+                    log("GainAuto: Off")
             except Exception as e:
-                log(f"  ⚠ GainAuto 설정 실패: {e}")
+                log(f"GainAuto 설정 실패: {e}")
 
             # TriggerMode off
             try:
                 if hasattr(self.camera, "TriggerMode"):
                     self.camera.TriggerMode.SetValue("Off")
-                    log("  ✓ TriggerMode: Off")
+                    log("TriggerMode: Off")
             except Exception as e:
-                log(f"  ⚠ TriggerMode 설정 실패: {e}")
+                log(f"TriggerMode 설정 실패: {e}")
 
             # Continuous 모드
             try:
                 if hasattr(self.camera, "AcquisitionMode"):
                     self.camera.AcquisitionMode.SetValue("Continuous")
-                    log("  ✓ AcquisitionMode: Continuous")
+                    log("AcquisitionMode: Continuous")
             except Exception as e:
-                log(f"  ⚠ AcquisitionMode 설정 실패: {e}")
+                log(f"AcquisitionMode 설정 실패: {e}")
 
             if hasattr(self.camera, "AcquisitionFrameRateEnable"):
                 self.camera.AcquisitionFrameRateEnable.SetValue(True)
-                log("  ✓ AcquisitionFrameRateEnable: On")
+                log("AcquisitionFrameRateEnable: On")
             if hasattr(self.camera, "AcquisitionFrameRateAbs"):
                 target_fps = 60.0
                 self.camera.AcquisitionFrameRateAbs.SetValue(target_fps)
-                log(f"  ✓ AcquisitionFrameRateAbs = {target_fps} Hz")
+                log(f"AcquisitionFrameRateAbs = {target_fps} Hz")
 
 
-            log("📷 Basler 설정 완료!\n")
+            log("Basler 설정 완료!\n")
 
         except Exception as e:
-            log(f"❌ Basler 설정 오류: {e}")
+            log(f"Basler 설정 오류: {e}")
 
 
     

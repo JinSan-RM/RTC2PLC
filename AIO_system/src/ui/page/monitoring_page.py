@@ -15,7 +15,6 @@ import cv2
 import numpy as np
 
 from src.AI.predict_AI import AIPlasticDetectionSystem
-from src.AI.cam.basler_manager import get_camera_count
 from src.AI.cam.camera_thread import CameraThread
 from src.utils.logger import log
 class CameraView(QFrame):
@@ -95,7 +94,7 @@ class CameraView(QFrame):
         
         layout.addLayout(info_layout)
         
-    def start_camera(self, camera_num: int = 0):
+    def start_camera(self):
         """카메라 시작"""
         if self.is_running:
             log(f"{self.camera_name} 이미 실행 중")
@@ -199,7 +198,7 @@ class CameraView(QFrame):
     def on_error(self, error_msg):
         """에러 처리"""
         log(f"{self.camera_name} 오류: {error_msg}")
-        self.image_label.setText(f"❌ 오류:\n{error_msg}")
+        self.image_label.setText(f"오류:\n{error_msg}")
         self.is_running = False
         self.update_status(False)
 
@@ -428,14 +427,8 @@ class MonitoringPage(QWidget):
         """전체 시작"""
         log("모든 카메라 시작")
         # TODO: 모든 카메라 시작
-        count = get_camera_count()
-        if count > 0:
-            for camera in count:
-                camera.start_camera()
-        else:
-            SystemError("camera detect fail")
-        # if self.hyper_camera:
-        #     self.hyper_camera.start_camera()
+        for camera in self.rgb_cameras:
+            camera.start_camera()
             
     def on_stop_all(self):
         """전체 정지"""

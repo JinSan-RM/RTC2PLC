@@ -116,7 +116,10 @@ class AIPlasticDetectionSystem:
         
         self.confidence_threshold = confidence_threshold
         self.img_size = img_size
-        self.camera_manager = BaslerCameraManager(camera_index=camera_index)
+        self.config = CAMERA_CONFIGS.get(camera_index, {})
+        roi = self.config.get('roi', None)
+        
+        self.camera_manager = BaslerCameraManager(camera_index=camera_index, roi = roi)
         self.line_counter = None
         self.sorting_system = PlasticSortingSystem()
         

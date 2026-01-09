@@ -15,7 +15,6 @@ class CameraThread(QThread):
     
     def __init__(
         self,
-        camera_num: int = 0,
         camera_index: int = 0,
         confidence_threshold: float = 0.7,
         img_size: int = 640,
@@ -23,7 +22,6 @@ class CameraThread(QThread):
         app=None
     ):
         super().__init__()
-        self.camera_num = camera_num
         self.camera_index = camera_index
         self.confidence_threshold = confidence_threshold
         self.img_size = img_size
