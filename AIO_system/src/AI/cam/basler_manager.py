@@ -5,6 +5,25 @@ from typing import Optional
 from src.utils.logger import log
 
 
+def get_camera_count() -> int:
+    """
+    연결된 카메라 개수 확인
+    """
+    
+    try:
+        tlFactory = pylon.TlFactory.GetInstance()
+        devices = tlFactory.EnumerateDevices()
+        count = len(devices)
+        log(f"카메라 {count}대 확인")
+        
+        for idx, device in enumerate(devices):
+            log(f"[{idx}] {device.GetModelName()} - {device.GetIpAddress()}")
+        return count
+    
+    except Exception as e:
+        log(f" 카메라 검색 실패 : {e}")
+        return 0
+
 class BaslerCameraManager:
     """Basler 산업용 카메라 관리"""
     

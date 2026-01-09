@@ -157,9 +157,7 @@ class AIPlasticDetectionSystem:
                 y=box_cfg['y'],
                 width=box_cfg['width'],
                 height=box_cfg['height'],
-                target_classes=box_cfg['target_classes'],
-                airknife_callback=self.airknife_callback,
-                airknife_id=box_cfg.get('airknife_id')
+                target_classes=box_cfg['target_classes']
             )
             boxes.append(box)
         log(f"카메라 {self.camera_index}: {len(boxes)}개 박스 생성")
