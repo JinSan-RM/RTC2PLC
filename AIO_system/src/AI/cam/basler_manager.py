@@ -101,7 +101,7 @@ class BaslerCameraManager:
                     offset_x = self.roi.get('x', 0)
                     offset_y = self.roi.get('y', 0)
                     width = self.roi.get('width', 1280)
-                    height = self.rio.get('height', 1080)
+                    height = self.roi.get('height', 1080)
                     
                     if hasattr(self.camera, 'OffsetX') and self.camera.OffsetX.IsWritable():
                         increment = self.camera.OffsetX.GetInc()
