@@ -99,7 +99,7 @@ class AIPlasticDetectionSystem:
     def __init__(
         self,
         model_path: str = None,
-        confidence_threshold: float = 0.7,
+        confidence_threshold: float = 0.5,
         img_size: int = 640,
         airknife_callback=None,
         app=None,
@@ -485,7 +485,7 @@ if __name__ == "__main__":
     try:
         detector = AIPlasticDetectionSystem(
             model_path=model_path,
-            confidence_threshold=0.7,
+            confidence_threshold=0.5,
             img_size=640  # 더 빠르게: 480 또는 320
         )
         detector.run()
