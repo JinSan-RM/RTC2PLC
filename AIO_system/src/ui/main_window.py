@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QPushButton, QLabel, QFrame, QTextEdit, 
+    QStackedWidget, QPushButton, QLabel, QFrame, QTabBar,
 )
 from PySide6.QtCore import Qt, QDateTime, QTimer, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QPixmap
 
 from typing import ClassVar
 
@@ -11,6 +11,7 @@ from src.ui.page.home_page import HomePage
 from src.ui.page.monitoring_page import MonitoringPage
 from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
+from src.utils.config_util import UI_PATH
 from src.utils.logger import Logger, log
 
 import inspect
@@ -48,147 +49,236 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         self.setWindowTitle("위드위 플라스틱 선별 시스템")
         self.setGeometry(0, 0, 1920, 1080)
+        self.setFixedSize(1920,1080)
         
         # 중앙 위젯
         central_widget = QWidget()
+        central_widget.setFixedSize(1920, 1080)
         self.setCentralWidget(central_widget)
         
         # 메인 레이아웃
-        main_layout = QHBoxLayout(central_widget)
+        main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
-        # 좌측 네비게이션
-        self.nav_bar = self.create_nav_bar()
-        main_layout.addWidget(self.nav_bar)
-        
-        # 우측 컨텐츠
-        content_layout = QVBoxLayout()
-        
-        # 상단 헤더
-        self.header = self.create_header()
-        content_layout.addWidget(self.header)
-        
-        # 페이지 스택
-        self.pages = QStackedWidget()
-        self.init_pages()
-        content_layout.addWidget(self.pages)
-        
-        main_layout.addLayout(content_layout, 1)
-        
+
+        # 헤더 타이틀
+        self.create_header_title(main_layout)
+
+        # 헤더 탭
+        self.create_header_tab(main_layout)
+
+        # 컨텐츠 영역
+        self.create_contents_area(main_layout)
+
         # 스타일 적용
         self.apply_styles()
-        
+
         # 홈 페이지로 시작
-        self.show_page(0)
+        self.change_page(0)
         
-    def create_nav_bar(self):
-        """좌측 네비게이션 바"""
-        nav_widget = QFrame()
-        nav_widget.setObjectName("nav_bar")
-        nav_widget.setFixedWidth(200)
-        
-        layout = QVBoxLayout(nav_widget)
-        layout.setSpacing(5)
-        layout.setContentsMargins(10, 20, 10, 10)
-        
-        # 로고
-        logo = QLabel("위드위")
-        logo.setObjectName("logo")
-        logo.setAlignment(Qt.AlignCenter)
-        logo.setFixedHeight(60)
-        
-        layout.addWidget(logo)
-        layout.addSpacing(20)
-        
-        # 네비게이션 버튼들
-        nav_buttons = [
-            ("홈", 0),
-            ("모니터링", 1),
-            ("설정", 2),
-            ("로그", 3),
-        ]
-        
-        self.nav_btn_list = []
-        for text, page_idx in nav_buttons:
-            btn = QPushButton(text)
-            btn.setObjectName("nav_button")
-            btn.setFixedHeight(60)
-            btn.clicked.connect(lambda checked, idx=page_idx: self.show_page(idx))
-            
-            layout.addWidget(btn)
-            self.nav_btn_list.append(btn)
-            
-        layout.addStretch()
-        
-        # 긴급정지 버튼
-        emergency_btn = QPushButton("긴급정지")
-        emergency_btn.setObjectName("emergency_button")
-        emergency_btn.setFixedHeight(80)
-        emergency_btn.clicked.connect(self.emergency_stop)
-        
-        layout.addWidget(emergency_btn)
-        
-        return nav_widget
-    
-    def create_header(self):
-        """상단 헤더"""
+    def create_header_title(self, parent_layout):
+        """헤더 타이틀"""
         header = QFrame()
         header.setObjectName("header")
-        header.setFixedHeight(70)
-        
+        header.setFixedHeight(85)
+
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(30, 10, 30, 10)
-        
-        # 페이지 제목
-        self.page_title = QLabel("홈 대시보드")
-        self.page_title.setObjectName("page_title")
-        layout.addWidget(self.page_title)
-        
+        layout.setContentsMargins(30, 0, 0, 0)
+
+        # 로고
+        logo_path = str(UI_PATH / "logo/logo_withwe.png")
+        logo_label = QLabel()
+        logo_label.setObjectName("header_logo")
+        logo_img = QPixmap(logo_path)
+        logo_label.setPixmap(logo_img)
+        logo_label.setScaledContents(True)
+        logo_label.setFixedSize(150, 28)
+        layout.addWidget(logo_label)
+        layout.addSpacing(19)
+
+        # 구분선
+        separator_line = QFrame()
+        separator_line.setFrameShape(QFrame.VLine)
+        separator_line.setFixedSize(1, 20)
+        separator_line.setStyleSheet(
+            """
+            border: 1px solid #DDDDDD;
+            """
+        )
+        layout.addWidget(separator_line)
+        layout.addSpacing(17)
+
+        # 앱 제목
+        self.main_title = QLabel("위드위 장비 관리자 페이지")
+        self.main_title.setObjectName("header_title")
+        layout.addWidget(self.main_title)
+
+        self.app_ver = QLabel("ver 0.1")
+        self.app_ver.setObjectName("app_version")
+        layout.addWidget(self.app_ver)
+
         layout.addStretch()
+
+        parent_layout.addWidget(header)
+
+    def create_header_tab(self, parent_layout):
+        """헤더 탭"""
+        tab_box = QFrame()
+        tab_box.setObjectName("header_tab_box")
+        tab_layout = QHBoxLayout(tab_box)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.addSpacing(30)
+
+        self.main_tab = QTabBar()
+        self.main_tab.setObjectName("header_tab")
+        self.main_tab.setExpanding(False)
+        self.main_tab.setDrawBase(False)
+
+        self.main_tab.addTab("대시보드")
+        self.main_tab.addTab("모니터링")
+        self.main_tab.addTab("설정")
+        self.main_tab.addTab("로그")
+
+        tab_layout.addWidget(self.main_tab)
+        tab_layout.addStretch(1)
+        parent_layout.addWidget(tab_box)
+
+        self.main_tab.currentChanged.connect(self.change_page)
+
+    def create_contents_area(self, parent_layout):
+        """컨텐츠 영역"""
+        contents_area = QFrame()
+        contents_area.setObjectName("contents_area")
         
-        # 시스템 상태
-        self.status_label = QLabel("⚫ 대기중")
+        contents_layout = QHBoxLayout(contents_area)
+        contents_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 좌측 사이드바
+        self.create_side_bar(contents_layout)
+
+        # 컨텐츠 영역
+        self.create_contents_main(contents_layout)
+
+        # 2개의 QStackedWidget에 내용 채우기
+        self.home_page = HomePage(self.app)
+        self.monitoring_page = MonitoringPage(self.app)
+        self.settings_page = SettingsPage(self.app, self.contents_title, self.contents_explain)
+        self.logs_page = LogsPage(self.app, self.contents_title)
+
+        self.side_stack.addWidget(self.home_page.side_widget)
+        self.side_stack.addWidget(self.monitoring_page.side_widget)
+        self.side_stack.addWidget(self.settings_page.side_widget)
+        self.side_stack.addWidget(self.logs_page.side_widget)
+
+        self.main_stack.addWidget(self.home_page.main_widget)
+        self.main_stack.addWidget(self.monitoring_page.main_widget)
+        self.main_stack.addWidget(self.settings_page.main_widget)
+        self.main_stack.addWidget(self.logs_page.main_widget)
+
+        parent_layout.addWidget(contents_area)
+
+    def create_side_bar(self, parent_layout):
+        """좌측 사이드바"""
+        side_bar = QFrame()
+        side_bar.setObjectName("side_bar")
+        side_bar.setFixedWidth(238)
+
+        side_layout = QVBoxLayout(side_bar)
+        side_layout.setSpacing(0)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+
+        side_layout.addSpacing(40)
+
+        self.side_stack = QStackedWidget()
+        self.side_stack.setStyleSheet("background: transparent;")
+        side_layout.addWidget(self.side_stack)
+
+        # 긴급정지 버튼
+        emergency_btn = QPushButton("긴급 정지")
+        emergency_btn.setObjectName("emergency_button")
+        emergency_btn.setFixedSize(177, 80)
+        emergency_btn.clicked.connect(self.emergency_stop)
+        side_layout.addWidget(emergency_btn)
+
+        side_layout.addSpacing(40)
+
+        parent_layout.addWidget(side_bar)
+
+    def create_contents_main(self, parent_layout):
+        """메인 컨텐츠 영역"""
+        main_layout = QVBoxLayout()
+
+        main_layout.setContentsMargins(30, 30, 30, 0)
+        main_layout.setSpacing(0)
+
+        header_box = QFrame()
+        header_box.setObjectName("contents_header_box")
+        contents_header = QHBoxLayout(header_box)
+        contents_header.setContentsMargins(0, 0, 0, 0)
+
+        # 컨텐츠 제목
+        self.contents_title = QLabel("홈 대시보드")
+        self.contents_title.setObjectName("contents_title")
+        self.contents_title.setFixedHeight(50)
+        contents_header.addWidget(self.contents_title)
+
+        contents_header.addSpacing(10)
+
+        self.contents_explain = QLabel()
+        self.contents_explain.setStyleSheet(
+            """
+            color: #4B4B4B;
+            font-size: 14px;
+            font-weight: normal;
+            """
+        )
+
+        contents_header.addWidget(self.contents_explain)
+
+        contents_header.addStretch()
+
+        # 우측 상태 및 시각 표시
+        status_layout = QHBoxLayout()
+
+        self.status_label = QLabel("대기중")
         self.status_label.setObjectName("status_label")
-        layout.addWidget(self.status_label)
+        self.status_label.setFixedSize(82, 28)
+        self.status_label.setAlignment(Qt.AlignCenter)
+        status_layout.addWidget(self.status_label)
         
-        # 현재 시간
+        status_layout.addSpacing(10)
+
         self.time_label = QLabel()
         self.time_label.setObjectName("time_label")
         self.update_time()
-        layout.addWidget(self.time_label)
-        
-        return header
+        status_layout.addWidget(self.time_label)
 
-    def init_pages(self):
-        """각 페이지 초기화"""
-        self.home_page = HomePage(self.app)
-        self.monitoring_page = MonitoringPage(self.app)
-        self.settings_page = SettingsPage(self.app)
-        self.logs_page = LogsPage(self.app)
+        contents_header.addLayout(status_layout)
+
+        main_layout.addWidget(header_box)
+
+        self.main_stack = QStackedWidget()
+        self.main_stack.setStyleSheet("background: transparent;")
+        main_layout.addWidget(self.main_stack)
+
+        parent_layout.addLayout(main_layout)
+
+    def change_page(self, index):
+        self.side_stack.setCurrentIndex(index)
+        self.main_stack.setCurrentIndex(index)
+        self.contents_explain.setText("")
         
-        self.pages.addWidget(self.home_page)
-        self.pages.addWidget(self.monitoring_page)
-        self.pages.addWidget(self.settings_page)
-        self.pages.addWidget(self.logs_page)
-        
-    def show_page(self, index):
-        """페이지 전환"""
-        self.pages.setCurrentIndex(index)
-        
-        # 페이지 제목 업데이트
-        titles = ["홈 대시보드", "실시간 모니터링", "시스템 설정", "로그"]
-        if index < len(titles):
-            self.page_title.setText(titles[index])
-        
-        # 네비게이션 버튼 활성화
-        for i, btn in enumerate(self.nav_btn_list):
-            if i == index:
-                btn.setProperty("active", True)
-            else:
-                btn.setProperty("active", False)
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
+        match index:
+            case 0:
+                self.contents_title.setText("홈 대시보드")
+            case 1:
+                self.contents_title.setText("실시간 모니터링")
+            case 2:
+                self.settings_page.btn_group.button(0).setChecked(True)
+                self.settings_page.show_page(0)
+            case 3:
+                self.logs_page.btn_group.button(0).setChecked(True)
+                self.logs_page.show_page(0)
         
     def update_time(self):
         """시간 업데이트"""
@@ -225,98 +315,137 @@ class MainWindow(QMainWindow):
         
     def apply_styles(self):
         """스타일시트 적용"""
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             /* 메인 윈도우 */
             QMainWindow {
-                background-color: #1e1e1e;
-            }
-            
-            /* 네비게이션 바 */
-            #nav_bar {
-                background-color: #0d1117;
-                border-right: 3px solid #30363d;
-            }
-            
-            /* 로고 */
-            #logo {
-                color: #58a6ff;
-                font-size: 28px;
-                font-weight: bold;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #0d1117, stop:1 #161b22);
-                border: 2px solid #30363d;
-                border-radius: 10px;
-                padding: 10px;
-            }
-            
-            /* 네비게이션 버튼 */
-            #nav_button {
-                background-color: #161b22;
-                color: #c9d1d9;
-                border: 2px solid #30363d;
-                border-radius: 8px;
-                text-align: left;
-                padding-left: 20px;
-                font-size: 15px;
-                font-weight: bold;
-            }
-            
-            #nav_button:hover {
-                background-color: #21262d;
-                border-color: #58a6ff;
-            }
-            
-            #nav_button[active="true"] {
-                background-color: #58a6ff;
-                color: #0d1117;
-                border-color: #58a6ff;
-            }
-            
-            /* 긴급정지 버튼 */
-            #emergency_button {
-                background-color: #da3633;
-                color: white;
-                border: 3px solid #f85149;
-                border-radius: 12px;
-                font-size: 18px;
-                font-weight: bold;
-            }
-            
-            #emergency_button:hover {
-                background-color: #f85149;
-            }
-            
-            #emergency_button:pressed {
-                background-color: #b62324;
+                background-color: #FFFFFF;
             }
             
             /* 헤더 */
             #header {
-                background-color: #161b22;
-                border-bottom: 3px solid #30363d;
+                background-color: #2D3039;
+                min-height: 85px;
+                border: none;
             }
-            
-            #page_title {
-                color: #58a6ff;
-                font-size: 24px;
+
+            /* 로고 */
+            #header_logo {
+                background: transparent;
+                border: none;
+            }
+
+            /* 앱 제목 */
+            #header_title {
+                color: #FFFFFF;
+                font-family: 'Pretendard';
+                font-size: 20px;
                 font-weight: bold;
+                background: transparent;
+                min-width: 239px;
+                min-height: 24px;
+            }
+
+            /* 앱 버전 */
+            #app_version {
+                color: #FFFFFF;
+                font-size: 10px;
+                font-weight: medium;
+                background: transparent;
+                min-width: 18px;
+                min-height: 15px;
+                margin-top: 10px;
             }
             
+            /* 헤더 탭 */
+            #header_tab_box {
+                background: transparent;
+                border-bottom: 1px solid #E2E2E2;
+            }
+
+            QTabBar {
+                background-color: transparent;
+                border: none;
+                alignment: left;
+            }
+
+            QTabBar::tab {
+                background: transparent;
+                color: #787878;
+                width: 100px;
+                height: 60px;
+                font-size: 14px;
+                font-weight: normal;
+                border: none;
+                border-bottom: 2px solid transparent;
+            }
+
+            QTabBar::tab:hover {
+                color: #000000;
+            }
+
+            QTabBar::tab:selected {
+                color: #000000;
+                border-bottom: 2px solid #2DB591;
+            }
+
+            /* 사이드바 */
+            #side_bar {
+                background-color: #F3F4F6;
+                border: none;
+                border-right: 1px solid #E2E2E2;
+                width: 238px;
+            }
+
+            #emergency_button {
+                background-color: #FF2427;
+                color: #FFFFFF;
+                min-width: 177px;
+                min-height: 80px;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
+                margin-left: 30px;
+                margin-right: 30px;
+            }
+
+            #emergency_button:hover {
+                background-color: #FF6467;
+            }
+
+            /* 컨텐츠 영역 헤더 */
+            #contents_header_box {
+                background: transparent;
+                border-bottom: 2px solid #E2E2E2;;
+            }
+
+            #contents_title {
+                color: #000000;
+                background: transparent;
+                font-size: 18px;
+                font-weight: medium;
+                border-bottom: 2px solid #2DB591;
+            }
+
             #status_label {
-                color: #c9d1d9;
-                font-size: 15px;
-                padding: 8px 20px;
-                background-color: #0d1117;
-                border: 2px solid #30363d;
-                border-radius: 8px;
+                color: #A4A4A4;
+                font-family: 'pretendard';
+                font-size: 12px;
+                font-weight: medium;
+                background-color: #F5F4F8;
+                border: 1px solid #A4A4A4;
+                border-radius: 4px;
             }
             
             #time_label {
-                color: #8b949e;
-                font-size: 14px;
-                padding: 8px 20px;
+                color: #A4A4A4;
+                font-family: 'Pretendard';
+                font-size: 12px;
+                font-weight: normal;
+                background: transparent
             }
-        """)
+            """
+        )
     
     def add_log_to_ui(self, log_msg, level):
         """UI에 로그 추가"""

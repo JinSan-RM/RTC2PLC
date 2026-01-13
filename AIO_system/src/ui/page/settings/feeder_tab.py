@@ -4,12 +4,11 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QGroupBox, QLineEdit, QFrame
+    QLabel, QPushButton, QScrollArea, QLineEdit, QFrame
 )
 from PySide6.QtGui import QDoubleValidator
 from PySide6.QtCore import Qt
 
-from src.utils.config_util import APP_CONFIG
 from src.utils.logger import log
 
 class FeederTab(QWidget):
@@ -23,195 +22,245 @@ class FeederTab(QWidget):
     def init_ui(self):
         """UI 초기화"""
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(25)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 스크롤
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        scroll_content = QWidget()
+        scroll_content.setObjectName("scroll_content")
+        scroll_content.setMaximumWidth(1610)
+
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setSpacing(0)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll_layout.addSpacing(25)
         
         # 내륜 모터
-        self.create_motor_section(main_layout, "내륜 모터", "inverter_001")
+        self.create_motor_section(scroll_layout, "내륜 모터", "inverter_001")
+
+        scroll_layout.addSpacing(20)
         
         # 외륜 모터
-        self.create_motor_section(main_layout, "외륜 모터", "inverter_002")
+        self.create_motor_section(scroll_layout, "외륜 모터", "inverter_002")
+
+        scroll_layout.addSpacing(30)
         
         # 배출물 사이즈 조절
-        self.create_size_control(main_layout)
-        
-        main_layout.addStretch()
+        self.create_size_control(scroll_layout)
+
+        scroll_layout.addSpacing(30)
+
+        scroll.setWidget(scroll_content)
+        main_layout.addWidget(scroll)
         
         # 스타일 적용
         self.apply_styles()
     
     def create_motor_section(self, parent_layout, title, motor_id):
         """모터 제어 섹션"""
-        motor_group = QGroupBox(f"{title}")
-        motor_group.setObjectName("group_box")
-        motor_main_layout = QVBoxLayout(motor_group)
-        
-        # 상태 표시
-        status_layout = QHBoxLayout()
-        status_layout.setSpacing(30)
-        
+        layout = QVBoxLayout()
+        layout.setSpacing(0)
+
+        header_layout = QHBoxLayout()
+        motor_title = QLabel(title)
+        motor_title.setObjectName("title_label")
+        header_layout.addWidget(motor_title)
+
+        header_layout.addSpacing(15)
+
         # 운전 상태
-        status_frame = QFrame()
-        status_frame_layout = QVBoxLayout(status_frame)
-        status_frame_layout.setAlignment(Qt.AlignCenter)
-        
-        status_title = QLabel("운전 상태")
-        status_title.setStyleSheet("color: #8b949e; font-size: 12px;")
-        status_frame_layout.addWidget(status_title)
-        
         status_label = QLabel("⚫ 정지")
         status_label.setObjectName(f"{motor_id}_status")
-        status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b949e;")
-        status_frame_layout.addWidget(status_label)
-        status_layout.addWidget(status_frame)
+        status_label.setFixedSize(74, 34)
+        status_label.setStyleSheet(
+            """
+            background-color: #F3F4F6;
+            border: 1px solid #E2E2E2;
+            border-radius: 4px;
+            color: #4B4B4B;
+            font-size: 14px;
+            font-weight: normal;
+            """
+        )
+        header_layout.addWidget(status_label)
+
+        header_layout.addStretch()
+
+        layout.addLayout(header_layout)
+
+        layout.addSpacing(10)
+        
+        # 상태 표시
+        contents_box = QFrame()
+        contents_box.setObjectName("contents_box")
+
+        contents_layout = QVBoxLayout(contents_box)
+        contents_layout.setSpacing(25)
+        contents_layout.setContentsMargins(30, 30, 30, 30)
+
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(50)
 
         _conf = self.app.config["inverter_config"][motor_id]
         
         # 현재 주파수
-        self.add_value_display(status_layout, "현재 주파수", f"{_conf[0]:.2f}", "Hz", f"{motor_id}_freq")
+        self.add_value_display(status_layout, "현재 주파수:", f"{_conf[0]:.2f}", "Hz", f"{motor_id}_freq")
         
         # 가속 시간
-        self.add_value_display(status_layout, "가속 시간", f"{_conf[1]:.1f}", "s", f"{motor_id}_acc")
+        self.add_value_display(status_layout, "가속 시간:", f"{_conf[1]:.1f}", "s", f"{motor_id}_acc")
         
         # 감속 시간
-        self.add_value_display(status_layout, "감속 시간", f"{_conf[2]:.1f}", "s", f"{motor_id}_dec")
+        self.add_value_display(status_layout, "감속 시간:", f"{_conf[2]:.1f}", "s", f"{motor_id}_dec")
 
         # 출력 전류
-        self.add_value_display(status_layout, "출력 전류", "0.0", "A", f"{motor_id}_crnt")
+        self.add_value_display(status_layout, "출력 전류:", "0.0", "A", f"{motor_id}_crnt")
 
         # 출력 전압
-        self.add_value_display(status_layout, "출력 전압", "0.0", "V", f"{motor_id}_vltg")
+        self.add_value_display(status_layout, "출력 전압:", "0.0", "V", f"{motor_id}_vltg")
         
         status_layout.addStretch()
-        motor_main_layout.addLayout(status_layout)
         
-        motor_main_layout.addSpacing(15)
+        contents_layout.addLayout(status_layout)
         
         # 설정 및 제어
         control_layout = QGridLayout()
         control_layout.setSpacing(10)
-        
+
         row = 0
         
         # 목표 주파수
-        control_layout.addWidget(QLabel("목표 주파수:"), row, 0)
-        freq_input = QLineEdit(f"{_conf[0]:.2f}")
-        freq_input.setValidator(QDoubleValidator(-120.0, 120.0, 2, control_layout))
-        freq_input.setPlaceholderText("-120.0 ~ 120.0 입력 가능")
-        freq_input.setObjectName("input_field")
-        freq_input.returnPressed.connect(lambda: self.on_set_freq(motor_id))
-        setattr(self, f"{motor_id}_target_freq", freq_input)
-        control_layout.addWidget(freq_input, row, 1)
-        control_layout.addWidget(QLabel("Hz"), row, 2)
-        
-        freq_set_btn = QPushButton("설정")
-        freq_set_btn.setObjectName("setting_btn")
-        freq_set_btn.clicked.connect(lambda _: self.on_set_freq(motor_id))
-        control_layout.addWidget(freq_set_btn, row, 3)
+        self.create_controller(control_layout, row, motor_id, "목표 주파수:",
+                               _conf[0], -120.0, 120.0, 2, "Hz", self.on_set_freq, f"{motor_id}_target_freq")
         row += 1
         
         # 가속 시간
-        control_layout.addWidget(QLabel("목표 가속 시간:"), row, 0)
-        acc_input = QLineEdit(f"{_conf[1]:.1f}")
-        acc_input.setValidator(QDoubleValidator(0.0, 999.0, 1, control_layout))
-        acc_input.setPlaceholderText("-0.0 ~ 999.0 입력 가능")
-        acc_input.setObjectName("input_field")
-        acc_input.returnPressed.connect(lambda: self.on_set_acc(motor_id))
-        setattr(self, f"{motor_id}_target_acc", acc_input)
-        control_layout.addWidget(acc_input, row, 1)
-        control_layout.addWidget(QLabel("s"), row, 2)
-        
-        acc_set_btn = QPushButton("설정")
-        acc_set_btn.setObjectName("setting_btn")
-        acc_set_btn.clicked.connect(lambda _: self.on_set_acc(motor_id))
-        control_layout.addWidget(acc_set_btn, row, 3)
+        self.create_controller(control_layout, row, motor_id, "목표 가속 시간:",
+                               _conf[1], 0.0, 999.0, 1, "s", self.on_set_acc, f"{motor_id}_target_acc")
         row += 1
         
         # 감속 시간
-        control_layout.addWidget(QLabel("목표 감속 시간:"), row, 0)
-        dec_input = QLineEdit(f"{_conf[2]:.1f}")
-        dec_input.setValidator(QDoubleValidator(0.0, 999.0, 1, control_layout))
-        dec_input.setPlaceholderText("-0.0 ~ 999.0 입력 가능")
-        dec_input.setObjectName("input_field")
-        dec_input.returnPressed.connect(lambda: self.on_set_dec(motor_id))
-        setattr(self, f"{motor_id}_target_dec", dec_input)
-        control_layout.addWidget(dec_input, row, 1)
-        control_layout.addWidget(QLabel("s"), row, 2)
+        self.create_controller(control_layout, row, motor_id, "목표 감속 시간:",
+                               _conf[2], 0.0, 999.0, 1, "s", self.on_set_dec, f"{motor_id}_target_dec")
         
-        dec_set_btn = QPushButton("설정")
-        dec_set_btn.setObjectName("setting_btn")
-        dec_set_btn.clicked.connect(lambda _: self.on_set_dec(motor_id))
-        control_layout.addWidget(dec_set_btn, row, 3)
-        
-        motor_main_layout.addLayout(control_layout)
-        
-        motor_main_layout.addSpacing(10)
+        contents_layout.addLayout(control_layout)
         
         # 운전/정지 버튼
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(10)
-        
+        btn_layout.setSpacing(20)
+        btn_layout.setAlignment(Qt.AlignLeft)
         
         start_btn = QPushButton("운전")
         start_btn.setObjectName("control_btn_start")
-        start_btn.setMinimumHeight(50)
+        start_btn.setFixedSize(498, 60)
         start_btn.clicked.connect(lambda _: self.on_motor_start(motor_id))
         btn_layout.addWidget(start_btn)
         
         stop_btn = QPushButton("정지")
         stop_btn.setObjectName("control_btn_stop")
-        stop_btn.setMinimumHeight(50)
+        stop_btn.setFixedSize(498, 60)
         stop_btn.clicked.connect(lambda _: self.on_motor_stop(motor_id))
         btn_layout.addWidget(stop_btn)
         
-        motor_main_layout.addLayout(btn_layout)
+        contents_layout.addLayout(btn_layout)
+
+        layout.addWidget(contents_box)
         
-        parent_layout.addWidget(motor_group)
+        parent_layout.addLayout(layout)
     
-    def add_value_display(self, layout, name, value, unit, obj_name):
+    def add_value_display(self, parent_layout, name, value, unit, obj_name):
         """값 표시 위젯 추가"""
-        frame = QFrame()
-        frame_layout = QVBoxLayout(frame)
-        frame_layout.setAlignment(Qt.AlignCenter)
-        frame_layout.setSpacing(5)
+        layout = QHBoxLayout()
+        layout.setSpacing(0)
         
         # 이름
         name_label = QLabel(name)
-        name_label.setStyleSheet("color: #8b949e; font-size: 12px;")
-        name_label.setAlignment(Qt.AlignCenter)
-        frame_layout.addWidget(name_label)
-        
-        # 값
-        value_layout = QHBoxLayout()
-        value_layout.setAlignment(Qt.AlignCenter)
+        name_label.setObjectName("name_label")
+        layout.addWidget(name_label)
+
+        layout.addSpacing(10)
         
         value_label = QLabel(value)
         value_label.setObjectName(obj_name)
-        value_label.setStyleSheet("color: #58a6ff; font-size: 18px; font-weight: bold;")
-        value_layout.addWidget(value_label)
+        value_label.setStyleSheet(
+            """
+            color: #2DB591;
+            font-size: 26px;
+            font-weight: 600;
+            """
+        )
+        layout.addWidget(value_label)
+
+        layout.addSpacing(5)
         
         unit_label = QLabel(unit)
-        unit_label.setStyleSheet("color: #8b949e; font-size: 12px;")
-        value_layout.addWidget(unit_label)
+        unit_label.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 26px;
+            font-weight: 600;
+            """
+        )
+        layout.addWidget(unit_label)
+        parent_layout.addLayout(layout)
+
+    def create_controller(self, parent_layout, row, motor_id, name,
+                          def_val, min, max, decimal, unit, func, attr_name):
+        name_label = QLabel(f"{name}")
+        name_label.setObjectName("name_label")
+        parent_layout.addWidget(name_label, row, 0)
+        _input = QLineEdit(f"{def_val}")
+        _input.setValidator(QDoubleValidator(min, max, decimal, parent_layout))
+        _input.setPlaceholderText(f"{min} ~ {max} 입력 가능")
+        _input.setObjectName("input_field")
+        _input.setFixedSize(600, 40)
+        parent_layout.addWidget(_input, row, 1)
+
+        unit_label = QLabel(f"{unit}")
+        unit_label.setObjectName("unit_label")
+        parent_layout.addWidget(unit_label, row, 2)
+        _input.returnPressed.connect(lambda: func(motor_id))
+        setattr(self, f"{attr_name}", _input)
         
-        frame_layout.addLayout(value_layout)
-        layout.addWidget(frame)
+        set_btn = QPushButton("설정")
+        set_btn.setObjectName("setting_btn")
+        set_btn.setFixedSize(112, 40)
+        set_btn.clicked.connect(lambda _: func(motor_id))
+        parent_layout.addWidget(set_btn, row, 3)
+
+        parent_layout.setColumnStretch(4, 1)
     
     def create_size_control(self, parent_layout):
         """배출물 사이즈 조절"""
-        size_group = QGroupBox("배출물 사이즈 조절")
-        size_group.setObjectName("group_box")
-        size_layout = QVBoxLayout(size_group)
-        
+        layout = QVBoxLayout()
+        layout.setSpacing(0)
+
+        size_title = QLabel("배출물 사이즈 조절")
+        size_title.setObjectName("title_label")
+        layout.addWidget(size_title)
+
+        layout.addSpacing(15)
+
+        size_box = QFrame()
+        size_box.setObjectName("contents_box")
+
+        size_layout = QVBoxLayout(size_box)
+        size_layout.setSpacing(0)
+        size_layout.setContentsMargins(30, 30, 30, 30)
+
         info_label = QLabel("서보 위치를 조정하여 피더 배출물 크기를 제어합니다.")
-        info_label.setStyleSheet("color: #8b949e; font-size: 12px;")
+        info_label.setObjectName("name_label")
         size_layout.addWidget(info_label)
         
         size_layout.addSpacing(10)
         
         # 프리셋 버튼들
         preset_layout = QHBoxLayout()
-        preset_layout.setSpacing(10)
+        preset_layout.setSpacing(20)
         
         presets = [
             ("소형", "small"),
@@ -223,13 +272,15 @@ class FeederTab(QWidget):
         for text, size in presets:
             btn = QPushButton(text)
             btn.setObjectName("preset_btn")
-            btn.setMinimumHeight(45)
+            btn.setFixedHeight(60)
             btn.clicked.connect(lambda checked, s=size: self.on_set_size(s))
             preset_layout.addWidget(btn)
         
         size_layout.addLayout(preset_layout)
+
+        layout.addWidget(size_box)
         
-        parent_layout.addWidget(size_group)
+        parent_layout.addLayout(layout)
     
     # 이벤트 핸들러
     def on_set_freq(self, motor_id):
@@ -317,65 +368,93 @@ class FeederTab(QWidget):
     
     def apply_styles(self):
         """스타일시트 적용"""
-        self.setStyleSheet("""
-            QGroupBox {
-                background-color: #0d1117;
-                border: 2px solid #30363d;
-                border-radius: 8px;
-                padding-top: 15px;
-                margin-top: 10px;
+        self.setStyleSheet(
+            """
+            /* 스크롤바 */
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #F3F4F6;
+                width: 5px;
+                margin: 0px;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #E2E2E2;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+
+            #scroll_content {
+                background-color: transparent;
+            }
+
+            #contents_box {
+                background-color: #FAFAFA;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
+            }
+            
+            #title_label {
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
+            }
+
+            #name_label {
+                color: #4B4B4B;
                 font-size: 14px;
-                font-weight: bold;
-                color: #c9d1d9;
+                font-weight: normal;
             }
-            
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 3px 10px;
-                color: #58a6ff;
-            }
-            
-            QLabel {
-                color: #c9d1d9;
-                font-size: 13px;
+
+            #unit_label {
+                color: #A8A8A8;
+                font-size: 14px;
+                font-weight: normal;
             }
             
             #input_field {
-                background-color: #161b22;
-                border: 2px solid #30363d;
-                border-radius: 5px;
-                padding: 5px;
-                color: #c9d1d9;
-                font-size: 13px;
-                min-width: 100px;
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                border-radius: 4px;
+                padding: 10;
+                color: #000000;
+                font-size: 14px;
+                font-weight: normal;
             }
             
             #input_field:focus {
-                border-color: #58a6ff;
+                border-color: #AAAAAA;
             }
             
             #setting_btn {
-                background-color: #161b22;
-                color: #c9d1d9;
-                border: 2px solid #30363d;
-                border-radius: 5px;
-                padding: 5px 15px;
-                font-size: 13px;
+                background-color: #F5F4F8;
+                border: 1px solid #A4A4A4;
+                border-radius: 4px;
+                color: #A4A4A4;
+                font-size: 14px;
+                font-weight: medium;
             }
             
             #setting_btn:hover {
-                background-color: #21262d;
-                border-color: #58a6ff;
+                background-color: #FAFAFA;
             }
             
             #control_btn_start {
-                background-color: #238636;
-                color: white;
-                border: 2px solid #2ea043;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #2DB591;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_start:hover {
@@ -383,12 +462,12 @@ class FeederTab(QWidget):
             }
             
             #control_btn_stop {
-                background-color: #da3633;
-                color: white;
-                border: 2px solid #f85149;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #FF2427;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_stop:hover {
@@ -396,15 +475,16 @@ class FeederTab(QWidget):
             }
             
             #preset_btn {
-                background-color: #1f6feb;
-                color: white;
-                border: 2px solid #58a6ff;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #E6E6E6;
+                color: #000000;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #preset_btn:hover {
-                background-color: #58a6ff;
+                background-color: #A4A4A4;
             }
-        """)
+            """
+        )

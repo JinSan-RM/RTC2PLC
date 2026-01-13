@@ -4,13 +4,13 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QGroupBox, QLineEdit, QRadioButton,
-    QButtonGroup, QFrame, QScrollArea
+    QLabel, QPushButton, QLineEdit, QRadioButton,
+    QFrame, QScrollArea
 )
 from PySide6.QtGui import QDoubleValidator
 from PySide6.QtCore import Qt
 
-from src.utils.config_util import get_servo_modified_value
+from src.utils.config_util import get_servo_modified_value, ToggleButton
 from src.utils.logger import log
 
 class ServoTab(QWidget):
@@ -24,259 +24,222 @@ class ServoTab(QWidget):
     def init_ui(self):
         """UI 초기화"""
         main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 스크롤 영역 설정
+        # 스크롤
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        # 스크롤 영역의 배경을 투명하게 하여 메인 배경 위에 그룹박스가 떠있는 느낌을 줌
-        scroll.setStyleSheet("""
-            QScrollArea { 
-                border: none; 
-                background-color: transparent; 
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #0d1117;
-                width: 10px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #30363d;
-                min-height: 20px;
-                border-radius: 5px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
 
-        # 스크롤 내부 컨텐츠 위젯
         scroll_content = QWidget()
         scroll_content.setObjectName("scroll_content")
-        # 컨텐츠 위젯도 투명하게 설정해야 그룹박스 배경색이 돋보임
-        scroll_content.setStyleSheet("#scroll_content { background-color: transparent; }")
-        
+        scroll_content.setMaximumWidth(1610)
+
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(15)  # 피더 탭과 동일한 간격
-        scroll_layout.setContentsMargins(20, 20, 20, 20)  # 피더 탭과 동일한 여백
-        
+        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setSpacing(0)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll_layout.addSpacing(25)
+
+        # 폭 제어
         self.create_servo_section(scroll_layout, "폭 제어", 0)
 
+        scroll_layout.addSpacing(30)
+
+        # 높이 제어
         self.create_servo_section(scroll_layout, "높이 제어", 1)
-        
-        scroll_layout.addStretch()
+
+        scroll_layout.addSpacing(30)
+
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
-        
+
         # 스타일 적용
         self.apply_styles()
 
     def create_servo_section(self, parent_layout, title, servo_id):
-        servo_group = QGroupBox(f"{title}")
-        servo_group.setObjectName("group_box")
-        servo_main_layout = QVBoxLayout(servo_group)
+        layout = QVBoxLayout()
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        header_layout = QHBoxLayout()
+
+        title_label = QLabel(f"{title}")
+        title_label.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 20px;
+            font-weight: normal;
+            """
+        )
+        header_layout.addWidget(title_label)
+
+        header_layout.addStretch()
+
+        state_label = QLabel("⚫ 서보 OFF")
+        state_label.setStyleSheet(
+            """
+            color: #616161;
+            font-size: 14px;
+            font-weight: normal;
+            """
+        )
+        header_layout.addWidget(state_label)
+        layout.addLayout(header_layout)
+
+        layout.addSpacing(15)
 
         # 상단: 상태 모니터링
-        self.create_status_section(servo_main_layout, servo_id)
+        self.create_status_section(layout, servo_id)
+
+        layout.addSpacing(20)
         
         # 중단: 제어 버튼들
-        self.create_control_section(servo_main_layout, servo_id)
+        self.create_control_section(layout, servo_id)
+
+        layout.addSpacing(30)
         
         # 하단: 위치 설정
-        self.create_position_section(servo_main_layout, servo_id)
+        self.create_position_section(layout, servo_id)
+
+        layout.addSpacing(30)
         
         # 정밀 이동
-        self.create_jog_section(servo_main_layout, servo_id)
+        self.create_jog_section(layout, servo_id)
 
-        parent_layout.addWidget(servo_group)
+        layout.addStretch()
+
+        parent_layout.addLayout(layout)
 
     def create_status_section(self, parent_layout, servo_id):
         """상태 모니터링 섹션"""
-        status_group = QGroupBox("현재 상태")
-        status_group.setObjectName("group_box")
-        status_layout = QHBoxLayout(status_group)
+        status_layout = QHBoxLayout()
         status_layout.setSpacing(20)
+        status_layout.setContentsMargins(0, 0, 0, 0)
         
         # 현재 위치
-        self.add_status_item(status_layout, "현재 위치", "0.000", "mm", f"servo_{servo_id}_pos")
+        self.add_status_item(status_layout, "현재 위치", "0.000 mm", f"servo_{servo_id}_pos")
         
         # 속도
-        self.add_status_item(status_layout, "속도", "0.000", "mm/s", f"servo_{servo_id}_speed")
+        self.add_status_item(status_layout, "속도", "0.000 mm/s", f"servo_{servo_id}_speed")
         
         # 경보
-        alarm_frame = QFrame()
-        alarm_layout = QVBoxLayout(alarm_frame)
-        alarm_layout.setAlignment(Qt.AlignCenter)
-        alarm_label = QLabel("경보")
-        alarm_label.setStyleSheet("color: #8b949e; font-size: 12px;")
-        alarm_layout.addWidget(alarm_label)
-        
-        alarm_indicator = QLabel("⚫ 정상")
-        alarm_indicator.setObjectName("alarm_indicator")
-        alarm_indicator.setAlignment(Qt.AlignCenter)
-        setattr(self, f"servo_{servo_id}_err_ind", alarm_indicator)
-        alarm_layout.addWidget(alarm_indicator)
-        status_layout.addWidget(alarm_frame)
+        self.add_status_item(status_layout, "경보", "⚫ 정상", f"servo_{servo_id}_err_ind")
         
         # 에러 코드
-        error_frame = QFrame()
-        error_layout = QVBoxLayout(error_frame)
-        error_layout.setAlignment(Qt.AlignCenter)
-        error_label = QLabel("에러 코드")
-        error_label.setStyleSheet("color: #8b949e; font-size: 12px;")
-        error_layout.addWidget(error_label)
+        self.add_status_item(status_layout, "에러 코드", "0x0000", f"servo_{servo_id}_err")
         
-        error_code = QLabel("0x0000")
-        error_code.setStyleSheet("color: #58a6ff; font-size: 18px; font-weight: bold;")
-        error_code.setAlignment(Qt.AlignCenter)
-        setattr(self, f"servo_{servo_id}_err", error_code)
-        error_layout.addWidget(error_code)
-        status_layout.addWidget(error_frame)
-        
-        parent_layout.addWidget(status_group)
+        parent_layout.addLayout(status_layout)
     
     def add_status_item(self, layout, title, value, unit, obj_name):
         """상태 항목 추가"""
-        frame = QFrame()
-        item_layout = QVBoxLayout(frame)
+        item_box = QFrame()
+        item_box.setObjectName("item_box")
+        item_box.setFixedHeight(130)
+
+        item_layout = QVBoxLayout(item_box)
         item_layout.setAlignment(Qt.AlignCenter)
         
         # 이름
         name_label = QLabel(title)
-        name_label.setStyleSheet("color: #8b949e; font-size: 12px;")
+        name_label.setObjectName("name_label")
         name_label.setAlignment(Qt.AlignCenter)
         item_layout.addWidget(name_label)
         
-        # 값 + 단위
-        value_layout = QHBoxLayout()
-        value_layout.setAlignment(Qt.AlignCenter)
-        
         value_label = QLabel(value)
         value_label.setObjectName(obj_name)
-        value_label.setStyleSheet("color: #58a6ff; font-size: 20px; font-weight: bold;")
+        value_label.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 30px;
+            font-weight: 600;
+            """
+        )
         setattr(self, obj_name, value_label)
-        value_layout.addWidget(value_label)
-        
-        unit_label = QLabel(unit)
-        unit_label.setStyleSheet("color: #8b949e; font-size: 12px;")
-        value_layout.addWidget(unit_label)
-        
-        item_layout.addLayout(value_layout)
-        layout.addWidget(frame)
+        item_layout.addWidget(value_label)
+
+        layout.addWidget(item_box)
     
     def create_control_section(self, parent_layout, servo_id):
         """제어 버튼 섹션"""
-        control_group = QGroupBox("제어")
-        control_group.setObjectName("group_box")
-        control_layout = QHBoxLayout(control_group)
-        control_layout.setSpacing(10)
+        control_box = QFrame()
+        control_box.setObjectName("control_box")
+
+        control_layout = QHBoxLayout(control_box)
+        control_layout.setSpacing(20)
+        control_layout.setContentsMargins(30, 30, 30, 30)
         
         # 서보 ON/OFF
-        servo_on_btn = QPushButton("서보 ON")
-        servo_on_btn.setObjectName("control_btn_on")
-        servo_on_btn.setMinimumHeight(50)
-        servo_on_btn.clicked.connect(lambda: self.on_servo_on(servo_id))
-        control_layout.addWidget(servo_on_btn)
-        
-        servo_off_btn = QPushButton("서보 OFF")
-        servo_off_btn.setObjectName("control_btn_off")
-        servo_off_btn.setMinimumHeight(50)
-        servo_off_btn.clicked.connect(lambda: self.on_servo_off(servo_id))
-        control_layout.addWidget(servo_off_btn)
+        toggle_btn = ToggleButton(None, 138, 48, "서보 ON", "서보 OFF")
+        toggle_btn.setChecked(False)
+        toggle_btn.clicked.connect(lambda checked: self.on_servo_toggle(servo_id, checked))
+        control_layout.addWidget(toggle_btn)
         
         # 리셋
-        reset_btn = QPushButton("리셋")
+        reset_btn = QPushButton("🔄️리셋")
         reset_btn.setObjectName("control_btn_reset")
-        reset_btn.setMinimumHeight(50)
+        reset_btn.setFixedSize(199, 65)
         reset_btn.clicked.connect(lambda: self.on_reset(servo_id))
         control_layout.addWidget(reset_btn)
         
         # 정지
-        stop_btn = QPushButton("정지")
+        stop_btn = QPushButton("⏹️정지")
         stop_btn.setObjectName("control_btn_stop")
-        stop_btn.setMinimumHeight(50)
+        stop_btn.setFixedSize(199, 65)
         stop_btn.clicked.connect(lambda: self.on_stop(servo_id))
         control_layout.addWidget(stop_btn)
 
         # 원점복귀
         homing_btn = QPushButton("원점복귀")
         homing_btn.setObjectName("control_btn_homing")
-        homing_btn.setMinimumHeight(50)
+        homing_btn.setFixedSize(199, 65)
         homing_btn.clicked.connect(lambda: self.on_homing(servo_id))
         control_layout.addWidget(homing_btn)
+
+        control_layout.addStretch()
         
-        parent_layout.addWidget(control_group)
+        parent_layout.addWidget(control_box)
     
     def create_position_section(self, parent_layout, servo_id):
         """위치 설정 섹션"""
-        position_group = QGroupBox("위치 설정")
-        position_group.setObjectName("group_box")
-        position_layout = QGridLayout(position_group)
-        position_layout.setSpacing(10)
-        
-        # row = 0
-        
-        # # 원점 설정
-        # position_layout.addWidget(QLabel("원점 설정:"), row, 0)
-        # origin_btn = QPushButton("현재 위치를 원점으로")
-        # origin_btn.setObjectName("setting_btn")
-        # origin_btn.clicked.connect(lambda: self.on_set_origin(servo_id))
-        # position_layout.addWidget(origin_btn, row, 1, 1, 2)
-        # row += 1
-        
-        # # 상한선 / 하한선
-        # position_layout.addWidget(QLabel("상한선:"), row, 0)
-        # upper_limit = QLineEdit("1000")
-        # upper_limit.setObjectName("input_field")
-        # setattr(self, f"servo_{servo_id}_upper_limit", upper_limit)
-        # position_layout.addWidget(upper_limit, row, 1)
-        # position_layout.addWidget(QLabel("mm"), row, 2)
-        # row += 1
-        
-        # position_layout.addWidget(QLabel("하한선:"), row, 0)
-        # lower_limit = QLineEdit("0")
-        # lower_limit.setObjectName("input_field")
-        # setattr(self, f"servo_{servo_id}_lower_limit", lower_limit)
-        # position_layout.addWidget(lower_limit, row, 1)
-        # position_layout.addWidget(QLabel("mm"), row, 2)
-        # row += 1
-        
-        # # 목표 위치 / 속도
-        # position_layout.addWidget(QLabel("목표 위치:"), row, 0)
-        # target_position = QLineEdit("0")
-        # target_position.setObjectName("input_field")
-        # setattr(self, f"servo_{servo_id}_target_pos", target_position)
-        # position_layout.addWidget(target_position, row, 1)
-        # position_layout.addWidget(QLabel("mm"), row, 2)
-        # row += 1
-        
-        # position_layout.addWidget(QLabel("이동 속도:"), row, 0)
-        # move_speed = QLineEdit("100")
-        # move_speed.setObjectName("input_field")
-        # setattr(self, f"servo_{servo_id}_target_speed", move_speed)
-        # position_layout.addWidget(move_speed, row, 1)
-        # position_layout.addWidget(QLabel("mm/s"), row, 2)
-        # row += 1
-        
-        # # 이동 버튼
-        # move_btn = QPushButton("지정 위치로 이동")
-        # move_btn.setObjectName("control_btn_move")
-        # move_btn.setMinimumHeight(45)
-        # move_btn.clicked.connect(lambda: self.on_move_to_position(servo_id))
-        # position_layout.addWidget(move_btn, row, 0, 1, 3)
+        layout = QVBoxLayout()
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        position_layout.addWidget(QLabel("목표 위치(mm)"), 0, 1)
-        position_layout.addWidget(QLabel("속도(mm/s)"), 0, 2)
+        position_title = QLabel("위치 설정")
+        position_title.setObjectName("title_label")
+        layout.addWidget(position_title)
+
+        layout.addSpacing(15)
+
+        position_box = QFrame()
+        position_box.setObjectName("control_box")
+        position_box.setFixedWidth(1609)
+
+        position_layout = QGridLayout(position_box)
+        position_layout.setSpacing(15)
+        position_layout.setContentsMargins(30, 30, 30, 30)
+
+        pos_name = QLabel("목표 위치")
+        pos_name.setObjectName("name_label")
+        position_layout.addWidget(pos_name, 0, 1)
+        v_name = QLabel("속도")
+        v_name.setObjectName("name_label")
+        position_layout.addWidget(v_name, 0, 3)
 
         for i in range(6):
             self.add_position_item(position_layout, servo_id, i+1)
+
+        layout.addWidget(position_box)
         
-        parent_layout.addWidget(position_group)
+        parent_layout.addLayout(layout)
 
     def add_position_item(self, parent_layout, servo_id, row):
         _name = "폭 조정" if servo_id == 0 else "높이 조정"
-        parent_layout.addWidget(QLabel(f"{_name} {row}"), row, 0)
+        name_label = QLabel(f"{_name} {row}:")
+        name_label.setObjectName("name_label")
+        parent_layout.addWidget(name_label, row, 0)
 
         _conf = self.app.config["servo_config"][f"servo_{servo_id}"]
 
@@ -284,40 +247,61 @@ class ServoTab(QWidget):
         target_position.setValidator(QDoubleValidator(-1000.0, 1000.0, 3, parent_layout))
         target_position.setPlaceholderText("-1000.0 ~ 1000.0 입력 가능")
         target_position.setObjectName("input_field")
+        target_position.setFixedSize(553, 40)
         target_position.returnPressed.connect(lambda: self.on_save_position(servo_id, row-1))
         setattr(self, f"servo_{servo_id}_target_pos_{row-1}", target_position)
         parent_layout.addWidget(target_position, row, 1)
+
+        pos_unit = QLabel("mm")
+        pos_unit.setObjectName("unit_label")
+        parent_layout.addWidget(pos_unit, row, 2)
 
         move_speed = QLineEdit(f"{_conf['position'][row-1][1]}")
         move_speed.setValidator(QDoubleValidator(0.0, 1000.0, 3, parent_layout))
         move_speed.setPlaceholderText("0.0 ~ 1000.0 입력 가능")
         move_speed.setObjectName("input_field")
+        move_speed.setFixedSize(553, 40)
         move_speed.returnPressed.connect(lambda: self.on_save_position(servo_id, row-1))
         setattr(self, f"servo_{servo_id}_target_speed_{row-1}", move_speed)
-        parent_layout.addWidget(move_speed, row, 2)
+        parent_layout.addWidget(move_speed, row, 3)
 
-        origin_btn = QPushButton("현재 위치 저장")
-        origin_btn.setObjectName("control_btn_on")
+        spd_unit = QLabel("mm/s")
+        spd_unit.setObjectName("unit_label")
+        parent_layout.addWidget(spd_unit, row, 4)
+
+        origin_btn = QPushButton("저장")
+        origin_btn.setObjectName("pos_btn")
+        origin_btn.setFixedHeight(40)
         origin_btn.clicked.connect(lambda: self.on_save_position(servo_id, row-1))
-        parent_layout.addWidget(origin_btn, row, 3)
+        parent_layout.addWidget(origin_btn, row, 5)
 
-        move_btn = QPushButton("위치로 이동")
-        move_btn.setObjectName("control_btn_move")
-        move_btn.setMinimumHeight(45)
+        move_btn = QPushButton("이동")
+        move_btn.setObjectName("pos_btn")
+        move_btn.setFixedHeight(40)
         move_btn.clicked.connect(lambda: self.on_move_to_position(servo_id, row-1))
-        parent_layout.addWidget(move_btn, row, 4)
+        parent_layout.addWidget(move_btn, row, 6)
 
     def create_jog_section(self, parent_layout, servo_id):
         """정밀 이동 섹션"""
-        jog_group = QGroupBox("정밀 이동")
-        jog_group.setObjectName("group_box")
-        jog_layout = QVBoxLayout(jog_group)
+        layout = QVBoxLayout()
+        jog_title = QLabel("정밀 이동")
+        jog_title.setObjectName("title_label")
+        layout.addWidget(jog_title)
+
+        layout.addSpacing(15)
+
+        jog_box = QFrame()
+        jog_box.setObjectName("control_box")
+        jog_layout = QVBoxLayout(jog_box)
+        jog_layout.setSpacing(20)
+        jog_layout.setContentsMargins(30, 30, 30, 30)
         
         # 모드 선택
         mode_layout = QHBoxLayout()
         mode_layout.setSpacing(20)
         
         mode_label = QLabel("이동 모드:")
+        mode_label.setObjectName("name_label")
         mode_layout.addWidget(mode_label)
         
         jog_mode = QRadioButton("조그 이동 (연속)")
@@ -339,16 +323,22 @@ class ServoTab(QWidget):
 
         settings_layout = QHBoxLayout()
         
-        settings_layout.addWidget(QLabel("조그 속도:"))
+        jog_spd_label = QLabel("조그 속도:")
+        jog_spd_label.setObjectName("name_label")
+        settings_layout.addWidget(jog_spd_label)
+
         jog_speed = QLineEdit(f"{_conf['jog_speed']}")
         jog_speed.setValidator(QDoubleValidator(0.0, 1000.0, 3, settings_layout))
         jog_speed.setPlaceholderText("0.0 ~ 1000.0 입력 가능")
         jog_speed.setObjectName(f"input_field")
-        jog_speed.setMaximumWidth(100)
+        jog_speed.setFixedSize(152, 40)
         jog_speed.returnPressed.connect(lambda: self.save_jog_speed(servo_id))
         setattr(self, f"servo_{servo_id}_jog_speed", jog_speed)
         settings_layout.addWidget(jog_speed)
-        settings_layout.addWidget(QLabel("mm/s"))
+
+        jog_unit = QLabel("mm/s")
+        jog_unit.setObjectName("unit_label")
+        settings_layout.addWidget(jog_unit)
         
         settings_layout.addSpacing(30)
         
@@ -357,40 +347,43 @@ class ServoTab(QWidget):
         inch_distance.setValidator(QDoubleValidator(0.0, 1000.0, 3, settings_layout))
         inch_distance.setPlaceholderText("0.0 ~ 1000.0 입력 가능")
         inch_distance.setObjectName(f"input_field")
-        inch_distance.setMaximumWidth(100)
+        inch_distance.setFixedSize(152, 40)
         inch_distance.returnPressed.connect(lambda: self.save_inch_distance(servo_id))
         setattr(self, f"servo_{servo_id}_inch_dist", inch_distance)
         settings_layout.addWidget(inch_distance)
-        settings_layout.addWidget(QLabel("mm"))
+
+        inch_unit = QLabel("mm")
+        inch_unit.setObjectName("unit_label")
+        settings_layout.addWidget(inch_unit)
         
         settings_layout.addStretch()
         jog_layout.addLayout(settings_layout)
         
         # 이동 버튼
         move_layout = QHBoxLayout()
-        move_layout.setAlignment(Qt.AlignCenter)
+        move_layout.setAlignment(Qt.AlignLeft)
         
         left_btn = QPushButton("◀ 후진")
         left_btn.setObjectName("jog_btn")
-        left_btn.setMinimumSize(120, 60)
+        left_btn.setFixedSize(199, 60)
         left_btn.pressed.connect(lambda: self.on_jog_move(servo_id, "left"))
         left_btn.clicked.connect(lambda: self.on_inch_move(servo_id, "left"))
         left_btn.released.connect(lambda: self.on_jog_stop(servo_id))
         move_layout.addWidget(left_btn)
         
-        move_layout.addSpacing(50)
-        
         right_btn = QPushButton("전진 ▶")
         right_btn.setObjectName("jog_btn")
-        right_btn.setMinimumSize(120, 60)
+        right_btn.setFixedSize(199, 60)
         right_btn.pressed.connect(lambda: self.on_jog_move(servo_id, "right"))
         right_btn.clicked.connect(lambda: self.on_inch_move(servo_id, "right"))
         right_btn.released.connect(lambda: self.on_jog_stop(servo_id))
         move_layout.addWidget(right_btn)
         
         jog_layout.addLayout(move_layout)
+
+        layout.addWidget(jog_box)
         
-        parent_layout.addWidget(jog_group)
+        parent_layout.addLayout(layout)
     
     # 이벤트 핸들러
     def on_servo_on(self, servo_id):
@@ -400,6 +393,14 @@ class ServoTab(QWidget):
     def on_servo_off(self, servo_id):
         log("서보 OFF")
         self.app.servo_off(servo_id)
+
+    def on_servo_toggle(self, servo_id, checked):
+        if checked:
+            log("서보 ON")
+            self.app.servo_on(servo_id)
+        else:
+            log("서보 OFF")
+            self.app.servo_off(servo_id)
     
     def on_reset(self, servo_id):
         log("서보 리셋")
@@ -495,8 +496,8 @@ class ServoTab(QWidget):
         err_code = _data[4]
         warn_code = _data[5]
 
-        _pos.setText(f"{cur_pos:.03f}")
-        _v.setText(f"{cur_v:.03f}")
+        _pos.setText(f"{cur_pos:.03f} mm")
+        _v.setText(f"{cur_v:.03f} mm/s")
         if err_code != 0:
             _err_ind.setText("🔴 오류")
             _err.setText(f"{err_code:04X}")
@@ -510,56 +511,110 @@ class ServoTab(QWidget):
     
     def apply_styles(self):
         """스타일시트 적용"""
-        self.setStyleSheet("""
-            QGroupBox {
-                background-color: #0d1117;
-                border: 2px solid #30363d;
-                border-radius: 8px;
-                padding-top: 15px;
-                margin-top: 10px;
-                font-size: 14px;
-                font-weight: bold;
-                color: #c9d1d9;
+        self.setStyleSheet(
+            """
+            /* 스크롤바 */
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
             }
-            
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 3px 10px;
-                color: #58a6ff;
+
+            QScrollBar:vertical {
+                border: none;
+                background: #F3F4F6;
+                width: 5px;
+                margin: 0px;
             }
-            
-            QLabel {
-                color: #c9d1d9;
-                font-size: 13px;
-            }
-            
-            #alarm_indicator {
-                font-size: 16px;
-                font-weight: bold;
-                padding: 5px;
-            }
-            
-            #input_field {
-                background-color: #161b22;
-                border: 2px solid #30363d;
+
+            QScrollBar::handle:vertical {
+                background: #E2E2E2;
+                min-height: 20px;
                 border-radius: 5px;
-                padding: 5px;
-                color: #c9d1d9;
-                font-size: 13px;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+
+            #scroll_content {
+                background-color: transparent;
+            }
+
+            #title_label {
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
+            }
+
+            #name_label {
+                color: #4B4B4B;
+                font-size: 14px;
+                font-weight: normal;
+            }
+
+            #unit_label {
+                color: #A8A8A8;
+                font-size: 14px;
+                font-weight: normal;
+            }
+
+            #combo_box {
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                border-radius: 4px;
+                padding: 5px 10px;
+                color: #4B4B4B;
             }
             
-            #input_field:focus {
+            #combo_box:hover {
                 border-color: #58a6ff;
             }
             
-            #control_btn_on {
-                background-color: #238636;
-                color: white;
-                border: 2px solid #2ea043;
-                border-radius: 8px;
+            #combo_box::drop-down {
+                border: none;
+            }
+            
+            #combo_box QAbstractItemView {
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                color: #4B4B4B;
+                selection-background-color: #FFFFFF;
+            }
+
+            #item_box {
+                background-color: #F3F4F6;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
+            }
+
+            #control_box {
+                background-color: #FAFAFA;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
+            }
+            
+            #input_field {
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                border-radius: 4px;
+                padding: 10;
+                color: #000000;
                 font-size: 14px;
-                font-weight: bold;
+                font-weight: normal;
+            }
+            
+            #input_field:focus {
+                border-color: #AAAAAA;
+            }
+            
+            /* 제어 버튼 */
+            #control_btn_on {
+                background-color: #2DB591;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_on:hover {
@@ -567,12 +622,12 @@ class ServoTab(QWidget):
             }
             
             #control_btn_off {
-                background-color: #6e7681;
-                color: white;
-                border: 2px solid #8b949e;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #E6E6E6;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_off:hover {
@@ -580,12 +635,12 @@ class ServoTab(QWidget):
             }
             
             #control_btn_reset, #control_btn_move {
-                background-color: #1f6feb;
-                color: white;
-                border: 2px solid #58a6ff;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #353535;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_reset:hover, #control_btn_move:hover {
@@ -593,12 +648,12 @@ class ServoTab(QWidget):
             }
             
             #control_btn_stop {
-                background-color: #da3633;
-                color: white;
-                border: 2px solid #f85149;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #FF2427;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_stop:hover {
@@ -607,68 +662,68 @@ class ServoTab(QWidget):
                            
             #control_btn_homing {
                 background-color: #1f6feb;
-                color: white;
-                border: 2px solid #58a6ff;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_homing:hover {
                 background-color: #58a6ff;
             }
             
-            #setting_btn {
-                background-color: #161b22;
-                color: #c9d1d9;
-                border: 2px solid #30363d;
-                border-radius: 5px;
-                padding: 8px;
-                font-size: 13px;
+            /* 위치 저장/이동 */
+            #pos_btn {
+                background-color: #E6E6E6;
+                color: #000000;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
-            #setting_btn:hover {
-                background-color: #21262d;
-                border-color: #58a6ff;
+            #pos_btn:hover {
+                background-color: #C0C0C0;
             }
             
+            /* 조그 또는 인칭 이동 */
             #jog_btn {
-                background-color: #6e7681;
-                color: white;
-                border: 2px solid #8b949e;
-                border-radius: 8px;
-                font-size: 15px;
-                font-weight: bold;
+                background-color: #E6E6E6;
+                color: #000000;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #jog_btn:hover {
-                background-color: #8b949e;
+                background-color: #C0C0C0;
             }
             
             #jog_btn:pressed {
-                background-color: #58a6ff;
-                border-color: #58a6ff;
+                background-color: #A0A0A0;
             }
             
             QRadioButton {
-                color: #c9d1d9;
-                font-size: 13px;
+                color: #000000;
+                font-size: 14px;
+                font-weight: normal;
             }
             
             QRadioButton::indicator {
-                width: 18px;
-                height: 18px;
+                width: 14px;
+                height: 14px;
+                border: none;
+                border-radius: 1px;
             }
             
             QRadioButton::indicator:unchecked {
-                border: 2px solid #30363d;
-                border-radius: 9px;
-                background-color: #161b22;
+                background-color: #D9D9D9;
             }
             
             QRadioButton::indicator:checked {
-                border: 2px solid #58a6ff;
-                border-radius: 9px;
-                background-color: #58a6ff;
+                background-color: #2DB591;
             }
-        """)
+            """
+        )

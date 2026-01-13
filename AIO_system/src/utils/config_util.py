@@ -272,6 +272,8 @@ APP_CONFIG = {
 FEEDER_TIME_1 = 20 # 피더 제품 미배출 기본 대기 시간
 FEEDER_TIME_2 = 10 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간
 
+LOG_PATH = Path(__file__).resolve().parent.parent.parent / "log"
+
 # ============================================================
 # endregion
 # ============================================================
@@ -338,8 +340,111 @@ CAMERA_CONFIGS = {
 
 
 # ============================================================
-# region Others
+# region UI
 # ============================================================
+
+UI_PATH = Path(__file__).resolve().parent.parent / "ui"
+
+from PySide6.QtWidgets import QAbstractButton
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QRectF
+from PySide6.QtGui import QPainter, QColor, QFont
+
+class ToggleButton(QAbstractButton):
+    def __init__(self, parent=None, width=60, height=28, on_text="ON", off_text="OFF"):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(width, height) # 알약 크기 조절
+
+        self.on_text = on_text
+        self.off_text = off_text
+
+        # 애니메이션 설정: 흰색 원의 위치를 제어
+        self._handle_position = self.width() - self.height() + 3 # 초기 위치 (왼쪽)
+        self.animation = QPropertyAnimation(self, b"handle_position", self)
+        self.animation.setDuration(100) # 이동 속도 (ms)
+        self.animation.setEasingCurve(QEasingCurve.InOutSine)
+
+        # 색상 설정
+        self._bg_color_off = QColor("#727272") # 꺼졌을 때 그레이
+        self._bg_color_on = QColor("#2DB591")  # 켜졌을 때 테마색
+        self._circle_color = QColor("#FFFFFF") # 내부 원 흰색
+
+    # 애니메이션을 위한 속성(Property) 정의
+    @Property(float)
+    def handle_position(self):
+        return self._handle_position
+
+    @handle_position.setter
+    def handle_position(self, pos):
+        self._handle_position = pos
+        self.update() # 화면 다시 그리기 호출
+
+    def _get_end_pos(self):
+        return 3 if self.isChecked() else self.width() - self.height() + 3
+
+    def setChecked(self, checked):
+        super().setChecked(checked)
+        self._handle_position = self._get_end_pos()
+        self.update()
+
+    def nextCheckState(self):
+        # 클릭 시 상태 전환 및 애니메이션 시작
+        super().nextCheckState()
+
+        self.animation.stop()
+        self.animation.setStartValue(self._handle_position)
+        self.animation.setEndValue(self._get_end_pos())
+        self.animation.start()
+
+    def resizeEvent(self, event):
+        self._handle_position = self._get_end_pos()
+        super().resizeEvent(event)
+
+    def paintEvent(self, event):
+        # 직접 위젯 그리기
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing) # 부드럽게 처리
+
+        # 1. 배경(알약 모양) 그리기
+        color = self._bg_color_on if self.isChecked() else self._bg_color_off
+        painter.setBrush(color)
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(0, 0, self.width(), self.height(), self.height()/2, self.height()/2)
+
+        # 2. 텍스트 그리기 로직
+        painter.setPen(QColor("#FFFFFF")) # 글자 색상
+        font = painter.font()
+        font.setFamily("Poppins")
+        font.setPixelSize(16)
+        font.setWeight(QFont.Weight.Medium)
+        painter.setFont(font)
+
+        # 상태에 따라 텍스트 내용과 위치 결정
+        if self.isChecked():
+            # 켜졌을 때: 원이 왼쪽에 있으므로 텍스트는 오른쪽에 배치
+            text = self.on_text
+            text_rect = QRectF(self.width() * 0.25, 0, self.width() * 0.75, self.height())
+            alignment = Qt.AlignCenter | Qt.AlignRight
+            padding = 18
+        else:
+            # 꺼졌을 때: 원이 오른쪽에 있으므로 텍스트는 왼쪽에 배치
+            text = self.off_text
+            text_rect = QRectF(0, 0, self.width() * 0.75, self.height())
+            alignment = Qt.AlignCenter | Qt.AlignLeft
+            padding = 8
+
+        # 텍스트 그리기 (여백 적용을 위해 text_rect 내부에서 정렬)
+        # 조금 더 세밀한 조정을 원하면 QRectF 좌표에 padding을 가감하세요.
+        painter.drawText(text_rect.adjusted(padding, 0, -padding, 0), alignment, text)
+
+        # 3. 흰색 원(핸들) 그리기 (텍스트 위에 덮어씌워지지 않도록 마지막에 그림)
+        painter.setBrush(self._circle_color)
+        painter.setPen(Qt.NoPen)
+        margin = 3
+        circle_size = self.height() - (margin * 2)
+        painter.drawEllipse(QRectF(self._handle_position, margin, circle_size, circle_size))
+
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 

@@ -3,12 +3,14 @@
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QGroupBox, QTextEdit, QScrollArea,
-    QFrame, QTabWidget
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QButtonGroup, QPushButton, QTextEdit,
+    QScrollArea, QFrame, QStackedWidget,
 )
 from PySide6.QtCore import Qt, QDateTime
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QTextCursor, QPixmap
+
+from src.utils.config_util import UI_PATH
 
 
 class IOIndicator(QFrame):
@@ -24,28 +26,46 @@ class IOIndicator(QFrame):
     def init_ui(self):
         """UI 초기화"""
         self.setObjectName("io_indicator")
-        self.setMinimumHeight(45)
-        self.setMaximumHeight(45)
+        self.setFixedHeight(45)
+        self.setStyleSheet(
+            """
+            border: none;
+            border-bottom: 1px solid #E2E2E2;
+            """
+        )
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # 상태 LED
         self.led = QLabel("⚫")
-        # self.led.setObjectName("led_off")
-        self.led.setStyleSheet("font-size: 20px;")
+        self.led.setStyleSheet("border: none; font-size: 16px;")
         layout.addWidget(self.led)
         
         # IO 이름
         name_label = QLabel(self.io_name)
-        name_label.setStyleSheet("color: #c9d1d9; font-size: 12px; font-weight: bold;")
+        name_label.setStyleSheet(
+            """
+            border: none;
+            color: #1B1B1B;
+            font-family: 'Pretendard';
+            font-size: 14px;
+            font-weight: normal;
+            """)
         layout.addWidget(name_label)
         
         layout.addStretch()
         
         # IO 주소
         addr_label = QLabel(self.io_address)
-        addr_label.setStyleSheet("color: #8b949e; font-size: 11px;")
+        addr_label.setStyleSheet(
+            """
+            border: none;
+            color: #000000;
+            font-family: 'Pretendard';
+            font-size: 14px;
+            font-weight: normal;
+            """)
         layout.addWidget(addr_label)
     
     def set_state(self, is_on: bool):
@@ -53,24 +73,8 @@ class IOIndicator(QFrame):
         if self.is_on ^ is_on:
             if is_on:
                 self.led.setText("🟢")
-                # self.led.setObjectName("led_on")
-                # self.setStyleSheet("""
-                #     #io_indicator {
-                #         background-color: #1a2e1a;
-                #         border: 2px solid #2ea043;
-                #         border-radius: 5px;
-                #     }
-                # """)
             else:
                 self.led.setText("⚫")
-                # self.led.setObjectName("led_off")
-                # self.setStyleSheet("""
-                #     #io_indicator {
-                #         background-color: #161b22;
-                #         border: 2px solid #30363d;
-                #         border-radius: 5px;
-                #     }
-                # """)
             self.is_on = is_on
 
 
@@ -85,8 +89,8 @@ class IOCheckTab(QWidget):
     def init_ui(self):
         """UI 초기화"""
         main_layout = QHBoxLayout(self)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         
         # 좌측: Input
         self.create_input_section(main_layout)
@@ -99,39 +103,39 @@ class IOCheckTab(QWidget):
     
     def create_input_section(self, parent_layout):
         """Input 섹션"""
-        input_group = QGroupBox("Input (센서)")
-        input_group.setObjectName("group_box")
+        layout = QVBoxLayout()
+        layout.setSpacing(0)
+
+        layout.addSpacing(30)
+
+        header_layout = QHBoxLayout()
+        input_title = QLabel(f"Input(센서)")
+        input_title.setObjectName("title_label")
+        header_layout.addWidget(input_title)
+
+        header_layout.addSpacing(15)
+
+        layout.addLayout(header_layout)
+
+        layout.addSpacing(15)
+
+        outer_box = QFrame()
+        outer_box.setObjectName("contents_box")
+
+        contents_layout = QVBoxLayout(outer_box)
         
-        # 스크롤 영역
-        scroll = QScrollArea()
+        # 스크롤
+        scroll = QScrollArea(outer_box)
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea { 
-                border: none; 
-                background-color: transparent; 
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #0d1117;
-                width: 10px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #30363d;
-                min-height: 20px;
-                border-radius: 5px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
-        
+
         scroll_content = QWidget()
         scroll_content.setObjectName("scroll_content")
-        # 컨텐츠 위젯도 투명하게 설정해야 그룹박스 배경색이 돋보임
-        scroll_content.setStyleSheet("#scroll_content { background-color: transparent; }")
+        scroll_content.setMaximumWidth(1610)
+
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(5)
+        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setSpacing(0)
+        scroll_layout.setContentsMargins(25, 10, 25, 10)
         
         # Input IO 항목들
         self.inputs = {}
@@ -177,47 +181,50 @@ class IOCheckTab(QWidget):
         
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
+
+        contents_layout.addWidget(scroll)
         
-        group_layout = QVBoxLayout(input_group)
-        group_layout.addWidget(scroll)
+        layout.addWidget(outer_box)
+
+        layout.addSpacing(25)
         
-        parent_layout.addWidget(input_group)
+        parent_layout.addLayout(layout)
     
     def create_output_section(self, parent_layout):
         """Output 섹션"""
-        output_group = QGroupBox("Output (에어나이프)")
-        output_group.setObjectName("group_box")
+        layout = QVBoxLayout()
+        layout.setSpacing(0)
+
+        layout.addSpacing(30)
+
+        header_layout = QHBoxLayout()
+        output_title = QLabel(f"Output(에어나이프)")
+        output_title.setObjectName("title_label")
+        header_layout.addWidget(output_title)
+
+        header_layout.addSpacing(15)
+
+        layout.addLayout(header_layout)
+
+        layout.addSpacing(15)
+
+        outer_box = QFrame()
+        outer_box.setObjectName("contents_box")
+
+        contents_layout = QVBoxLayout(outer_box)
         
-        # 스크롤 영역
+        # 스크롤
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea { 
-                border: none; 
-                background-color: transparent; 
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #0d1117;
-                width: 10px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #30363d;
-                min-height: 20px;
-                border-radius: 5px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
-        
+
         scroll_content = QWidget()
         scroll_content.setObjectName("scroll_content")
-        # 컨텐츠 위젯도 투명하게 설정해야 그룹박스 배경색이 돋보임
-        scroll_content.setStyleSheet("#scroll_content { background-color: transparent; }")
+        scroll_content.setMaximumWidth(1610)
+
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(5)
+        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setSpacing(0)
+        scroll_layout.setContentsMargins(25, 10, 25, 10)
         
         # Output IO 항목들
         self.outputs = {}
@@ -263,11 +270,14 @@ class IOCheckTab(QWidget):
         
         scroll_layout.addStretch()
         scroll.setWidget(scroll_content)
+
+        contents_layout.addWidget(scroll)
         
-        group_layout = QVBoxLayout(output_group)
-        group_layout.addWidget(scroll)
+        layout.addWidget(outer_box)
+
+        layout.addSpacing(25)
         
-        parent_layout.addWidget(output_group)
+        parent_layout.addLayout(layout)
     
     def update_io_state(self, io_address: str, is_on: bool):
         """IO 상태 업데이트"""
@@ -293,25 +303,48 @@ class IOCheckTab(QWidget):
     
     def apply_styles(self):
         """스타일시트 적용"""
-        self.setStyleSheet("""
-            QGroupBox {
-                background-color: #0d1117;
-                border: 2px solid #30363d;
-                border-radius: 8px;
-                padding-top: 15px;
-                margin-top: 10px;
-                font-size: 14px;
-                font-weight: bold;
-                color: #c9d1d9;
+        self.setStyleSheet(
+            """
+            /* 스크롤바 */
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #F3F4F6;
+                width: 5px;
+                margin: 0px;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #E2E2E2;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+
+            #scroll_content {
+                background-color: transparent;
+            }
+
+            #contents_box {
+                background-color: #FAFAFA;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
             }
             
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 3px 10px;
-                color: #58a6ff;
+            #title_label {
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
             }
-        """)
+            """
+        )
 
 
 class LogTab(QWidget):
@@ -325,61 +358,88 @@ class LogTab(QWidget):
     def init_ui(self):
         """UI 초기화"""
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        main_layout.addSpacing(25)
         
         # 상단: 제어
         control_layout = QHBoxLayout()
         
         # 로그 레벨 필터
-        control_layout.addWidget(QLabel("로그 레벨:"))
+        lv_title = QLabel("로그 레벨:")
+        lv_title.setObjectName("title_label")
+        control_layout.addWidget(lv_title)
+
+        control_layout.addSpacing(15)
+
+        self.btn_group = QButtonGroup(self)
+        self.btn_group.setExclusive(True)
+        self.btn_group.idClicked.connect(self.filter_log)
         
         self.level_all = QPushButton("전체")
+        self.level_all.setFixedSize(104, 34)
         self.level_all.setCheckable(True)
         self.level_all.setChecked(True)
-        self.level_all.setObjectName("filter_btn")
-        self.level_all.clicked.connect(lambda: self.filter_log("all"))
+        self.level_all.setObjectName("left_filter_btn")
         control_layout.addWidget(self.level_all)
+        self.btn_group.addButton(self.level_all, 0)
         
         self.level_info = QPushButton("ℹ️ 정보")
+        self.level_info.setFixedSize(104, 34)
         self.level_info.setCheckable(True)
         self.level_info.setObjectName("filter_btn")
-        self.level_info.clicked.connect(lambda: self.filter_log("info"))
         control_layout.addWidget(self.level_info)
+        self.btn_group.addButton(self.level_info, 1)
         
         self.level_warning = QPushButton("⚠️ 경고")
+        self.level_warning.setFixedSize(104, 34)
         self.level_warning.setCheckable(True)
         self.level_warning.setObjectName("filter_btn")
-        self.level_warning.clicked.connect(lambda: self.filter_log("warning"))
         control_layout.addWidget(self.level_warning)
+        self.btn_group.addButton(self.level_warning, 2)
         
         self.level_error = QPushButton("❌ 에러")
+        self.level_error.setFixedSize(104, 34)
         self.level_error.setCheckable(True)
-        self.level_error.setObjectName("filter_btn")
-        self.level_error.clicked.connect(lambda: self.filter_log("error"))
+        self.level_error.setObjectName("right_filter_btn")
         control_layout.addWidget(self.level_error)
+        self.btn_group.addButton(self.level_error, 3)
         
         control_layout.addStretch()
         
         # 지우기
         clear_btn = QPushButton("로그 지우기")
         clear_btn.setObjectName("clear_btn")
+        clear_btn.setFixedSize(141, 40)
         clear_btn.clicked.connect(self.clear_log)
         control_layout.addWidget(clear_btn)
+
+        control_layout.addSpacing(15)
         
         # 저장
         save_btn = QPushButton("저장")
         save_btn.setObjectName("save_btn")
+        save_btn.setFixedSize(141, 40)
         save_btn.clicked.connect(self.save_log)
         control_layout.addWidget(save_btn)
         
         main_layout.addLayout(control_layout)
+
+        main_layout.addSpacing(15)
         
         # 로그 텍스트
+        outer_box = QFrame()
+        outer_box.setObjectName("contents_box")
+
+        contents_layout = QVBoxLayout(outer_box)
+
         self.log_text = QTextEdit()
         self.log_text.setObjectName("log_text")
         self.log_text.setReadOnly(True)
-        main_layout.addWidget(self.log_text)
+        contents_layout.addWidget(self.log_text)
+        main_layout.addWidget(outer_box)
+        main_layout.addSpacing(25)
         
         # 스타일 적용
         self.apply_styles()
@@ -428,40 +488,112 @@ class LogTab(QWidget):
     
     def apply_styles(self):
         """스타일시트 적용"""
-        self.setStyleSheet("""
-            QLabel {
-                color: #c9d1d9;
-                font-size: 13px;
+        self.setStyleSheet(
+            """
+            /* 스크롤바 */
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #F3F4F6;
+                width: 5px;
+                margin: 0px;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #E2E2E2;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+
+            #scroll_content {
+                background-color: transparent;
+            }
+
+            #contents_box {
+                background-color: #FAFAFA;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
+            }
+            
+            #title_label {
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #filter_btn {
-                background-color: #161b22;
-                color: #8b949e;
-                border: 2px solid #30363d;
-                border-radius: 5px;
-                padding: 5px 15px;
-                font-size: 12px;
+                background-color: #F2F2F2;
+                border: 1px solid #E2E2E2;
+                color: #7F7F7F;
+                font-size: 14px;
+                font-weight: normal;
             }
             
             #filter_btn:checked {
-                background-color: #1f6feb;
-                color: white;
-                border-color: #58a6ff;
-                font-weight: bold;
+                background-color: #2DB591;
+                color: #FFFFFF;
+                font-weight: medium;
             }
             
             #filter_btn:hover {
-                border-color: #58a6ff;
+                color: #000000;
+            }
+
+            #left_filter_btn {
+                background-color: #F2F2F2;
+                border: 1px solid #E2E2E2;
+                border-top-left-radius: 4px;
+                border-bottom-left-radius: 4px;
+                color: #7F7F7F;
+                font-size: 14px;
+                font-weight: normal;
+            }
+            
+            #left_filter_btn:checked {
+                background-color: #2DB591;
+                color: #FFFFFF;
+                font-weight: medium;
+            }
+            
+            #left_filter_btn:hover {
+                color: #000000;
+            }
+
+            #right_filter_btn {
+                background-color: #F2F2F2;
+                border: 1px solid #E2E2E2;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                color: #7F7F7F;
+                font-size: 14px;
+                font-weight: normal;
+            }
+            
+            #right_filter_btn:checked {
+                background-color: #2DB591;
+                color: #FFFFFF;
+                font-weight: medium;
+            }
+            
+            #right_filter_btn:hover {
+                color: #000000;
             }
             
             #clear_btn {
-                background-color: #da3633;
-                color: white;
-                border: 2px solid #f85149;
-                border-radius: 6px;
-                padding: 5px 15px;
-                font-size: 13px;
-                font-weight: bold;
+                background-color: #353535;
+                border: none;
+                border-radius: 4px;
+                color: #FFFFFF;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #clear_btn:hover {
@@ -469,13 +601,12 @@ class LogTab(QWidget):
             }
             
             #save_btn {
-                background-color: #1f6feb;
-                color: white;
-                border: 2px solid #58a6ff;
-                border-radius: 6px;
-                padding: 5px 15px;
-                font-size: 13px;
-                font-weight: bold;
+                background-color: #2DB591;
+                border: none;
+                border-radius: 4px;
+                color: #FFFFFF;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #save_btn:hover {
@@ -483,46 +614,110 @@ class LogTab(QWidget):
             }
             
             #log_text {
-                background-color: #0d1117;
-                border: 2px solid #30363d;
-                border-radius: 8px;
-                color: #c9d1d9;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 12px;
-                padding: 10px;
+                background-color: transparent;
+                border: none;
+                color: #1B1B1B;
+                font-family: 'Pretendard';
+                font-size: 14px;
             }
-        """)
+            """
+        )
 
 
 class LogsPage(QWidget):
     """로그 페이지 - IO 체크 및 로그"""
     
-    def __init__(self, app):
+    def __init__(self, app, title: QLabel):
         super().__init__()
         self.app = app
+        self.title = title
         self.init_ui()
     
     def init_ui(self):
         """UI 초기화"""
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        # 사이드바
+        self.side_widget = QFrame(self)
+        side_layout = QVBoxLayout(self.side_widget)
+        side_layout.setSpacing(0)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.create_sidebar(side_layout)
+
+        side_layout.addSpacing(20)
+
+        self.create_side_tab(side_layout)
+
+        side_layout.addStretch()
+
+        # 컨텐츠 영역
+        self.main_widget = QFrame(self)
+        main_layout = QVBoxLayout(self.main_widget)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 탭 위젯
-        self.tabs = QTabWidget()
-        self.tabs.setObjectName("diagnosis_tabs")
+        self.pages = QStackedWidget()
         
-        # IO 체크 탭
+        # 탭 추가
         self.io_tab = IOCheckTab(self.app)
-        self.tabs.addTab(self.io_tab, "IO 체크")
-        
-        # 로그 탭
         self.log_tab = LogTab(self.app)
-        self.tabs.addTab(self.log_tab, "로그")
         
-        main_layout.addWidget(self.tabs)
+        self.pages.addWidget(self.io_tab)
+        self.pages.addWidget(self.log_tab)
+        
+        main_layout.addWidget(self.pages)
         
         # 스타일 적용
         self.apply_styles()
+
+    def create_sidebar(self, parent_layout):
+        title_layout = QHBoxLayout()
+        title_layout.setSpacing(0)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+
+        title_layout.addSpacing(30)
+
+        img_label = QLabel()
+        img_label.setObjectName("side_title_logo")
+        logo_img = QPixmap(str(UI_PATH / "logo/log_page.png"))
+        img_label.setPixmap(logo_img)
+        img_label.setScaledContents(True)
+        img_label.setFixedSize(16, 16)
+        title_layout.addWidget(img_label)
+
+        title_layout.addSpacing(10)
+
+        title_label = QLabel("로그")
+        title_label.setObjectName("side_title_label")
+        title_layout.addWidget(title_label)
+
+        parent_layout.addLayout(title_layout)
+
+    nav_list = [
+        "IO 체크",
+        "로그",
+    ]
+    
+    def create_side_tab(self, parent_layout):
+        self.btn_group = QButtonGroup(self)
+        self.btn_group.setExclusive(True)
+        self.btn_group.idClicked.connect(self.show_page)
+        
+        for i, text in enumerate(self.nav_list):
+            btn = QPushButton(text)
+            btn.setObjectName("nav_button")
+            btn.setCheckable(True)
+            btn.setFixedHeight(44)
+            
+            parent_layout.addWidget(btn)
+            self.btn_group.addButton(btn, i)
+    
+    def show_page(self, index):
+        """페이지 전환"""
+        self.pages.setCurrentIndex(index)
+        
+        # 페이지 제목 업데이트
+        if index < len(self.nav_list):
+            self.title.setText(self.nav_list[index])
     
     def add_log(self, message, level="info"):
         """로그 추가 (외부 호출용)"""
@@ -530,35 +725,37 @@ class LogsPage(QWidget):
     
     def apply_styles(self):
         """스타일시트 적용"""
-        self.setStyleSheet("""
-            QTabWidget::pane {
-                border: 2px solid #30363d;
-                border-radius: 8px;
-                background-color: #161b22;
-                top: -1px;
+        self.side_widget.setStyleSheet(
+            """
+            /* 사이드바 제목 */
+            #side_title_label {
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
             }
-            
-            QTabBar::tab {
-                background-color: #0d1117;
-                color: #8b949e;
-                padding: 12px 24px;
-                margin-right: 2px;
-                border: 2px solid #30363d;
-                border-bottom: none;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
+
+            /* 네비게이션 버튼 */
+            #nav_button {
+                background-color: transparent;
+                min-height: 44px;
+                max-height: 44px;
+                color: #000000;
+                border: none;
+                text-align: left;
+                padding-left: 30px;
                 font-size: 14px;
-                font-weight: bold;
+                font-weight: normal;
             }
             
-            QTabBar::tab:selected {
-                background-color: #161b22;
-                color: #58a6ff;
-                border-color: #30363d;
+            #nav_button:hover {
+                background-color: #FFFFFF;
+                font-weight:500;
             }
             
-            QTabBar::tab:hover {
-                background-color: #21262d;
-                color: #c9d1d9;
+            #nav_button:checked {
+                background-color: #FFFFFF;
+                color: #2DB591;
+                font-weight: medium;
             }
-        """)
+            """
+        )

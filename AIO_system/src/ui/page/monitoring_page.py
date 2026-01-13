@@ -4,7 +4,7 @@
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QGroupBox, QFrame, QComboBox,
+    QLabel, QPushButton, QScrollArea, QFrame, QComboBox,
     QLineEdit
 )
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
@@ -17,7 +17,7 @@ import numpy as np
 from src.AI.predict_AI import AIPlasticDetectionSystem
 from src.AI.cam.camera_thread import CameraThread
 from src.utils.logger import log
-from src.utils.config_util import CAMERA_CONFIGS
+from src.utils.config_util import CAMERA_CONFIGS, UI_PATH
 
 
 class CameraView(QFrame):
@@ -47,18 +47,19 @@ class CameraView(QFrame):
         self.setMinimumSize(400, 300)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(5)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         
         # 헤더
         header_layout = QHBoxLayout()
+        header_layout.setAlignment(Qt.AlignLeft)
         
         # 카메라 이름
         title = QLabel(self.camera_name)
         title.setObjectName("camera_title")
         header_layout.addWidget(title)
         
-        header_layout.addStretch()
+        header_layout.addSpacing(15)
         
         # 상태 표시
         self.status = QLabel("🟢 연결됨")
@@ -66,6 +67,8 @@ class CameraView(QFrame):
         header_layout.addWidget(self.status)
         
         layout.addLayout(header_layout)
+
+        layout.addSpacing(15)
         
         # 카메라 화면
         self.image_label = QLabel()
@@ -73,29 +76,50 @@ class CameraView(QFrame):
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setMinimumSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
         self.image_label.setText("📷 카메라 대기 중...")
-        self.image_label.setStyleSheet("""
-            background-color: #000000;
-            color: #8b949e;
+        self.image_label.setStyleSheet(
+            """
+            background-color: #FAFAFA;
+            color: #B9B9B9;
             font-size: 14px;
-            border: 2px solid #30363d;
-            border-radius: 5px;
-        """)
+            font-weight: medium;
+            border: 1px solid #E2E2E2;
+            border-radius: 7px;
+            """
+        )
         layout.addWidget(self.image_label)
         
         # 하단 정보
         info_layout = QHBoxLayout()
         
         self.fps_label = QLabel("FPS: 0")
-        self.fps_label.setStyleSheet("color: #8b949e; font-size: 11px;")
+        self.fps_label.setStyleSheet(
+            """
+            color: #989898;
+            font-size: 12px;
+            font-weight: normal;
+            margin-left: 10px;
+            margin-bottom: 25px;
+            """
+        )
         info_layout.addWidget(self.fps_label)
         
         info_layout.addStretch()
         
         self.resolution = QLabel("해상도: 1920x1080")
-        self.resolution.setStyleSheet("color: #8b949e; font-size: 11px;")
+        self.resolution.setStyleSheet(
+            """
+            color: #989898;
+            font-size: 12px;
+            font-weight: normal;
+            margin-right: 10px;
+            margin-bottom: 25px;
+            """
+        )
         info_layout.addWidget(self.resolution)
         
         layout.addLayout(info_layout)
+
+        layout.addStretch()
         
     def start_camera(self):
         """카메라 시작"""
@@ -221,109 +245,176 @@ class MonitoringPage(QWidget):
     
     def init_ui(self):
         """UI 초기화"""
-        main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        
+        # 사이드바
+        self.side_widget = QFrame(self)
+        side_layout = QVBoxLayout(self.side_widget)
+        side_layout.setSpacing(0)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.create_sidebar(side_layout)
+
+        side_layout.addStretch()
+
+        # 컨텐츠 영역
+        self.main_widget = QFrame(self)
+        main_layout = QVBoxLayout(self.main_widget)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 스크롤
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        scroll_content = QWidget()
+        scroll_content.setObjectName("scroll_content")
+        scroll_content.setMaximumWidth(1610)
+
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setSpacing(0)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll_layout.addSpacing(25)
+
         # 상단: 제어 패널
-        self.create_control_panel(main_layout)
+        self.create_control_panel(scroll_layout)
+
+        scroll_layout.addSpacing(30)
         
         # 중단: RGB 카메라 (2x2)
-        self.create_rgb_cameras(main_layout)
+        self.create_rgb_cameras(scroll_layout)
+
+        scroll_layout.addSpacing(30)
         
         # 하단: 초분광 카메라
-        self.create_hyperspectral_camera(main_layout)
+        self.create_hyperspectral_camera(scroll_layout)
+
+        scroll_layout.addSpacing(30)
+
+        scroll.setWidget(scroll_content)
+        main_layout.addWidget(scroll)
         
         # 스타일 적용
         self.apply_styles()
+
+    def create_sidebar(self, parent_layout):
+        title_layout = QHBoxLayout()
+        title_layout.setSpacing(0)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+
+        title_layout.addSpacing(30)
+
+        img_label = QLabel()
+        img_label.setObjectName("side_title_logo")
+        logo_img = QPixmap(str(UI_PATH / "logo/monitoring_page.png"))
+        img_label.setPixmap(logo_img)
+        img_label.setScaledContents(True)
+        img_label.setFixedSize(16, 16)
+        title_layout.addWidget(img_label)
+
+        title_layout.addSpacing(10)
+
+        title_label = QLabel("실시간 모니터링")
+        title_label.setObjectName("side_title_label")
+        title_layout.addWidget(title_label)
+
+        parent_layout.addLayout(title_layout)
     
     def create_control_panel(self, parent_layout):
         """제어 패널"""
-        control_group = QGroupBox("제어")
-        control_group.setObjectName("group_box")
-        control_layout = QHBoxLayout(control_group)
-        control_layout.setSpacing(15)
+        control_box = QFrame()
+        control_box.setObjectName("control_box")
+        layout = QHBoxLayout(control_box)
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 30, 30, 30)
         
         # 전체 시작/정지
-        start_all_btn = QPushButton("전체 시작")
+        start_all_btn = QPushButton("▶️전체 시작")
         start_all_btn.setObjectName("control_btn_start")
-        start_all_btn.setMinimumHeight(45)
+        start_all_btn.setFixedSize(199, 60)
         start_all_btn.clicked.connect(self.on_start_all)
-        control_layout.addWidget(start_all_btn)
+        layout.addWidget(start_all_btn)
         
-        stop_all_btn = QPushButton("전체 정지")
+        stop_all_btn = QPushButton("⏹️전체 정지")
         stop_all_btn.setObjectName("control_btn_stop")
-        stop_all_btn.setMinimumHeight(45)
+        stop_all_btn.setFixedSize(199, 60)
         stop_all_btn.clicked.connect(self.on_stop_all)
-        control_layout.addWidget(stop_all_btn)
-        
-        # 스냅샷
-        snapshot_btn = QPushButton("스냅샷")
-        snapshot_btn.setObjectName("control_btn_snapshot")
-        snapshot_btn.setMinimumHeight(45)
-        snapshot_btn.clicked.connect(self.on_snapshot)
-        control_layout.addWidget(snapshot_btn)
-        
+        layout.addWidget(stop_all_btn)
+
         # 녹화
-        self.record_btn = QPushButton("녹화 시작")
+        self.record_btn = QPushButton("▶️녹화 시작")
         self.record_btn.setObjectName("control_btn_record")
         self.record_btn.setCheckable(True)
-        self.record_btn.setMinimumHeight(45)
+        self.record_btn.setFixedSize(199, 60)
         self.record_btn.clicked.connect(self.on_record)
-        control_layout.addWidget(self.record_btn)
+        layout.addWidget(self.record_btn)
+        
+        # 스냅샷
+        snapshot_btn = QPushButton("📸스냅샷")
+        snapshot_btn.setObjectName("control_btn_snapshot")
+        snapshot_btn.setFixedSize(199, 60)
+        snapshot_btn.clicked.connect(self.on_snapshot)
+        layout.addWidget(snapshot_btn)
+
+        layout.addSpacing(15)
         
         # 해상도 선택
-        control_layout.addWidget(QLabel("해상도:"))
+        res_title = QLabel("해상도:")
+        res_title.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 16px;
+            font-weight: normal;
+            """
+        )
+        layout.addWidget(res_title)
+
         self.resolution_combo = QComboBox()
         self.resolution_combo.setObjectName("combo_box")
+        self.resolution_combo.setFixedSize(220, 40)
         self.resolution_combo.addItems(["1920x1080", "1280x720", "640x480"])
-        control_layout.addWidget(self.resolution_combo)
-
-        # 구분선
-        separator1 = QFrame()
-        separator1.setFrameShape(QFrame.VLine)
-        separator1.setStyleSheet("background-color: #30363d;")
-        control_layout.addWidget(separator1)
+        layout.addWidget(self.resolution_combo)
 
         # 배출 순서 제어
-        control_layout.addWidget(QLabel("배출 순서 제어:"))
+        layout.addWidget(QLabel("배출 순서 제어:"))
 
         _saved_seq = self.app.config.get("air_sequence", [])
         _prev = "".join([str(n) for n in _saved_seq])
         self.sequence_edit = QLineEdit(f"{_prev}")
         _rx = QRegularExpression("^[1-3]*$")
-        self.sequence_edit.setValidator(QRegularExpressionValidator(_rx, control_layout))
+        self.sequence_edit.setValidator(QRegularExpressionValidator(_rx, layout))
         self.sequence_edit.setPlaceholderText("1 ~ 3 의 값을 연속 입력 가능")
         self.sequence_edit.setObjectName("input_field")
         self.sequence_edit.setMaximumWidth(300)
         self.sequence_edit.setAlignment(Qt.AlignLeft)
         self.sequence_edit.returnPressed.connect(lambda: self.on_set_sequence())
-        control_layout.addWidget(self.sequence_edit)
+        layout.addWidget(self.sequence_edit)
 
         sequence_set_btn = QPushButton("설정")
         sequence_set_btn.setObjectName("setting_btn")
+        sequence_set_btn.setMinimumHeight(60)
+        sequence_set_btn.setMinimumWidth(60)
         sequence_set_btn.clicked.connect(lambda: self.on_set_sequence())
-        control_layout.addWidget(sequence_set_btn)
+        layout.addWidget(sequence_set_btn)
 
         self.toggle_btn = QPushButton("미사용")
         self.toggle_btn.setObjectName(f"toggle_btn")
         self.toggle_btn.setCheckable(True)
         self.toggle_btn.setChecked(False)
-        self.toggle_btn.setMinimumHeight(45)
+        self.toggle_btn.setMinimumHeight(60)
         self.toggle_btn.setMinimumWidth(60)
         self.toggle_btn.clicked.connect(lambda checked: self.on_use_sequence(checked))
-        control_layout.addWidget(self.toggle_btn)
+        layout.addWidget(self.toggle_btn)
         
-        control_layout.addStretch()
+        layout.addStretch()
         
-        parent_layout.addWidget(control_group)
+        parent_layout.addWidget(control_box)
     
     def create_rgb_cameras(self, parent_layout):
         """RGB 카메라 그리드"""
-        rgb_group = QGroupBox("RGB 카메라")
-        rgb_group.setObjectName("group_box")
-        rgb_layout = QGridLayout(rgb_group)
-        rgb_layout.setSpacing(15)
+        rgb_layout = QGridLayout()
+        rgb_layout.setContentsMargins(0, 0, 0, 0)
+        rgb_layout.setSpacing(20)
         
         # 4개의 RGB 카메라
         self.rgb_cameras = []
@@ -346,13 +437,11 @@ class MonitoringPage(QWidget):
             rgb_layout.addWidget(cam, row, col)
             self.rgb_cameras.append(cam)
         
-        parent_layout.addWidget(rgb_group)
+        parent_layout.addLayout(rgb_layout)
     
     def create_hyperspectral_camera(self, parent_layout):
         """초분광 카메라"""
-        hyper_group = QGroupBox("초분광 카메라 (플라스틱 분류)")
-        hyper_group.setObjectName("group_box")
-        hyper_layout = QVBoxLayout(hyper_group)
+        hyper_layout = QVBoxLayout()
         
         # 카메라 뷰
         camera_layout = QHBoxLayout()
@@ -360,69 +449,109 @@ class MonitoringPage(QWidget):
         self.hyper_camera = CameraView("hyperspectral", "Specim FX17",camera_index=0,app=self.app)
         self.hyper_camera.setMinimumSize(600, 400)
         camera_layout.addWidget(self.hyper_camera)
+
+        camera_layout.addSpacing(20)
         
         # 우측: 분류 통계
+        stats_layout = QVBoxLayout()
+        stats_layout.setSpacing(0)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        stats_title = QLabel("실시간 분류 통계")
+        stats_title.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 16px;
+            font-weight: medium;
+            """
+        )
+        stats_layout.addWidget(stats_title)
+
+        stats_layout.addSpacing(15)
+
         stats_frame = QFrame()
         stats_frame.setObjectName("stats_frame")
-        stats_frame.setMaximumWidth(300)
-        stats_layout = QVBoxLayout(stats_frame)
-        
-        stats_title = QLabel("실시간 분류 통계")
-        stats_title.setStyleSheet("color: #58a6ff; font-size: 14px; font-weight: bold;")
-        stats_layout.addWidget(stats_title)
-        
-        stats_layout.addSpacing(10)
+        stats_frame.setFixedSize(415, 422)
+
+        stats_frame_layout = QVBoxLayout(stats_frame)
         
         # 플라스틱 종류별 카운트
         self.plastic_counts = {}
         plastics = ["PET", "PE", "PP", "PS", "PVC", "기타"]
-        colors = ["#58a6ff", "#3fb950", "#f85149", "#d29922", "#bc4c00", "#8b949e"]
+        colors = ["#258FD0", "#1CB786", "#E43C3C", "#F5A50F", "#BE5EC3", "#878787"]
         
         for plastic, color in zip(plastics, colors):
             count_layout = QHBoxLayout()
             
             label = QLabel(plastic)
-            label.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: bold;")
+            label.setStyleSheet(
+                f"""
+                color: {color};
+                font-size: 16px;
+                font-weight: medium;
+                """
+            )
             count_layout.addWidget(label)
             
             count_layout.addStretch()
             
             count = QLabel("0")
-            count.setStyleSheet(f"color: {color}; font-size: 18px; font-weight: bold;")
+            count.setStyleSheet(
+                f"""
+                color: {color};
+                font-size: 16px;
+                font-weight: medium;
+                """
+            )
             self.plastic_counts[plastic] = count
             count_layout.addWidget(count)
             
-            stats_layout.addLayout(count_layout)
+            stats_frame_layout.addLayout(count_layout)
         
-        stats_layout.addSpacing(10)
+        stats_frame_layout.addSpacing(10)
         
         # 총 처리량
         total_layout = QHBoxLayout()
         total_label = QLabel("총 처리량:")
-        total_label.setStyleSheet("color: #c9d1d9; font-size: 14px; font-weight: bold;")
+        total_label.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 16px;
+            font-weight: medium;
+            """
+        )
         total_layout.addWidget(total_label)
         
         total_layout.addStretch()
         
         self.total_count = QLabel("0")
-        self.total_count.setStyleSheet("color: #58a6ff; font-size: 20px; font-weight: bold;")
+        self.total_count.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 20px;
+            font-weight: medium;
+            """
+        )
         total_layout.addWidget(self.total_count)
         
-        stats_layout.addLayout(total_layout)
+        stats_frame_layout.addLayout(total_layout)
+
+        stats_frame_layout.addSpacing(15)
         
         # 리셋 버튼
         reset_btn = QPushButton("카운터 리셋")
         reset_btn.setObjectName("reset_btn")
-        reset_btn.setMinimumHeight(40)
+        reset_btn.setFixedHeight(60)
         reset_btn.clicked.connect(self.on_reset_counter)
-        stats_layout.addWidget(reset_btn)
+        stats_frame_layout.addWidget(reset_btn)
         
+        stats_layout.addWidget(stats_frame)
+
         stats_layout.addStretch()
-        
-        camera_layout.addWidget(stats_frame)
+
+        camera_layout.addLayout(stats_layout)
         hyper_layout.addLayout(camera_layout)
         
-        parent_layout.addWidget(hyper_group)
+        parent_layout.addLayout(hyper_layout)
     
     
     def on_start_all(self):
@@ -524,55 +653,81 @@ class MonitoringPage(QWidget):
     
     def apply_styles(self):
         """스타일시트 적용"""
-        self.setStyleSheet("""
-            QGroupBox {
-                background-color: #0d1117;
-                border: 2px solid #30363d;
-                border-radius: 8px;
-                padding-top: 15px;
-                margin-top: 10px;
-                font-size: 14px;
-                font-weight: bold;
-                color: #c9d1d9;
+        self.side_widget.setStyleSheet(
+            """
+            /* 사이드바 제목 */
+            #side_title_label {
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
             }
-            
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 3px 10px;
-                color: #58a6ff;
+            """
+        )
+        self.main_widget.setStyleSheet(
+            """
+            /* 스크롤바 */
+            QScrollArea { 
+                border: none; 
+                background-color: transparent; 
+            }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #F3F4F6;
+                width: 5px;
+                margin: 0px;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #E2E2E2;
+                min-height: 20px;
+                border-radius: 5px;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+
+            #scroll_content {
+                background-color: transparent;
+            }
+
+            #control_box {
+                background-color: #FAFAFA;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
             }
             
             #camera_view {
-                background-color: #161b22;
-                border: 2px solid #30363d;
-                border-radius: 8px;
+                background-color: transparent;
+                border: none;
             }
             
             #camera_title {
-                color: #58a6ff;
-                font-size: 13px;
-                font-weight: bold;
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
+            }
+
+            #camera_status {
+                color: #616161;
+                font-size: 14px;
+                font-weight: normal;
             }
             
             #stats_frame {
-                background-color: #161b22;
-                border: 2px solid #30363d;
-                border-radius: 8px;
+                background-color: #FAFAFA;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
                 padding: 15px;
             }
             
-            QLabel {
-                color: #c9d1d9;
-            }
-            
             #combo_box {
-                background-color: #161b22;
-                border: 2px solid #30363d;
-                border-radius: 5px;
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                border-radius: 4px;
                 padding: 5px 10px;
-                color: #c9d1d9;
-                min-width: 120px;
+                color: #4B4B4B;
             }
             
             #combo_box:hover {
@@ -584,63 +739,75 @@ class MonitoringPage(QWidget):
             }
             
             #combo_box QAbstractItemView {
-                background-color: #161b22;
-                border: 2px solid #30363d;
-                color: #c9d1d9;
-                selection-background-color: #58a6ff;
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                color: #4B4B4B;
+                selection-background-color: #FFFFFF;
             }
             
             #control_btn_start {
-                background-color: #238636;
-                color: white;
-                border: 2px solid #2ea043;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #353535;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_start:hover {
-                background-color: #2ea043;
+                background-color: #555555;
             }
             
             #control_btn_stop {
-                background-color: #da3633;
-                color: white;
-                border: 2px solid #f85149;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+                background-color: #FF2427;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #control_btn_stop:hover {
-                background-color: #f85149;
+                background-color: #FF6467;
             }
             
-            #control_btn_snapshot, #control_btn_record {
-                background-color: #1f6feb;
-                color: white;
-                border: 2px solid #58a6ff;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
+            #control_btn_record {
+                background-color: #2DB591;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
-            #control_btn_snapshot:hover, #control_btn_record:hover {
-                background-color: #58a6ff;
+            #control_btn_record:hover {
+                background-color: #45CAA6;
             }
-            
+
             #control_btn_record:checked {
-                background-color: #da3633;
-                border-color: #f85149;
+                background-color: #FF2427;
+            }
+
+            #control_btn_snapshot {
+                background-color: #54B9DE;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
+            }
+            
+            #control_btn_snapshot:hover {
+                background-color: #64C9EE;
             }
             
             #reset_btn {
-                background-color: #6e7681;
-                color: white;
-                border: 2px solid #8b949e;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
+                background-color: #E6E6E6;
+                border: none;
+                border-radius: 4px;
+                color: #000000;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #reset_btn:hover {
@@ -648,26 +815,26 @@ class MonitoringPage(QWidget):
             }
             
             #input_field {
-                background-color: #161b22;
-                border: 2px solid #30363d;
-                border-radius: 5px;
-                padding: 5px;
-                color: #c9d1d9;
-                font-size: 13px;
-                min-width: 100px;
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                border-radius: 4px;
+                padding: 10;
+                color: #000000;
+                font-size: 14px;
+                font-weight: normal;
             }
             
             #input_field:focus {
-                border-color: #58a6ff;
+                border-color: #AAAAAA;
             }
             
             #setting_btn {
                 background-color: #161b22;
-                color: #c9d1d9;
+                color: #FFFFFF;
                 border: 2px solid #30363d;
-                border-radius: 5px;
-                padding: 5px 15px;
-                font-size: 13px;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #setting_btn:hover {
@@ -677,11 +844,11 @@ class MonitoringPage(QWidget):
             
             #toggle_btn {
                 background-color: #238636;
-                color: white;
-                border: 2px solid #2ea043;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
+                border: none;
+                border-radius: 4px;
+                color: #FFFFFF;
+                font-size: 16px;
+                font-weight: medium;
             }
             
             #toggle_btn:checked {
@@ -697,4 +864,5 @@ class MonitoringPage(QWidget):
             #toggle_btn:hover {
                 opacity: 0.8;
             }
-        """)
+            """
+        )

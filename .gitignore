@@ -1,5 +1,4 @@
 *.pyc
-*.png
 PLC_TestTool
 RGB_streaming
 *env
@@ -8,3 +7,4 @@ env*
 /AIO_system/*env
 /AIO_system/env*
 *.json
+/AIO_system/log

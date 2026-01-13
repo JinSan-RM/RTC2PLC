@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QFontDatabase
 import sys
 import json
 import os
@@ -13,7 +13,7 @@ from src.ui.main_window import MainWindow
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
 from src.ui.page.monitoring_page import MonitoringPage
-from src.utils.config_util import CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2
+from src.utils.config_util import CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH
 from src.utils.logger import log
 
 import faulthandler
@@ -40,8 +40,29 @@ class App():
         
         self.qt_app = QApplication(sys.argv)
         
+        font_files = [
+            "fonts/Poppins-Bold.ttf",
+            "fonts/Poppins-Medium.ttf",
+            "fonts/Poppins-Regular.ttf",
+            "fonts/Poppins-semiBold.ttf",
+            "fonts/Pretendard-Bold.otf",
+            "fonts/Pretendard-Medium.otf",
+            "fonts/Pretendard-Regular.otf",
+            "fonts/Pretendard-semiBold.otf",
+        ]
+
+        for _path in font_files:
+            font_path = str(UI_PATH / _path)
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            if font_id == -1:
+                log(f"[WARNING] font load failed: {font_path}")
+            else:
+                font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
+                log(f"[INFO] font load success: {font_family}")
+        
         # 글로벌 폰트 설정
-        font = QFont("맑은 고딕", 10)
+        font = QFont("Poppins")
+        font.setLetterSpacing(QFont.PercentageSpacing, 98)
         self.qt_app.setFont(font)
         
         self.ui = MainWindow(self)
@@ -301,10 +322,11 @@ class App():
 if __name__ == '__main__':
     # 시스템 레벨의 에러 발생 시 파일에 로그 남김
     try:
-        log_dir = ".\\log"
+        log_dir = str(LOG_PATH)
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        f = open(log_dir + "\\crash_log.txt", 'w')
+        today = datetime.now().strftime("%y%m%d(%a)")
+        f = open(log_dir + f"\\crash_log_{today}.txt", 'w')
         faulthandler.enable(file=f)
     except Exception as e:
         log(f"[ERROR] make crash log file failed: {e}")
