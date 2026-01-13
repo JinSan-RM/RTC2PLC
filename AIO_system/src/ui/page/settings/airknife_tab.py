@@ -273,7 +273,7 @@ class AirKnifeTab(QWidget):
         
         # 모든 토글 버튼 상태 변경
         for i in range(1, 9):
-            btn = self.findChild(QPushButton, f"toggle_btn_{i}")
+            btn = self.findChild(ToggleButton, f"toggle_btn_{i}")
             if btn:
                 btn.setChecked(enable)
         # TODO: 실제 전체 활성화/비활성화

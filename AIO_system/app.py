@@ -320,7 +320,7 @@ if __name__ == '__main__':
         log_dir = str(LOG_PATH)
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        today = datetime.now().strftime("%y%m%d(%a)")
+        today = datetime.now().strftime("%y%m%d(%a)_%H%M%S")
         f = open(log_dir + f"\\crash_log_{today}.txt", 'w')
         faulthandler.enable(file=f)
     except Exception as e:
