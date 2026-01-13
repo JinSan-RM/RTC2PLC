@@ -13,6 +13,7 @@ from .cam.basler_manager import BaslerCameraManager
 from src.utils.logger import log
 from src.utils.config_util import CAMERA_CONFIGS
 
+
 @dataclass
 class DetectedObject:
     """감지된 폐플라스틱 객체 정보"""
@@ -22,6 +23,7 @@ class DetectedObject:
     bbox: Tuple[int, int, int, int]
     confidence: float
     metainfo: Optional[Dict] = None
+
 
 class PlasticClassifier:
     """AI Hub 폐플라스틱 4종 분류기"""
@@ -50,6 +52,7 @@ class PlasticClassifier:
             }
         except:
             return {'container_type': '기타', 'transparency': '불투명', 'shape': '기타', 'size': '기타', 'compression': '비압축'}
+
 
 class PlasticSortingSystem:
     """AI Hub 폐플라스틱 자동 선별 시스템"""
@@ -119,7 +122,7 @@ class AIPlasticDetectionSystem:
         self.config = CAMERA_CONFIGS.get(camera_index, {})
         roi = self.config.get('roi', None)
         
-        self.camera_manager = BaslerCameraManager(camera_index=camera_index, roi = roi)
+        self.camera_manager = BaslerCameraManager(camera_index=camera_index, roi=roi)
         self.line_counter = None
         self.sorting_system = PlasticSortingSystem()
         

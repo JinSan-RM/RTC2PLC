@@ -15,7 +15,6 @@ from src.function.ethercat_manager import EtherCATManager
 from src.ui.page.monitoring_page import MonitoringPage
 from src.utils.config_util import CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2
 from src.utils.logger import log
-from src.AI.temp_algorithm import ServoPositionBasedAirControl
 
 import faulthandler
 

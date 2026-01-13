@@ -17,6 +17,9 @@ import numpy as np
 from src.AI.predict_AI import AIPlasticDetectionSystem
 from src.AI.cam.camera_thread import CameraThread
 from src.utils.logger import log
+from src.utils.config_util import CAMERA_CONFIGS
+
+
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     
@@ -68,7 +71,7 @@ class CameraView(QFrame):
         self.image_label = QLabel()
         self.image_label.setObjectName("camera_frame")
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setMinimumSize(380, 260)
+        self.image_label.setMinimumSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
         self.image_label.setText("📷 카메라 대기 중...")
         self.image_label.setStyleSheet("""
             background-color: #000000;
@@ -328,7 +331,7 @@ class MonitoringPage(QWidget):
         # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
             ("RGB 카메라 1", 0, 0, 0),
-            ("RGB 카메라 2", 1, 0, 1),
+            ("RGB 카메라 2", 0, 1, 1),
             # ("RGB 카메라 3", 1, 0),
             # ("RGB 카메라 4", 1, 1),
         ]
