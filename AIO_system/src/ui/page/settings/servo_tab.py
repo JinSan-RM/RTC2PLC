@@ -78,6 +78,7 @@ class ServoTab(QWidget):
         header_layout.addStretch()
 
         state_label = QLabel("⚫ 서보 OFF")
+        state_label.setObjectName(f"servo_{servo_id}_state")
         state_label.setStyleSheet(
             """
             color: #616161;
@@ -489,6 +490,15 @@ class ServoTab(QWidget):
         btn = self.findChild(ToggleButton, f"toggle_btn_{servo_id}")
         if btn and btn.isChecked() != servo_on:
             btn.setChecked(servo_on)
+
+        state_label = self.findChild(QLabel, f"servo_{servo_id}_state")
+        if state_label:
+            cur_txt = state_label.text()
+            if servo_on and cur_txt != "🟢 서보 ON":
+                state_label.setText("🟢 서보 ON")
+            elif not servo_on and cur_txt != "⚫ 서보 OFF":
+                state_label.setText("⚫ 서보 OFF")
+        
         _pos = getattr(self, f"servo_{servo_id}_pos", None)
         if _pos is None:
             return
@@ -503,13 +513,16 @@ class ServoTab(QWidget):
 
         _pos.setText(f"{cur_pos:.03f} mm")
         _v.setText(f"{cur_v:.03f} mm/s")
-        if err_code != 0:
+
+        err_txt = f"{err_code:04X}"
+        warn_txt = f"{warn_code:04X}"
+        if err_code != 0 and _err.text() != err_txt:
             _err_ind.setText("🔴 오류")
-            _err.setText(f"{err_code:04X}")
-        elif warn_code != 0:
+            _err.setText(err_txt)
+        elif warn_code != 0 and _err.text() != warn_txt:
             _err_ind.setText("🟡 경고")
-            _err.setText(f"{warn_code:04X}")
-        else:
+            _err.setText(warn_txt)
+        elif err_code == 0 and warn_code == 0 and _err.text() != "0x0000":
             _err_ind.setText("⚫ 정상")
             _err.setText("0x0000")
 
