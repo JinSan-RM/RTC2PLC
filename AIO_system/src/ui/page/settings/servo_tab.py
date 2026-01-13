@@ -132,7 +132,7 @@ class ServoTab(QWidget):
         
         parent_layout.addLayout(status_layout)
     
-    def add_status_item(self, layout, title, value, unit, obj_name):
+    def add_status_item(self, layout, title, value, obj_name):
         """상태 항목 추가"""
         item_box = QFrame()
         item_box.setObjectName("item_box")
