@@ -205,17 +205,31 @@ class App():
 
     def auto_mode_run(self):
         self.auto_run = True
+
+        # 피더, 컨베이어 동작 함수
+        self.modbus_manager.on_automode_start()
+
+        # 카메라 동작 함수
+        self.camera_manager.on_start_all()
+
         self._auto_thread = threading.Thread(target=self._auto_loop)
         self._auto_thread.start()
         log("[INFO] auto mode run")
 
     def auto_mode_stop(self):
         self._stop_event.set()
+
         if hasattr(self, '_auto_thread') and self._auto_thread.is_alive():
             log("[INFO] auto thread to terminate...")
             self._auto_thread.join(timeout=5)
             if self._auto_thread.is_alive():
                 log("[WARNING] auto thread did not terminate properly")
+        # 피더, 컨베이어 멈춤 함수
+        self.modbus_manager.on_automode_stop()
+
+        # 카메라 멈춤 함수
+        self.camera_manager.on_stop_all()
+
         self.auto_run = False
 
     def reset_alarm(self):
@@ -246,20 +260,12 @@ class App():
 # endregion
 
     def on_auto_start(self):
-        # 피더 동작 함수
-        # 컨베이어 동작 함수
-        self.modbus_manager.on_automode_start()
-
-        # 카메라 동작 함수
-        self.camera_manager.on_start_all()
+        self.set_auto_mode(True)
+        self.auto_mode_run()
 
     def on_auto_stop(self):
-        # 피더 멈춤 함수
-        # 컨베이어 멈춤 함수
-        self.modbus_manager.on_automode_stop()
-
-        # 카메라 멈춤 함수
-        self.camera_manager.on_stop_all()
+        self.auto_mode_stop()
+        self.set_auto_mode(False)
 
     def load_config(self):
         try:
