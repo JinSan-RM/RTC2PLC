@@ -3,18 +3,8 @@ import numpy as np
 from typing import Tuple, List, Optional, Dict
 from collections import defaultdict
 from dataclasses import dataclass
+from src.AI.AI_manager import DetectedObject
 
-
-@dataclass
-class DetectedObject:
-    """감지된 폐플라스틱 객체 정보"""
-    id: int
-    class_name: str
-    center: Tuple[int, int]
-    bbox: Tuple[int, int, int, int]
-    confidence: float
-    metainfo: Optional[Dict] = None
-    
 
 class ConveyorBoxZone:
     """
@@ -43,6 +33,7 @@ class ConveyorBoxZone:
         self.tracked_objects = set()  # 현재 박스 안에 있는 객체들
         self.class_counts = {cls: 0 for cls in target_classes}
         self.detected_objects = set()  # 이미 카운트된 객체들
+        self.tracked_objects_info: Dict[int, DetectedObject] = {}
 
         self.is_active = False  # 현재 물체가 있는지
         
@@ -52,20 +43,25 @@ class ConveyorBoxZone:
         x, y = center
         return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
     
-    def update(self, obj_id: int, center: Tuple[int, int], class_name: str) -> bool:
-        inside = self.is_inside(center)
-        is_target = class_name in self.target_classes
+    def update(self, obj: DetectedObject) -> bool:
+        inside = self.is_inside(obj.center)
+        is_target = obj.class_name in self.target_classes
         
         if inside and is_target:
-            if obj_id not in self.tracked_objects:
-                self.tracked_objects.add(obj_id)
-                self.class_counts[class_name] += 1  # 클래스별 카운트
+            if obj.id not in self.tracked_objects:
+                self.tracked_objects.add(obj.id)
+                self.class_counts[obj.class_name] += 1  # 클래스별 카운트
+                
+                self.tracked_objects_info[obj.id] = obj
+                
                 return True  # 액션 트리거
             else:
-                self.tracked_objects.add(obj_id)
+                self.tracked_objects.add(obj.id)
+                self.tracked_objects_info[obj.id] = obj
                 self.is_active = True
         else:
-            self.tracked_objects.discard(obj_id)
+            self.tracked_objects.discard(obj.id)
+            self.tracked_objects_info.pop(obj.id, None)
             
         self.is_active = len(self.tracked_objects) > 0
         return False
@@ -93,8 +89,10 @@ class ConveyorBoxZone:
         """카운트 리셋"""
         self.tracked_objects.clear()
         self.detected_objects.clear()
+        self.tracked_objects_info.clear()
         self.class_counts = {cls: 0 for cls in self.target_classes}
         self.is_active = False
+        
         
         
 class ConveyorBoxManager:
@@ -103,15 +101,15 @@ class ConveyorBoxManager:
     def __init__(self, boxes: List[ConveyorBoxZone]):
         self.boxes = boxes
 
-    def update_detections(self, detected_objects: List[DetectedObject]) -> List[Tuple[int, str]]:
+    def update_detections(self, detected_objects: List[DetectedObject]):
         """
         모든 박스에 대해 감지 업데이트
-        Returns: [(box_id, class_name), ...] 새로 감지된 객체들
         """
         # 조기 리턴으로 불필요한 연산 제거
         if not detected_objects:
             for box in self.boxes:
                 box.tracked_objects.clear()
+                box.tracked_objects_info.clear()
                 box.is_active = False
             return
         
@@ -120,13 +118,17 @@ class ConveyorBoxManager:
         # 새로운 객체들 업데이트
         for obj in detected_objects:
             for box in self.boxes:
-                box.update(obj.id, obj.center, obj.class_name)
+                box.update(obj)
                 
         # 각 박스에서 사라진 객체 제거
         for box in self.boxes:
             # 현재 프레임에 없는 ID는 tracked_objects에서 제거
             # box.tracked_objects = box.tracked_objects & current_ids
             box.tracked_objects &= current_ids
+            box.tracked_objects_info = {
+                k: v for k, v in box.tracked_objects_info.items() 
+                if k in current_ids
+            }
             # 박스 상태 업데이트
             box.is_active = bool(box.tracked_objects)
     

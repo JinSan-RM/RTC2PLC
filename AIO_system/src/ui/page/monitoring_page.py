@@ -15,7 +15,9 @@ import cv2
 import numpy as np
 
 from src.AI.predict_AI import AIPlasticDetectionSystem
+# from src.AI.cam.camera_thread_old import CameraThread
 from src.AI.cam.camera_thread import CameraThread
+from src.AI.AI_manager import BatchAIManager
 from src.utils.logger import log
 from src.utils.config_util import CAMERA_CONFIGS, UI_PATH
 
@@ -23,12 +25,13 @@ from src.utils.config_util import CAMERA_CONFIGS, UI_PATH
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     
-    def __init__(self, camera_id, camera_name, camera_index, app):
+    def __init__(self, camera_id, camera_name, camera_index, app, ai_manager=None):
         super().__init__()
         self.app = app
         self.camera_id = camera_id
         self.camera_name = camera_name
         self.camera_index = camera_index
+        self.ai_manager = ai_manager
         self.detector = None
         self.detector_frame_generator = None
         self.timer = QTimer()
@@ -73,7 +76,7 @@ class CameraView(QFrame):
         # 카메라 화면
         self.image_label = QLabel()
         self.image_label.setObjectName("camera_frame")
-        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.image_label.setMinimumSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
         self.image_label.setText("📷 카메라 대기 중...")
         self.image_label.setStyleSheet(
@@ -136,7 +139,8 @@ class CameraView(QFrame):
                 confidence_threshold=0.5,
                 img_size=640,
                 airknife_callback=self.app.airknife_on,
-                app=self.app
+                app=self.app,
+                ai_manager = self.ai_manager
             )
             
             # 시그널 연결
@@ -203,10 +207,11 @@ class CameraView(QFrame):
             )
             
             self.image_label.setPixmap(scaled_pixmap)
+            self.image_label.setFixedSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
             
             # FPS 업데이트
-            if self.camera_thread and self.camera_thread.detector:
-                fps = self.camera_thread.detector.current_fps
+            if self.camera_thread:
+                fps = self.camera_thread.current_fps
                 self.fps_label.setText(f"FPS: {fps}")
             
         except Exception as e:
@@ -237,6 +242,19 @@ class MonitoringPage(QWidget):
         self.app = app
         self.rgb_cameras = []
         self.hyper_camera = None
+        self.ai_manager = BatchAIManager(
+            num_cameras=2,
+            confidence_threshold=0.6,
+            img_size=480,
+            max_det=50
+        )
+        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        if not self.ai_manager.initialize(model_path):
+            log("AI 매니저 초기화 실패")
+            # 초기화 실패해도 UI는 표시
+        else:
+            log("BatchAIManager 초기화 완료!")
+        
         self.init_ui()
         
         
@@ -432,7 +450,8 @@ class MonitoringPage(QWidget):
                 camera_id=f"rgb_{row}{col}", 
                 camera_name=name,
                 camera_index=camera_index,
-                app=self.app
+                app=self.app,
+                ai_manager=self.ai_manager
             )
             rgb_layout.addWidget(cam, row, col)
             self.rgb_cameras.append(cam)
@@ -558,12 +577,18 @@ class MonitoringPage(QWidget):
         """전체 시작"""
         log("모든 카메라 시작")
         # TODO: 모든 카메라 시작
+        if self.ai_manager:
+            self.ai_manager.start()
+            
         for camera in self.rgb_cameras:
             camera.start_camera()
             
     def on_stop_all(self):
         """전체 정지"""
         log("모든 카메라 정지")
+        if self.ai_manager:
+            self.ai_manager.stop()
+            
         for camera in self.rgb_cameras:
             camera.stop_camera()
         # if self.hyper_camera:
