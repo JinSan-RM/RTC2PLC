@@ -56,12 +56,14 @@ class CameraThread(QThread):
         # 캐싱된 결과 (프레임 스킵용)
         self.last_detected_objects = []
         self.frame_count = 0
-        self.inference_interval = 2  # 2프레임마다 추론
+        self.inference_interval = 3  # 2프레임마다 추론
         
         # 통계
         self.fps_counter = 0
         self.fps_start_time = 0
         self.current_fps = 0
+        
+        self.frame_offset = camera_index * 8
     
     def _create_box_manager(self):
         """카메라별 박스 생성"""
@@ -112,6 +114,7 @@ class CameraThread(QThread):
         
         # FPS 타이머 시작
         import time
+        time.sleep(self.frame_offset / 1000.0)
         self.fps_start_time = time.time()
         
         try:

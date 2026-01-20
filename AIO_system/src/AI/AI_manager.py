@@ -115,37 +115,36 @@ class BatchAIManager:
             try:
                 # 1. 모든 카메라에서 프레임 수집 (논블로킹)
                 frames = {}
-                for cam_id in range(self.num_cameras):
-                    try:
-                        # 타임아웃 0.005초 (5ms)
-                        frame = self.input_queues[cam_id].get(timeout=0.005)
-                        frames[cam_id] = frame
+                deadline = time.time() + 0.020  # 20ms 데드라인
+                
+                while time.time() < deadline and len(frames) < self.num_cameras:
+                    for cam_id in range(self.num_cameras):
+                        if cam_id in frames:
+                            continue
+                        try:
+                            remaining_time = deadline - time.time()
+                            if remaining_time <= 0:
+                                break
+                            
+                            frame = self.input_queues[cam_id].get(
+                                timeout=max(0.001, remaining_time)
+                            )
+                            frames[cam_id] = frame
+                        except queue.Empty:
+                            continue
+                    
+                    # 모든 카메라 프레임 수집 완료
+                    if len(frames) == self.num_cameras:
                         break
-                    except queue.Empty:
-                        continue
                 
                 # 프레임이 하나도 없으면 다음 루프
                 if not frames:
                     continue
                 
-                for cam_id in range(self.num_cameras):
-                    if cam_id in frames:
-                        continue
-                    try:
-                        frame = self.input_queues[cam_id].get_nowait()
-                        frames[cam_id] = frame
-                    except queue.Empty:
-                        continue
-                
-                # 프레임이 하나도 없으면 다음 루프
-                if not frames:
-                    continue
-                
-                # 2. 배치 구성
+                # 배치 구성 및 추론
                 cam_ids = list(frames.keys())
                 frame_list = [frames[cam_id] for cam_id in cam_ids]
                 
-                # 3. 배치 추론 (GPU 1번 호출!)
                 t_start = time.time()
                 
                 results = self.model.track(
