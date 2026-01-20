@@ -248,7 +248,7 @@ class CameraThread(QThread):
             self.current_fps = int(self.fps_counter / elapsed)
             self.fps_counter = 0
             self.fps_start_time = time.time()
-                self.fps_start_time = time.time()
+            self.fps_start_time = time.time()
     
     def stop(self):
         """스레드 정지"""
