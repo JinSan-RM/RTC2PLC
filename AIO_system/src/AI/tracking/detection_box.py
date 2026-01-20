@@ -74,7 +74,6 @@ class ConveyorBoxZone:
         """박스 그리기 (물체 있으면 빨강, 없으면 초록)"""
         color = (0, 0, 255) if self.is_active else (0, 255, 0)
         cv2.rectangle(frame, (self.x1, self.y1), (self.x2, self.y2), color, 2)
-        thickness = 2
         
         # Zone 별로 ID
         cv2.putText(frame, f"Zone {self.box_id}", (self.x1 + 5, self.y1 + 20),
@@ -109,6 +108,13 @@ class ConveyorBoxManager:
         모든 박스에 대해 감지 업데이트
         Returns: [(box_id, class_name), ...] 새로 감지된 객체들
         """
+        # 조기 리턴으로 불필요한 연산 제거
+        if not detected_objects:
+            for box in self.boxes:
+                box.tracked_objects.clear()
+                box.is_active = False
+            return
+        
         current_ids = {obj.id for obj in detected_objects}
     
         # 새로운 객체들 업데이트
@@ -119,14 +125,18 @@ class ConveyorBoxManager:
         # 각 박스에서 사라진 객체 제거
         for box in self.boxes:
             # 현재 프레임에 없는 ID는 tracked_objects에서 제거
-            box.tracked_objects = box.tracked_objects & current_ids
+            # box.tracked_objects = box.tracked_objects & current_ids
+            box.tracked_objects &= current_ids
             # 박스 상태 업데이트
-            box.is_active = len(box.tracked_objects) > 0
+            box.is_active = bool(box.tracked_objects)
     
     def draw_all(self, frame: np.ndarray) -> np.ndarray:
         """모든 박스 그리기"""
+        # for box in self.boxes:
+        #     frame = box.draw(frame)
+        # return frame
         for box in self.boxes:
-            frame = box.draw(frame)
+            box.draw(frame)
         return frame
     
     def get_total_counts(self) -> Dict[str, int]:

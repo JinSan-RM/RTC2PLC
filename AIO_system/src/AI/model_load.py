@@ -2,7 +2,7 @@ import torch
 from ultralytics import YOLO
 from src.utils.logger import log
 
-def load_yolov11(model_path):
+def load_yolov11(model_path, half_precision=True):
     """YOLOv11 모델 로드 (GPU 우선)"""
     try:
         # CUDA 사용 가능 여부 확인
@@ -20,6 +20,10 @@ def load_yolov11(model_path):
         
         # GPU로 모델 이동
         model.to(device)
+        
+        # FP16 최적화 (GPU 메모리 50% 절감 + 속도 2배 예상)
+        if half_precision and device == 'cuda':
+            model.model.half()
         
         log(f"✅ YOLOv11 모델 로드 성공!")
         log(f"🎮 사용 장치: {device.upper()}")

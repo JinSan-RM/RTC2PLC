@@ -77,11 +77,11 @@ class BaslerCameraManager:
         카메라 인덱스 받아서 각 카메라별 설정값 명백히 맵핑해서 동작해야함.
         """
         try:
-            log("\n📷 Basler 카메라 설정 시작...")
+            log("\nBasler 카메라 설정 시작...")
 
             # 1) 버퍼 최소화
-            self.camera.MaxNumBuffer.Value = 10
-            log("  ✓ MaxNumBuffer = 10")
+            self.camera.MaxNumBuffer.Value = 3
+            log(f"MaxNumBuffer = {self.camera.MaxNumBuffer.Value} ")
 
             # 2) PixelFormat RAW 설정
             try:

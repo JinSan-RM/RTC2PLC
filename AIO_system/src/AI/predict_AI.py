@@ -103,7 +103,7 @@ class AIPlasticDetectionSystem:
         self,
         model_path: str = None,
         confidence_threshold: float = 0.5,
-        img_size: int = 640,
+        img_size: int = 480,
         airknife_callback=None,
         app=None,
         camera_index: int = 0
@@ -135,7 +135,7 @@ class AIPlasticDetectionSystem:
         #     # ConveyorBoxZone(box_id=2, x=300, y=500, width=500, height=200),
         # ])
         
-        
+        self.inference_interval = 2
         self.fps_counter = 0
         self.fps_start_time = time.time()
         self.current_fps = 0
@@ -180,9 +180,11 @@ class AIPlasticDetectionSystem:
                 device=self.device,
                 verbose=False,
                 half=True,  # FP16
-                max_det=100,
+                max_det=50,
                 persist=True,  # ← 추적 ID 유지 (중요!)
-                tracker="bytetrack.yaml"  # 또는 "botsort.yaml"
+                tracker="bytetrack.yaml",  # 또는 "botsort.yaml"
+                agnostic_nms=True,
+                classes=[0, 1, 2, 3]
             )
             
             detected_objects = []
@@ -363,10 +365,10 @@ class AIPlasticDetectionSystem:
             frame_count = 0
             
             while True:
-                t_total_start = time.time()
+                # t_total_start = time.time()
                 
                 # 1. 프레임 획득 시간
-                t1 = time.time()
+                # t1 = time.time()
                 if use_basler:
                     frame = self.camera_manager.grab_frame()
                     if frame is None:
@@ -375,79 +377,112 @@ class AIPlasticDetectionSystem:
                     ret, frame = cap.read()
                     if not ret:
                         break
-                t2 = time.time()
-                timing_grab.append((t2 - t1) * 1000)
+                # t2 = time.time()
+                # timing_grab.append((t2 - t1) * 1000)
                 
                 # if self.line_counter is None:
                 #     self.setup_conveyor_line(frame.shape)
                 
                 # 2. 추론 시간
-                t3 = time.time()
-                detected_objects = self.detect(frame)
-                self.box_manager.update_detections(detected_objects)
-                # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작
+                # ================================================
+                # t3 = time.time()
+                # detected_objects = self.detect(frame)
+                # self.box_manager.update_detections(detected_objects)
+                # # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작
+                # if len(detected_objects) > 0:
+                #     # log(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
+                #     if self.app.use_air_sequence and self.app.air_index_iter != None:
+                #         box_id = int(next(self.app.air_index_iter))
+                #         box = self.box_manager.boxes[box_id]
+                #         # log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                #         if box.is_active:
+                #             log(f"blow action")
+                #             self.send_airknife_signal(air_num=box.box_id, on_term=1000)
+                #     else:
+                #         for box in self.box_manager.boxes:
+                #             # log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                #             if box.is_active:
+                #                 log(f"blow action")
+                #                 self.send_airknife_signal(air_num=box.box_id, on_term=1000)
+                # ==================================================
+                # t3 = time.time()
+                # infercence_interval 에 따라서 N 번마다 프레임 추론
+                if frame_count % self.inference_interval == 0:
+                    # 추론 실행
+                    detected_objects = self.detect(frame)
+                    last_detected_objects = detected_objects
+                    self.box_manager.update_detections(detected_objects)
+                
+                else:
+                    detected_objects = last_detected_objects
+                
+                # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작 시키는것
                 if len(detected_objects) > 0:
-                    # log(f"프레임 {frame_count}: 감지된 객체 {len(detected_objects)}, {detected_objects}개")
+                    
                     if self.app.use_air_sequence and self.app.air_index_iter != None:
                         box_id = int(next(self.app.air_index_iter))
                         box = self.box_manager.boxes[box_id]
-                        # log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                        
                         if box.is_active:
-                            log(f"blow action")
+                            log("Air Knife action")
                             self.send_airknife_signal(air_num=box.box_id, on_term=1000)
+                            
                     else:
+                        
                         for box in self.box_manager.boxes:
-                            # log(f"Zone : {box.box_id} : is_active = {box.is_active}, tracked={box.tracked_objects}, target = {box.target_classes}")
+                            
                             if box.is_active:
-                                log(f"blow action")
+                                log("Air Knife action")
                                 self.send_airknife_signal(air_num=box.box_id, on_term=1000)
+                    
+                    
 
-                t4 = time.time()
-                timing_inference.append((t4 - t3) * 1000)
+                # t4 = time.time()
+                # timing_inference.append((t4 - t3) * 1000)
                 
-                for obj in detected_objects:
-                    metainfo = PlasticClassifier.parse_metainfo("기본_투명_병류_대_비압축")
-                    log(f"감지 ID {obj.id}: {obj.class_name} ({PlasticClassifier.get_plastic_info(obj.class_name)})")
-                    self.sorting_system.execute_sorting(obj.class_name, metainfo)
-                    self.total_processed += 1
+                # for obj in detected_objects:
+                #     metainfo = PlasticClassifier.parse_metainfo("기본_투명_병류_대_비압축")
+                #     log(f"감지 ID {obj.id}: {obj.class_name} ({PlasticClassifier.get_plastic_info(obj.class_name)})")
+                #     self.sorting_system.execute_sorting(obj.class_name, metainfo)
+                #     self.total_processed += 1
                 
                 # 30프레임마다 정리
                 frame_count += 1
                 
                 # 3. 그리기 시간
-                t5 = time.time()
+                # t5 = time.time()
                 frame = self.box_manager.draw_all(frame)
                 frame = self.draw_detections(frame, detected_objects)
                 
-                t6 = time.time()
-                timing_draw.append((t6 - t5) * 1000)
-                timing_total.append((time.time() - t_total_start) * 1000)
+                # t6 = time.time()
+                # timing_draw.append((t6 - t5) * 1000)
+                # timing_total.append((time.time() - t_total_start) * 1000)
                 
-                # 100프레임마다 타이밍 통계 출력
-                if frame_count == 100:
-                    log("\n" + "="*70)
-                    log("타이밍 분석 (100 프레임 평균)")
-                    log("="*70)
-                    log(f"{'구간':<20} {'평균(ms)':<15} {'예상 FPS':<15}")
-                    log("-"*70)
-                    log(f"{'프레임 획득':<20} {np.mean(timing_grab):>10.2f}ms    {1000/np.mean(timing_grab):>10.1f} fps")
-                    log(f"{'추론':<20} {np.mean(timing_inference):>10.2f}ms    {1000/np.mean(timing_inference):>10.1f} fps")
-                    log(f"{'그리기+표시':<20} {np.mean(timing_draw):>10.2f}ms    {1000/np.mean(timing_draw):>10.1f} fps")
-                    log(f"{'전체':<20} {np.mean(timing_total):>10.2f}ms    {1000/np.mean(timing_total):>10.1f} fps")
-                    log("="*70)
+                # # # 100프레임마다 타이밍 통계 출력
+                # if frame_count == 100:
+                #     log("\n" + "="*70)
+                #     log("타이밍 분석 (100 프레임 평균)")
+                #     log("="*70)
+                #     log(f"{'구간':<20} {'평균(ms)':<15} {'예상 FPS':<15}")
+                #     log("-"*70)
+                #     log(f"{'프레임 획득':<20} {np.mean(timing_grab):>10.2f}ms    {1000/np.mean(timing_grab):>10.1f} fps")
+                #     log(f"{'추론':<20} {np.mean(timing_inference):>10.2f}ms    {1000/np.mean(timing_inference):>10.1f} fps")
+                #     log(f"{'그리기+표시':<20} {np.mean(timing_draw):>10.2f}ms    {1000/np.mean(timing_draw):>10.1f} fps")
+                #     log(f"{'전체':<20} {np.mean(timing_total):>10.2f}ms    {1000/np.mean(timing_total):>10.1f} fps")
+                #     log("="*70)
                     
-                    # 병목 진단
-                    grab_avg = np.mean(timing_grab)
-                    if grab_avg > 50:
-                        log(f"병목: 프레임 획득 ({grab_avg:.1f}ms)")
-                        log("Basler 카메라 FPS 설정 확인 필요")
-                        log("Pylon Viewer로 카메라 FPS 설정 확인")
+                #     # 병목 진단
+                #     grab_avg = np.mean(timing_grab)
+                #     if grab_avg > 50:
+                #         log(f"병목: 프레임 획득 ({grab_avg:.1f}ms)")
+                #         log("Basler 카메라 FPS 설정 확인 필요")
+                #         log("Pylon Viewer로 카메라 FPS 설정 확인")
                     
-                    # 타이밍 리셋
-                    timing_grab.clear()
-                    timing_inference.clear()
-                    timing_draw.clear()
-                    timing_total.clear()
+                #     # 타이밍 리셋
+                #     timing_grab.clear()
+                #     timing_inference.clear()
+                #     timing_draw.clear()
+                #     timing_total.clear()
                 
                 yield frame
         
