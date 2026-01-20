@@ -298,7 +298,7 @@ class EtherCATManager():
         # 도달 판정시 종료
         if abs(target_pos - current_pos) < SERVO_IN_POS_WIDTH:
             with servo.lock:
-                servo.variables['state'] = SERVO_STATE.SERVO_READY
+                servo.variables['state'] = OPERATION_MODE.SERVO_READY
     
     # 원점 복귀 완료 시 state를 READY로 전환
     def _homing_check(self, servo: SlaveInfo):
@@ -312,7 +312,7 @@ class EtherCATManager():
             homing_mask = 0x1400 # 12번과 10번 비트가 1인 경우 원점 복귀 완료
             if (cur_state & homing_mask) == homing_mask and abs(cur_pos) < SERVO_IN_POS_WIDTH:
                 with servo.lock:
-                    servo.variables['state'] = SERVO_STATE.SERVO_READY
+                    servo.variables['state'] = OPERATION_MODE.SERVO_READY
         except Exception as e:
             log(f"[ERROR] homing check failed: {e}")
 
@@ -329,7 +329,6 @@ class EtherCATManager():
 
     def _servo_worker(self, index: int):
         servo = self.servo_drives[index]
-        servo.variables['state'] = SERVO_STATE.SERVO_INIT
 
         # 동작 실행 전에 한 번 셧다운을 해줘야 이후 정상작동함
         self.servo_shutdown(index)
@@ -341,18 +340,20 @@ class EtherCATManager():
         while not self.stop_event.is_set():
             # update status
             tx_pdo = self.update_servo_values(index)
+            status_word = tx_pdo[0]
             with servo.lock:
                 cur_state = servo.variables['state']
 
-            if cur_state == SERVO_STATE.SERVO_SHUTDOWN:
+            if not check_mask(status_word, STATUS_MASK.STATUS_OPERATION_ENABLED):
+                # 서보 ON이 아님
                 continue
 
-            if cur_state == SERVO_STATE.SERVO_HOMING:
+            if cur_state == OPERATION_MODE.SERVO_HOMING:
                 self._homing_check(servo)
                 continue
 
             # update realtime position
-            if cur_state == SERVO_STATE.SERVO_CSP:
+            if cur_state == OPERATION_MODE.SERVO_CSP:
                 self._calc_move_pos(servo)
 
             # run tasks with delay
@@ -573,7 +574,7 @@ class EtherCATManager():
             servo = self.servo_drives[servo_id]
             self._set_servo_rx_pdo(servo, 0x001F, 6)
             with servo.lock:
-                servo.variables['state'] = SERVO_STATE.SERVO_HOMING
+                servo.variables['state'] = OPERATION_MODE.SERVO_HOMING
         except Exception as e:
             log(f"[ERROR] servo homing failed: {e}")
 
@@ -585,7 +586,7 @@ class EtherCATManager():
             servo.variables['target_pos'] = tgt_pos
             servo.variables['target_vel'] = tgt_vel
             servo.variables['last_time'] = time.time()
-            servo.variables['state'] = SERVO_STATE.SERVO_CSP
+            servo.variables['state'] = OPERATION_MODE.SERVO_CSP
 
     # 절대 위치 이동
     def servo_move_absolute(self, servo_id: int, pos: float, v: float):
@@ -595,7 +596,7 @@ class EtherCATManager():
             with servo.lock:
                 temp = servo.input[0:2]
             cur_state = int.from_bytes(temp, 'little')
-            if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
+            if not check_mask(cur_state, STATUS_MASK.STATUS_OPERATION_ENABLED):
                 raise Exception("servo is not ready to work")
 
             with servo.lock:
@@ -615,7 +616,7 @@ class EtherCATManager():
             with servo.lock:
                 temp = servo.input[0:2]
             cur_state = int.from_bytes(temp, 'little')
-            if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
+            if not check_mask(cur_state, STATUS_MASK.STATUS_OPERATION_ENABLED):
                 raise Exception("servo is not ready to work")
             
             with servo.lock:
@@ -636,12 +637,12 @@ class EtherCATManager():
             with servo.lock:
                 temp = servo.input[0:2]
             cur_state = int.from_bytes(temp, 'little')
-            if not check_mask(cur_state, STATUS_MASK.STATUS_READY_TO_SWITCH_ON):
+            if not check_mask(cur_state, STATUS_MASK.STATUS_OPERATION_ENABLED):
                 raise Exception("servo is not ready to work")
 
             self._set_servo_rx_pdo(servo, 0x000F, 9, 0, v)
             with servo.lock:
-                servo.variables['state'] = SERVO_STATE.SERVO_CSV
+                servo.variables['state'] = OPERATION_MODE.SERVO_CSV
         except Exception as e:
             log(f"[ERROR] servo CSV move failed: {e}")
 
@@ -651,7 +652,7 @@ class EtherCATManager():
             servo = self.servo_drives[servo_id]
             self._set_servo_rx_pdo(servo, 0x010F)
             with servo.lock:
-                servo.variables['state'] = SERVO_STATE.SERVO_READY
+                servo.variables['state'] = OPERATION_MODE.SERVO_READY
         except Exception as e:
             log(f"[ERROR] halt failed: {e}")
 
@@ -660,7 +661,7 @@ class EtherCATManager():
             servo = self.servo_drives[servo_id]
             self._set_servo_rx_pdo(servo, 0x008F)
             with servo.lock:
-                servo.variables['state'] = SERVO_STATE.SERVO_READY
+                servo.variables['state'] = OPERATION_MODE.SERVO_READY
         except Exception as e:
             log(f"[ERROR] reset failed: {e}")
 
@@ -668,8 +669,6 @@ class EtherCATManager():
         try:
             servo = self.servo_drives[servo_id]
             self._set_servo_rx_pdo(servo, 0x0006)
-            with servo.lock:
-                servo.variables['state'] = SERVO_STATE.SERVO_SHUTDOWN
         except Exception as e:
             log(f"[ERROR] shutdown failed: {e}")
 

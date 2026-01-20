@@ -166,25 +166,23 @@ def get_servo_modified_value(value):
 from enum import IntEnum
 # 서보 상태 체크용 bit mask
 class STATUS_MASK(IntEnum):
-    STATUS_NOT_READY_TO_SWITCH_ON = 0x0000
-    STATUS_SWITCH_ON_DISABLED = 0x0040
-    STATUS_READY_TO_SWITCH_ON = 0x0021
-    STATUS_OPERATION_ENABLED = 0x0027
-    STATUS_QUICK_STOP_ACTIVE = 0x0007
-    STATUS_FAULT_REACTION_ACTIVE = 0x000F
-    STATUS_FAULT = 0x0008
-    STATUS_WARNING = 0x0080
+    STATUS_NOT_READY_TO_SWITCH_ON = 0x0000 # 초기화 중
+    STATUS_SWITCH_ON_DISABLED = 0x0040 # 초기화 완료, 주전원 투입 불가
+    STATUS_READY_TO_SWITCH_ON = 0x0021 # 주전원 투입 가능
+    STATUS_SWITCHED_ON = 0x0023 # 주전원 투입 완료, 서보 OFF
+    STATUS_OPERATION_ENABLED = 0x0027 # 서보 ON
+    STATUS_QUICK_STOP_ACTIVE = 0x0007 # Quick stop 기능 수행 중
+    STATUS_FAULT_REACTION_ACTIVE = 0x000F # 서보 알람 관련 시퀀스 처리 중
+    STATUS_FAULT = 0x0008 # 서보 알람(AL 코드) 발생
+    STATUS_WARNING = 0x0080 # 경보(W 코드) 발생
 
 def check_mask(s, m):
     low_bit = s & 0x00FF
     return (low_bit & m) == m
 
 # 서보 state
-class SERVO_STATE(IntEnum):
+class OPERATION_MODE(IntEnum):
     SERVO_READY = 0
-    SERVO_INIT = 1
-    SERVO_SHUTDOWN = 2
-    SERVO_STOP = 3
     SERVO_HOMING = 6
     SERVO_CSP = 8
     SERVO_CSV = 9
