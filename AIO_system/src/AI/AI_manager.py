@@ -74,14 +74,14 @@ class BatchAIManager:
                 return False
             
             # 워밍업
-            dummy_frames = [np.zeros((640, 640, 3), dtype=np.uint8) for _ in range(self.num_cameras)]
-            for _ in range(2):
-                _ = self.model.track(
-                    source=dummy_frames,
-                    verbose=False,
-                    device=self.device,
-                    imgsz=self.img_size
-                )
+            # dummy_frames = [np.zeros((640, 640, 3), dtype=np.uint8) for _ in range(self.num_cameras)]
+            # for _ in range(2):
+            #     _ = self.model.track(
+            #         source=dummy_frames,
+            #         verbose=False,
+            #         device=self.device,
+            #         imgsz=self.img_size
+            #     )
             
             log("BatchAIManager 초기화 완료")
             return True
@@ -139,7 +139,7 @@ class BatchAIManager:
                     imgsz=self.img_size,
                     device=self.device,
                     verbose=False,
-                    half=True,
+                    half=False,
                     max_det=self.max_det,
                     persist=True,
                     tracker="bytetrack.yaml",
