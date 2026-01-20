@@ -41,12 +41,12 @@ class BatchAIManager:
         
         # 카메라별 입력 큐 (프레임 저장)
         self.input_queues = {
-            i: queue.Queue(maxsize=2) for i in range(num_cameras)
+            i: queue.Queue(maxsize=10) for i in range(num_cameras)
         }
         
         # 카메라별 출력 큐 (결과 저장)
         self.output_queues = {
-            i: queue.Queue(maxsize=2) for i in range(num_cameras)
+            i: queue.Queue(maxsize=10) for i in range(num_cameras)
         }
         
         # 모델 로드
@@ -60,6 +60,7 @@ class BatchAIManager:
         # 통계
         self.total_inferences = 0
         self.batch_count = 0
+        self.dropped_frames = {i: 0 for i in range(num_cameras)}
     
     def initialize(self, model_path: str) -> bool:
         """모델 초기화"""
@@ -118,6 +119,20 @@ class BatchAIManager:
                     try:
                         # 타임아웃 0.005초 (5ms)
                         frame = self.input_queues[cam_id].get(timeout=0.005)
+                        frames[cam_id] = frame
+                        break
+                    except queue.Empty:
+                        continue
+                
+                # 프레임이 하나도 없으면 다음 루프
+                if not frames:
+                    continue
+                
+                for cam_id in range(self.num_cameras):
+                    if cam_id in frames:
+                        continue
+                    try:
+                        frame = self.input_queues[cam_id].get_nowait()
                         frames[cam_id] = frame
                     except queue.Empty:
                         continue
@@ -258,8 +273,12 @@ class BatchAIManager:
         # 큐가 가득 차면 오래된 프레임 버림
         if self.input_queues[camera_id].full():
             try:
-                dropped_frame = self.input_queues[camera_id].get_nowait()
-                log(f"카메라 {camera_id} 프레임 드롭 발생")
+                self.input_queues[camera_id].get_nowait()
+                self.dropped_frames[camera_id] += 1
+                
+                # ✅ 50번마다 한 번만 로그
+                if self.dropped_frames[camera_id] % 50 == 0:
+                    log(f"⚠️ 카메라 {camera_id}: 총 {self.dropped_frames[camera_id]}개 프레임 드롭")
             except queue.Empty:
                 pass
         
