@@ -201,7 +201,7 @@ class BaslerCameraManager:
             return None
         try:
             if self.camera and self.camera.IsGrabbing():
-                grabResult = self.camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+                grabResult = self.camera.RetrieveResult(100, pylon.TimeoutHandling_ThrowException)
                 if grabResult.GrabSucceeded():
                     image = self.converter.Convert(grabResult)
                     frame = image.GetArray()

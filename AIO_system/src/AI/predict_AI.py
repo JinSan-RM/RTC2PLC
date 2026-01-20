@@ -98,6 +98,12 @@ class AIPlasticDetectionSystem:
     """YOLOv11 기반 AI Hub 폐플라스틱 감지 시스템 (GPU 가속)"""
     
     CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
+    CLASS_COLORS = {
+        'PET': (0, 165, 255),
+        'PE': (255, 0, 0),
+        'PP': (0, 255, 0),
+        'PS': (255, 0, 255)
+    }
     
     def __init__(
         self,
@@ -256,60 +262,66 @@ class AIPlasticDetectionSystem:
     
     def draw_detections(self, frame: np.ndarray, detected_objects: List[DetectedObject]) -> np.ndarray:
         """감지 결과 그리기"""
-        class_colors = {
-            'PET': (0, 165, 255),
-            'PE': (255, 0, 0),
-            'PP': (0, 255, 0),
-            'PS': (255, 0, 255)
-        }
+        # class_colors = {
+        #     'PET': (0, 165, 255),
+        #     'PE': (255, 0, 0),
+        #     'PP': (0, 255, 0),
+        #     'PS': (255, 0, 255)
+        # }
         
         for obj in detected_objects:
             x1, y1, x2, y2 = obj.bbox
-            color = class_colors.get(obj.class_name, (128, 128, 128))
+            color = self.CLASS_COLORS.get(obj.class_name, (128, 128, 128))
             
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.circle(frame, obj.center, 5, (0, 0, 255), -1)
+            # cv2.circle(frame, obj.center, 5, (0, 0, 255), -1)
             
             label = f"{obj.class_name}: {obj.confidence:.2f}"
-            cv2.putText(frame, label, (x1, y1 - 10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            cv2.putText(
+                frame, label, (x1, y1 - 10), 
+                cv2.FONT_HERSHEY_SIMPLEX, 
+                0.5,  # ✨ 0.6 → 0.5 (폰트 크기 감소)
+                color, 
+                1,    # ✨ 2 → 1 (두께 감소, 렌더링 2배 빠름)
+                cv2.LINE_AA
+            )
         
         return frame
 
     
-    def draw_ui(self, frame: np.ndarray) -> np.ndarray:
-        """UI 그리기"""
-        height, width = frame.shape[:2]
+    # def draw_ui(self, frame: np.ndarray) -> np.ndarray:
+    #     """UI 그리기"""
+    #     height, width = frame.shape[:2]
         
-        self.fps_counter += 1
-        if time.time() - self.fps_start_time >= 1.0:
-            self.current_fps = self.fps_counter
-            self.fps_counter = 0
-            self.fps_start_time = time.time()
+    #     self.fps_counter += 1
+    #     if time.time() - self.fps_start_time >= 1.0:
+    #         self.current_fps = self.fps_counter
+    #         self.fps_counter = 0
+    #         self.fps_start_time = time.time()
         
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (500, 180), (0, 0, 0), -1)
-        frame = cv2.addWeighted(frame, 0.7, overlay, 0.3, 0)
+    #     overlay = frame.copy()
+    #     cv2.rectangle(overlay, (0, 0), (500, 180), (0, 0, 0), -1)
+    #     frame = cv2.addWeighted(frame, 0.7, overlay, 0.3, 0)
         
-        device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
-        cv2.putText(frame, f"YOLOv11 Plastic Detection ({device_name})", (10, 25), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        cv2.putText(frame, f"FPS: {self.current_fps} | Total: {self.total_processed}", 
-                   (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    #     device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+    #     cv2.putText(frame, f"YOLOv11 Plastic Detection ({device_name})", (10, 25), 
+    #                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+    #     cv2.putText(frame, f"FPS: {self.current_fps} | Total: {self.total_processed}", 
+    #                (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         
-        y_offset = 75
-        if self.line_counter:
-            for class_name, count in self.line_counter.class_counts.items():
-                color = self.sorting_system.bins[class_name]['color']
-                bin_id = self.sorting_system.bins[class_name]['bin_id']
-                cv2.putText(frame, f"{class_name}({bin_id}): {count}", 
-                           (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                y_offset += 25
+    #     y_offset = 75
+    #     if self.line_counter:
+    #         for class_name, count in self.line_counter.class_counts.items():
+    #             color = self.sorting_system.bins[class_name]['color']
+    #             bin_id = self.sorting_system.bins[class_name]['bin_id']
+    #             cv2.putText(frame, f"{class_name}({bin_id}): {count}", 
+    #                        (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    #             y_offset += 25
         
-        cv2.putText(frame, "Press 'q':Quit | 'r':Reset | 's':Stats", 
-                   (10, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+    #     cv2.putText(frame, "Press 'q':Quit | 'r':Reset | 's':Stats", 
+    #                (10, height - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         
-        return frame
+    #     return frame
     
     def send_airknife_signal(self, air_num, on_term):
         """AirKnife 신호 전송"""
@@ -327,10 +339,10 @@ class AIPlasticDetectionSystem:
         log("AI Hub 폐플라스틱 감지 시스템 시작 (YOLOv11 + GPU)")
         
         # 타이밍 측정용
-        timing_grab = []
-        timing_inference = []
-        timing_draw = []
-        timing_total = []
+        # timing_grab = []
+        # timing_inference = []
+        # timing_draw = []
+        # timing_total = []
         
         camera_ip = None
         if not self.camera_manager.initialize(camera_ip=camera_ip):
@@ -424,7 +436,7 @@ class AIPlasticDetectionSystem:
                         box = self.box_manager.boxes[box_id]
                         
                         if box.is_active:
-                            log("Air Knife action")
+                            # log("Air Knife action")
                             self.send_airknife_signal(air_num=box.box_id, on_term=1000)
                             
                     else:
@@ -432,7 +444,7 @@ class AIPlasticDetectionSystem:
                         for box in self.box_manager.boxes:
                             
                             if box.is_active:
-                                log("Air Knife action")
+                                # log("Air Knife action")
                                 self.send_airknife_signal(air_num=box.box_id, on_term=1000)
                     
                     
