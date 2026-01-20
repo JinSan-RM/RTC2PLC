@@ -136,7 +136,6 @@ class CameraView(QFrame):
             # CameraThread 생성
             self.camera_thread = CameraThread(
                 camera_index=self.camera_index,
-                img_size=640,
                 airknife_callback=self.app.airknife_on,
                 app=self.app,
                 ai_manager = self.ai_manager
@@ -446,7 +445,7 @@ class MonitoringPage(QWidget):
 
         for name, row, col, camera_index in cameras:
             cam = CameraView(
-                camera_id=f"rgb_{row}{col}", 
+                camera_id=f"rgb_{row}{col}",
                 camera_name=name,
                 camera_index=camera_index,
                 app=self.app,
@@ -464,7 +463,7 @@ class MonitoringPage(QWidget):
         # 카메라 뷰
         camera_layout = QHBoxLayout()
         
-        self.hyper_camera = CameraView("hyperspectral", "Specim FX17",camera_index=0,app=self.app)
+        self.hyper_camera = CameraView("hyperspectral", "Specim FX17",camera_index=0,app=self.app, ai_manager=None)
         self.hyper_camera.setMinimumSize(600, 400)
         camera_layout.addWidget(self.hyper_camera)
 
