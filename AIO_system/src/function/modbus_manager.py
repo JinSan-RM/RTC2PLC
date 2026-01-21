@@ -1,12 +1,19 @@
-from pymodbus.client import ModbusSerialClient
+"""
+시리얼 통신 매니저
+"""
 import queue
 import threading
 import time
 
-from src.utils.config_util import *
+from pymodbus.client import ModbusSerialClient
+
+from src.utils.config_util import MODBUS_RTU_CONFIG
 from src.utils.logger import log
 
-class ModbusManager():
+class ModbusManager:
+    """
+    시리얼 통신 매니저
+    """
     _lock = threading.Lock()
     _initialized = False
 
@@ -15,6 +22,7 @@ class ModbusManager():
             self.app = app
             self.config = MODBUS_RTU_CONFIG
 
+            self.process_thread = None
             self.stop_event = threading.Event()
             self.tasks: queue.Queue[dict] = queue.Queue()
             self.client = None
@@ -22,6 +30,11 @@ class ModbusManager():
             self._initialized = True
 
     def connect(self):
+        """
+        시리얼 통신 연결
+        
+        :param self: Description
+        """
         try:
             self.client = ModbusSerialClient(
                 port = self.config['port'],
@@ -49,6 +62,11 @@ class ModbusManager():
             log(f"Modbus connection error: {e}")
 
     def run(self):
+        """
+        시리얼 통신 시작
+        
+        :param self: Description
+        """
         try:
             # 시작 시 인버터들 설정 값 세팅
             for name, _ in self.slave_ids.items():
@@ -63,6 +81,12 @@ class ModbusManager():
             log(f"error while process: {e}")
 
     def disconnect(self):
+        """
+        시리얼 통신 종료
+        
+        :param self: Description
+        """
+        log("Modbus disconnect start")
         try:
             self.stop_event.set()
             self.process_thread.join(timeout=5)
@@ -70,6 +94,7 @@ class ModbusManager():
                 log("comm manager thread did not terminate properly")
             self.client.close()
             self.client = None
+            log("Modbus disconnect completed")
         except Exception as e:
             log(f"Modbus disconnection error: {e}")
 
@@ -79,133 +104,156 @@ class ModbusManager():
             with self._lock:
                 while not self.tasks.empty():
                     task = self.tasks.get()
-                    task[0](*task[1])
+                    ret = task['task_func'](*task['args'])
+                    task['callback_func'](ret, *task['args'])
 
             time.sleep(0.033) # 60프레임 업데이트 해본다
 
 # region r/w register
     # G100 인버터는 코일(비트) 읽기/쓰기는 지원하지 않으므로 해당하는 함수들은 구현하지 않음
-
-    def read_holding_register(self, host_name: str, register_address: int) -> int | None:
+    def read_holding_register(self, inverter_name: str, register_address: int) -> int | None:
         """
-            홀딩 레지스터 읽기
+        홀딩 레지스터 읽기
 
-            Args:
-                host_name: 슬레이브 명칭
-                register_address: 레지스터 주소
+        Args:
+            inverter_name: 슬레이브 명칭
+            register_address: 레지스터 주소
 
-            Returns:
-                읽은 값 또는 None (오류시)
+        Returns:
+            읽은 값 또는 None (오류시)
         """
         try:
-            if host_name not in self.slave_ids:
-                log(f"can't find slave: {host_name}")
+            if inverter_name not in self.slave_ids:
+                log(f"can't find slave: {inverter_name}")
                 return False
 
-            slave_id = self.slave_ids[host_name]
-            ret = self.client.read_holding_registers(register_address-1, count=1, device_id=slave_id)
+            slave_id = self.slave_ids[inverter_name]
+            ret = self.client.read_holding_registers(
+                register_address-1,
+                count=1,
+                device_id=slave_id
+            )
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
             value = ret.registers[0]
-            # log(f"[{host_name}] Register {register_address} read: {value}")
             return value
 
         except Exception as e:
-            log(f"read register failed (Name: {host_name}, Register: {register_address}): {e}")
+            log(f"""
+                read register failed (Name: {inverter_name}, Register: {register_address}): {e}
+                """)
             return None
 
-    def write_holding_register(self, host_name: str, register_address: int, value: int) -> bool:
+    def write_holding_register(self, inverter_name: str, register_address: int, value: int) -> bool:
         """
-            홀딩 레지스터 쓰기
+        홀딩 레지스터 쓰기
 
-            Args:
-                host_name: 슬레이브 명칭
-                register_address: 레지스터 주소
-                value: 쓸 값
+        Args:
+            inverter_name: 슬레이브 명칭
+            register_address: 레지스터 주소
+            value: 쓸 값
 
-            Returns:
-                성공 여부
+        Returns:
+            성공 여부
         """
         try:
-            if host_name not in self.slave_ids:
-                log(f"can't find slave: {host_name}")
+            if inverter_name not in self.slave_ids:
+                log(f"can't find slave: {inverter_name}")
                 return False
 
-            slave_id = self.slave_ids[host_name]
+            slave_id = self.slave_ids[inverter_name]
             ret = self.client.write_register(register_address-1, value, device_id=slave_id)
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
-            # log(f"[{host_name}] write value {value} on register {register_address} completed")
             return True
 
         except Exception as e:
-            log(f"register writing failed (Name: {host_name}, Register: {register_address}, Value: {value}): {e}")
+            log(f"""
+                register writing failed 
+                (Name: {inverter_name}, Register: {register_address}, Value: {value}): {e}
+                """)
             return False
 
-    def read_multiple_registers(self, host_name: str, start_address: int, count: int) -> list[int] | None:
+    def read_multiple_registers(self, inverter_name: str, start_address: int, count: int) -> list[int] | None:
         """
-            다중 레지스터 읽기
+        다중 레지스터 읽기
 
-            Args:
-                host_name: 슬레이브 명칭
-                start_address: 시작 레지스터 주소
-                count: 읽을 레지스터 개수
+        Args:
+            inverter_name: 슬레이브 명칭
+            start_address: 시작 레지스터 주소
+            count: 읽을 레지스터 개수
 
-            Returns:
-                읽은 값들의 리스트 또는 None (오류시)
+        Returns:
+            읽은 값들의 리스트 또는 None (오류시)
         """
         try:
-            if host_name not in self.slave_ids:
-                log(f"can't find slave: {host_name}")
+            if inverter_name not in self.slave_ids:
+                log(f"can't find slave: {inverter_name}")
                 return None
 
-            slave_id = self.slave_ids[host_name]
-            ret = self.client.read_holding_registers(start_address-1, count=count, device_id=slave_id)
+            slave_id = self.slave_ids[inverter_name]
+            ret = self.client.read_holding_registers(
+                start_address-1,
+                count=count,
+                device_id=slave_id
+            )
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
             values = ret.registers[:count]
-            # log(f"[{host_name}] register {start_address}-{start_address+count-1} read: {values}")
             return values
 
         except Exception as e:
-            log(f"reading multiple registers failed (Name: {host_name}, Start: {start_address}, Count: {count}): {e}")
+            log(f"""
+                reading multiple registers failed 
+                (Name: {inverter_name}, Start: {start_address}, Count: {count}): {e}
+                """)
             return None
 
-    def write_multiple_registers(self, host_name: str, start_address: int, values: list[int]) -> bool:
+    def write_multiple_registers(self,
+                                 inverter_name: str,
+                                 start_address: int,
+                                 values: list[int]) -> bool:
         """
-            다중 레지스터 쓰기
+        다중 레지스터 쓰기
 
-            Args:
-                host_name: 슬레이브 명칭
-                start_address: 시작 레지스터 주소
-                values: 쓸 값의 리스트
+        Args:
+            inverter_name: 슬레이브 명칭
+            start_address: 시작 레지스터 주소
+            values: 쓸 값의 리스트
 
-            Returns:
-                성공 여부
+        Returns:
+            성공 여부
         """
         try:
-            if host_name not in self.slave_ids:
-                log(f"can't find slave: {host_name}")
+            if inverter_name not in self.slave_ids:
+                log(f"can't find slave: {inverter_name}")
                 return False
 
-            slave_id = self.slave_ids[host_name]
+            slave_id = self.slave_ids[inverter_name]
             ret = self.client.write_registers(start_address-1, values, device_id=slave_id)
             if ret.isError():
                 raise Exception(f"Modbus error: {ret}")
 
-            # log(f"[{host_name}] write values {values} on register {start_address}-{start_address+len(values)-1} completed")
             return True
 
         except Exception as e:
-            log(f"multiple registers writing failed (Name: {host_name}, Start: {start_address}, Count: {len(values)}): {e}")
+            log(f"""
+                multiple registers writing failed 
+                (Name: {inverter_name}, Start: {start_address}, Count: {len(values)}): {e}
+                """)
             return False
 # endregion
 
 # region functions
     def read_monitor_values(self):
+        """
+        인버터 상태 UI 업데이트
+        
+        :param self: Description
+        """
         # 모니터링 값: 가속시간(0007, 0.1sec), 감속시간(0008, 0.1sec), 출력전류(0009, 0.1A), 출력주파수(000A, 0.01Hz), 출력전압(000B, 1V), DC Link 전압(000C, 1V), 출력파워(000D, 0.1kW), 운전상태6종(000E)
         # 운전 상태: 정지(B0), 정방향(B1), 역방향(B2), Fault(B3), 가속중(B4), 감속중(B5)
         _data = {}
@@ -223,82 +271,169 @@ class ModbusManager():
         self.app.on_update_inverter_status(_data)
 
     # 주파수 설정 함수
-    def set_freq(self, motor_id:str = 'inverter_001', value: float = 0.0):
+    def set_freq(self, inverter_name: str = 'inverter_001', value: float = 0.0):
         """ 주파수 설정 """
-        ret = self.write_holding_register(motor_id, 0x0005, int(value * 100))
+        task = {
+            'task_func': self.write_holding_register,
+            'callback_func': self.callback_set_freq,
+            'args': [ inverter_name, 0x0005, int(value * 100) ]
+        }
+        self.tasks.put(task)
+
+    def callback_set_freq(self, ret, inverter_name: str, addr: int, value: int):
+        """ 주파수 설정 콜백 """
         if ret:
-            self.app.config["inverter_config"][motor_id][0] = value
-            log(f"set Frequency to {value:.2f} Hz success")
-            
+            f_value = value * 0.01
+            self.app.config["inverter_config"][inverter_name][0] = f_value
+            log(f"set frequency to {f_value:.2f} Hz success")
+        else:
+            log(f"{inverter_name} set frequency failed")
+
     # 가속 시간 설정 함수
-    def set_acc(self, motor_id:str = 'inverter_001', value: float = 0.0):
+    def set_acc(self, inverter_name: str = 'inverter_001', value: float = 0.0):
         """ 가속 시간 설정 """
-        ret = self.write_holding_register(motor_id, 0x0007, int(value * 10))
+        task = {
+            'task_func': self.write_holding_register,
+            'callback_func': self.callback_set_acc,
+            'args': [ inverter_name, 0x0007, int(value * 10) ]
+        }
+        self.tasks.put(task)
+
+    def callback_set_acc(self, ret, inverter_name: str, addr: int, value: int):
+        """ 가속 시간 설정 콜백 """
         if ret:
-            self.app.config["inverter_config"][motor_id][1] = value
-            log(f"set acceleration time to {value:.1f} sec success")
+            f_value = value * 0.1
+            self.app.config["inverter_config"][inverter_name][1] = f_value
+            log(f"set acceleration time to {f_value:.1f} sec success")
+        else:
+            log(f"{inverter_name} set acceleration time failed")
 
     # 감속 시간 설정 함수
-    def set_dec(self, motor_id:str = 'inverter_001', value: float = 0.0):
+    def set_dec(self, inverter_name: str = 'inverter_001', value: float = 0.0):
         """ 감속 시간 설정 """
-        ret = self.write_holding_register(motor_id, 0x0008, int(value * 10))
+        task = {
+            'task_func': self.write_holding_register,
+            'callback_func': self.callback_set_dec,
+            'args': [ inverter_name, 0x0008, int(value * 10) ]
+        }
+        self.tasks.put(task)
+
+    def callback_set_dec(self, ret, inverter_name: str, addr: int, value: int):
+        """ 감속 시간 설정 콜백 """
         if ret:
-            self.app.config["inverter_config"][motor_id][2] = value
-            log(f"set Frequency to {value:.1f} sec success")
-    
-    # 모터 동작 함수
-    def motor_start(self, motor_id: str = 'inverter_001'):
-        """모터 운전 시작"""
-        log(f"motor_start called: {motor_id}")
-        
-        if motor_id not in self.slave_ids:
-            log(f"Unknown motor_id: {motor_id}")
-            return
-        
-        ret = self.write_holding_register(motor_id, 0x0382, 0x0001)
-        if ret:
-            log(f"{motor_id} started")
+            f_value = value * 0.1
+            self.app.config["inverter_config"][inverter_name][2] = f_value
+            log(f"set deceleration time to {f_value:.1f} sec success")
         else:
-            log("motor start failed")
+            log(f"{inverter_name} set deceleration time failed")
+
+    # 모터 동작 함수
+    def motor_start(self, inverter_name: str = 'inverter_001'):
+        """ 모터 운전 시작 """
+        log(f"motor_start called: {inverter_name}")
+
+        task = {
+            'task_func': self.write_holding_register,
+            'callback_func': self.callback_motor_start,
+            'args': [ inverter_name, 0x0382, 0x0001 ]
+        }
+        self.tasks.put(task)
+
+    def callback_motor_start(self, ret, inverter_name: str, addr: int, value: int):
+        """ 모터 운전 시작 콜백 """
+        if ret:
+            log(f"{inverter_name} started")
+        else:
+            log(f"{inverter_name} start failed")
 
     # 모터 정지 함수
-    def motor_stop(self, motor_id: str):
-        """모터 운전 정지"""
-        log(f"motor_stop called: {motor_id}")
-        
-        if motor_id not in self.slave_ids:
-            log(f"Unknown motor_id: {motor_id}")
-            return
-        
-        ret = self.write_holding_register(motor_id, 0x0382, 0x0000)
+    def motor_stop(self, inverter_name: str):
+        """ 모터 운전 정지 """
+        log(f"motor_stop called: {inverter_name}")
+
+        task = {
+            'task_func': self.write_holding_register,
+            'callback_func': self.callback_motor_stop,
+            'args': [ inverter_name, 0x0382, 0x0000 ]
+        }
+        self.tasks.put(task)
+
+    def callback_motor_stop(self, ret, inverter_name: str, addr: int, value: int):
+        """ 모터 운전 정지 콜백 """
         if ret:
-            log(f"{motor_id} stopped")
+            log(f"{inverter_name} stopped")
         else:
-            log("motor stop failed")
+            log(f"{inverter_name} stop failed")
 
     # 자동 운전 시작
     def on_automode_start(self):
-        log("auto mode started")
-        for _name, _id in self.slave_ids.items():
+        """
+        인버터 전체 운전 시작
+        
+        :param self: Description
+        """
+        for _name, _ in self.slave_ids.items():
             self.motor_start(_name)
 
     # 자동 운전 정지
     def on_automode_stop(self):
-        log("auto mode stopped")
-        for _name, _id in self.slave_ids.items():
+        """
+        인버터 전체 정지
+        
+        :param self: Description
+        """
+        for _name, _ in self.slave_ids.items():
             self.motor_stop(_name)
 
-    # def custom_check(self, addr):
-    #     ret = self.read_holding_register("inverter_001", addr - 1)
-    #     if ret != None:
-    #         log(f"read addr: {addr:X} value: {ret}")
-    #     else:
-    #         log(f"read addr: {addr:X} failed")
+    def custom_read(self, slave_id: int, addr: int):
+        """
+        원하는 주소의 값 읽기
+        
+        :param self: Description
+        :param slave_id: Description
+        :type slave_id: int
+        :param addr: Description
+        :type addr: int
+        """
+        inverter_name = f"inverter_00{slave_id}"
+        task = {
+            'task_func': self.read_holding_register,
+            'callback_func': self.callback_custom_read,
+            'args': [ inverter_name, addr ]
+        }
+        self.tasks.put(task)
 
-    # def custom_write(self, addr, value):
-    #     ret = self.write_holding_register("inverter_001", addr - 1, value)
-    #     if ret:
-    #         log(f"write addr: {addr:X} value: {value}")
-    #     else:
-    #         log(f"write addr: {addr:X} failed")
+    def callback_custom_read(self, ret, inverter_name: str, addr: int):
+        """ 원하는 주소의 값 읽기 콜백 """
+        if ret:
+            log(f"{inverter_name}read addr: {addr:X} value: {ret}")
+        else:
+            log(f"{inverter_name} read addr: {addr:X} failed")
+
+    def custom_write(self, slave_id: int, addr: int, value: int):
+        """
+        원하는 주소에 값 쓰기
+        
+        :param self: Description
+        :param slave_id: Description
+        :type slave_id: int
+        :param addr: Description
+        :type addr: int
+        :param value: Description
+        :type value: int
+        """
+        inverter_name = f"inverter_00{slave_id}"
+        task = {
+            'task_func': self.write_holding_register,
+            'callback_func': self.callback_custom_write,
+            'args': [ inverter_name, addr, value ]
+        }
+        self.tasks.put(task)
+
+    def callback_custom_write(self, ret, inverter_name: str, addr: int, value: int):
+        """ 원하는 주소에 값 쓰기 콜백 """
+        if ret:
+            log(f"{inverter_name} write addr: {addr:X} value: {value}")
+        else:
+            log(f"{inverter_name} write addr: {addr:X} failed")
 # endregion

@@ -23,8 +23,8 @@ class MainWindow(QMainWindow):
     servo_updated: ClassVar[Signal] = Signal(int, object)
     inverter_updated: ClassVar[Signal] = Signal(object)
     airknife_updated: ClassVar[Signal] = Signal(int)
-    input_updated: ClassVar[Signal] = Signal(int, int)
-    output_updated: ClassVar[Signal] = Signal(int, int)
+    input_updated: ClassVar[Signal] = Signal(int)
+    output_updated: ClassVar[Signal] = Signal(int)
     
     def __init__(self, app):
         super().__init__()
@@ -301,9 +301,11 @@ class MainWindow(QMainWindow):
         print("긴급정지")
         self.app.on_log("긴급정지 버튼 눌림")
         self.update_status("긴급정지", "red")
-    
-   
+
     def closeEvent(self, a0):
+        if self.app.is_reload:
+            return
+
         self.log_updated.disconnect()
         self.servo_updated.disconnect()
         self.inverter_updated.disconnect()

@@ -287,14 +287,14 @@ class IOCheckTab(QWidget):
             self.outputs[io_address].set_state(is_on)
 
     # input_id, output_id 는 추후 입출력 모듈이 추가되는 경우 사용
-    def update_input_status(self, input_id: int, total_input: int):
+    def update_input_status(self, total_input: int):
         for bit in range(32):
             if total_input & (1 << bit):
                 self.update_io_state(f"I{bit:02d}", True)
             else:
                 self.update_io_state(f"I{bit:02d}", False)
 
-    def update_output_status(self, output_id: int, total_output: int):
+    def update_output_status(self, total_output: int):
         for bit in range(32):
             if total_output & (1 << bit):
                 self.update_io_state(f"O{bit:02d}", True)
