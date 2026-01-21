@@ -26,7 +26,6 @@ from src.ui.main_window import MainWindow
 from src.function.sharedmemory_manager import SharedMemoryManager
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
-from src.ui.page.monitoring_page import MonitoringPage
 from src.utils.config_util import (
     CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH
 )
@@ -175,11 +174,16 @@ class App():
         self.ethercat_manager = EtherCATManager(self)
         self.ethercat_manager.connect()
 
-        self.camera_manager = MonitoringPage(self)
-
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.on_periodic_update)
         self.update_timer.start(100)
+        
+    @property
+    def camera_manger(self):
+        """UI의 monitoring_page를 camera_manager로 참조"""
+        if hasattr(self.ui, 'monitoring_page'):
+            return self.ui.monitoring_page
+        return None
 
     def on_periodic_update(self):
         """주기적 업데이트"""
@@ -666,10 +670,6 @@ class App():
         self.update_timer.stop()
         self.update_timer.timeout.disconnect()
 
-        if self.camera_manager:
-            self.camera_manager.on_stop_all()
-            self.camera_manager = None
-
         if self.ui:
             self.ui.close()
             self.ui.deleteLater()
@@ -700,7 +700,6 @@ class App():
         ui_module = importlib.import_module("src.ui.main_window")
         modbus_module = importlib.import_module("src.function.modbus_manager")
         ethercat_module = importlib.import_module("src.function.ethercat_manager")
-        camera_module = importlib.import_module("src.ui.page.monitoring_page")
         importlib.import_module("src.utils.config_util")
 
         self.shm_manager = shm_module.SharedMemoryManager(mem_name=self.shm_name, create=True)
@@ -712,8 +711,6 @@ class App():
 
         self.ethercat_manager = ethercat_module.EtherCATManager(self)
         self.ethercat_manager.connect()
-
-        self.camera_manager = camera_module.MonitoringPage(self)
 
         self.update_timer.timeout.connect(self.on_periodic_update)
         self.update_timer.start(100)
