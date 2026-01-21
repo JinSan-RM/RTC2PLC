@@ -14,30 +14,26 @@ import numpy as np
 import pysoem
 
 from src.utils.config_util import (
-    IF_NAME, ETHERCAT_DELAY, LS_VENDOR_ID, LSProductCode,
+    IF_NAME, ETHERCAT_DELAY, LS_VENDOR_ID,
     EC_RX_INDEX, EC_TX_INDEX, SERVO_RX_MAP, SERVO_TX_MAP, SERVO_RX, SERVO_TX,
     OUTPUT_RX_MAP, INPUT_TX_MAP, OUTPUT_RX, INPUT_TX,
-    get_servo_unmodified_value, get_servo_modified_value,
-    StatusMask, check_mask, OperationMode, SERVO_ACCEL, SERVO_IN_POS_WIDTH,
-    SHARED_MEMORY_DTYPE, sync_shared_memory
+    SERVO_ACCEL, SERVO_IN_POS_WIDTH, SHM_NAME, SHM_DTYPE,
+    LSProductCode, StatusMask,  OperationMode,
+    get_servo_unmodified_value, get_servo_modified_value, check_mask, sync_shared_memory
 )
 from src.utils.logger import log
 
 
 @dataclass
 class SlaveInfo:
-    """
-    class for EtherCAT slaves
-    """
+    """이더캣 슬레이브 관리용 클래스"""
     slave: pysoem.CdefSlave
     pdo_lock: synchronize.Lock = field(default_factory=mp.Lock)
 
 
 @dataclass
 class ProcessVars:
-    """
-    서브 프로세스의 run 함수 내에서 생성해야 하는 속성 모음
-    """
+    """서브 프로세스의 run 함수 내에서 생성해야 하는 속성 모음"""
     shm: shared_memory.SharedMemory = None
     shm_data: np.ndarray = None
     master: pysoem.CdefMaster = None
@@ -47,19 +43,15 @@ class ProcessVars:
     output_modules: list[SlaveInfo] = None
 
 
-# region EtherCATProcess
 class EtherCATProcess(Process):
-    """
-    이더캣 통신을 위한, 분리된 프로세스
-    """
+    """이더캣 통신을 위한, 분리된 프로세스"""
     _initialized = False
 
-    def __init__(self, shm_name: str):
+    def __init__(self):
         if not self._initialized:
             super().__init__()
 
             self.recv = 0
-            self.shm_name = shm_name
 
             self.vars = None
 
@@ -70,10 +62,10 @@ class EtherCATProcess(Process):
     def run(self):
         log("EtherCAT Process run")
         try:
-            shm = shared_memory.SharedMemory(name=self.shm_name)
+            shm = shared_memory.SharedMemory(name=SHM_NAME)
             self.vars = ProcessVars(
                 shm=shm,
-                shm_data=np.frombuffer(shm.buf, dtype=SHARED_MEMORY_DTYPE)[0]
+                shm_data=np.frombuffer(shm.buf, dtype=SHM_DTYPE)[0]
             )
 
             self._connect()
@@ -137,10 +129,10 @@ class EtherCATProcess(Process):
                         self.vars.output_modules.append(slave_info)
                     case _:
                         self.vars.master.close()
-                        raise Exception("unexpected slave layout")
+                        raise Exception(f"unexpected slave id: {slave.id:X}")
             else:
                 self.vars.master.close()
-                raise Exception("unexpected slave layout")
+                raise Exception(f"unexpected slave manufacturer: {slave.man}")
 
             slave.is_lost = False
 
@@ -497,5 +489,4 @@ class EtherCATProcess(Process):
 
     def _emcy_callback_output(self, msg):
         log(f"[ERROR] output emergency: {msg}")
-# endregion
 # endregion

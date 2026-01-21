@@ -30,11 +30,7 @@ class ModbusManager:
             self._initialized = True
 
     def connect(self):
-        """
-        시리얼 통신 연결
-        
-        :param self: Description
-        """
+        """시리얼 통신 연결"""
         try:
             self.client = ModbusSerialClient(
                 port = self.config['port'],
@@ -81,11 +77,7 @@ class ModbusManager:
             log(f"error while process: {e}")
 
     def disconnect(self):
-        """
-        시리얼 통신 종료
-        
-        :param self: Description
-        """
+        """시리얼 통신 종료"""
         log("Modbus disconnect start")
         try:
             self.stop_event.set()
@@ -111,7 +103,9 @@ class ModbusManager:
 
 # region r/w register
     # G100 인버터는 코일(비트) 읽기/쓰기는 지원하지 않으므로 해당하는 함수들은 구현하지 않음
-    def read_holding_register(self, inverter_name: str, register_address: int) -> int | None:
+    def read_holding_register(self,
+                              inverter_name: str,
+                              register_address: int) -> int | None:
         """
         홀딩 레지스터 읽기
 
@@ -145,7 +139,10 @@ class ModbusManager:
                 """)
             return None
 
-    def write_holding_register(self, inverter_name: str, register_address: int, value: int) -> bool:
+    def write_holding_register(self,
+                               inverter_name: str,
+                               register_address: int,
+                               value: int) -> bool:
         """
         홀딩 레지스터 쓰기
 
@@ -176,7 +173,10 @@ class ModbusManager:
                 """)
             return False
 
-    def read_multiple_registers(self, inverter_name: str, start_address: int, count: int) -> list[int] | None:
+    def read_multiple_registers(self,
+                                inverter_name: str,
+                                start_address: int,
+                                count: int) -> list[int] | None:
         """
         다중 레지스터 읽기
 
@@ -251,11 +251,15 @@ class ModbusManager:
     def read_monitor_values(self):
         """
         인버터 상태 UI 업데이트
-        
-        :param self: Description
+
+        # 모니터링 값 #
+        가속시간(0007, 0.1sec), 감속시간(0008, 0.1sec),
+        출력전류(0009, 0.1A), 출력주파수(000A, 0.01Hz), 출력전압(000B, 1V),
+        DC Link 전압(000C, 1V), 출력파워(000D, 0.1kW), 운전상태6종(000E)
+
+        # 운전 상태 #
+        정지(B0), 정방향(B1), 역방향(B2), Fault(B3), 가속중(B4), 감속중(B5)
         """
-        # 모니터링 값: 가속시간(0007, 0.1sec), 감속시간(0008, 0.1sec), 출력전류(0009, 0.1A), 출력주파수(000A, 0.01Hz), 출력전압(000B, 1V), DC Link 전압(000C, 1V), 출력파워(000D, 0.1kW), 운전상태6종(000E)
-        # 운전 상태: 정지(B0), 정방향(B1), 역방향(B2), Fault(B3), 가속중(B4), 감속중(B5)
         _data = {}
         for _name, _ in self.slave_ids.items():
             ret = self.read_multiple_registers(_name, 0x0007, 8)
@@ -270,9 +274,10 @@ class ModbusManager:
 
         self.app.on_update_inverter_status(_data)
 
+# pylint: disable=unused-argument
     # 주파수 설정 함수
     def set_freq(self, inverter_name: str = 'inverter_001', value: float = 0.0):
-        """ 주파수 설정 """
+        """주파수 설정"""
         task = {
             'task_func': self.write_holding_register,
             'callback_func': self.callback_set_freq,
@@ -281,7 +286,7 @@ class ModbusManager:
         self.tasks.put(task)
 
     def callback_set_freq(self, ret, inverter_name: str, addr: int, value: int):
-        """ 주파수 설정 콜백 """
+        """주파수 설정 콜백"""
         if ret:
             f_value = value * 0.01
             self.app.config["inverter_config"][inverter_name][0] = f_value
@@ -291,7 +296,7 @@ class ModbusManager:
 
     # 가속 시간 설정 함수
     def set_acc(self, inverter_name: str = 'inverter_001', value: float = 0.0):
-        """ 가속 시간 설정 """
+        """가속 시간 설정"""
         task = {
             'task_func': self.write_holding_register,
             'callback_func': self.callback_set_acc,
@@ -300,7 +305,7 @@ class ModbusManager:
         self.tasks.put(task)
 
     def callback_set_acc(self, ret, inverter_name: str, addr: int, value: int):
-        """ 가속 시간 설정 콜백 """
+        """가속 시간 설정 콜백"""
         if ret:
             f_value = value * 0.1
             self.app.config["inverter_config"][inverter_name][1] = f_value
@@ -310,7 +315,7 @@ class ModbusManager:
 
     # 감속 시간 설정 함수
     def set_dec(self, inverter_name: str = 'inverter_001', value: float = 0.0):
-        """ 감속 시간 설정 """
+        """감속 시간 설정"""
         task = {
             'task_func': self.write_holding_register,
             'callback_func': self.callback_set_dec,
@@ -319,7 +324,7 @@ class ModbusManager:
         self.tasks.put(task)
 
     def callback_set_dec(self, ret, inverter_name: str, addr: int, value: int):
-        """ 감속 시간 설정 콜백 """
+        """감속 시간 설정 콜백"""
         if ret:
             f_value = value * 0.1
             self.app.config["inverter_config"][inverter_name][2] = f_value
@@ -329,7 +334,7 @@ class ModbusManager:
 
     # 모터 동작 함수
     def motor_start(self, inverter_name: str = 'inverter_001'):
-        """ 모터 운전 시작 """
+        """모터 운전 시작"""
         log(f"motor_start called: {inverter_name}")
 
         task = {
@@ -340,7 +345,7 @@ class ModbusManager:
         self.tasks.put(task)
 
     def callback_motor_start(self, ret, inverter_name: str, addr: int, value: int):
-        """ 모터 운전 시작 콜백 """
+        """모터 운전 시작 콜백"""
         if ret:
             log(f"{inverter_name} started")
         else:
@@ -348,7 +353,7 @@ class ModbusManager:
 
     # 모터 정지 함수
     def motor_stop(self, inverter_name: str):
-        """ 모터 운전 정지 """
+        """모터 운전 정지"""
         log(f"motor_stop called: {inverter_name}")
 
         task = {
@@ -359,29 +364,22 @@ class ModbusManager:
         self.tasks.put(task)
 
     def callback_motor_stop(self, ret, inverter_name: str, addr: int, value: int):
-        """ 모터 운전 정지 콜백 """
+        """모터 운전 정지 콜백"""
         if ret:
             log(f"{inverter_name} stopped")
         else:
             log(f"{inverter_name} stop failed")
+# pylint: enable=unused-argument
 
     # 자동 운전 시작
     def on_automode_start(self):
-        """
-        인버터 전체 운전 시작
-        
-        :param self: Description
-        """
+        """인버터 전체 운전 시작"""
         for _name, _ in self.slave_ids.items():
             self.motor_start(_name)
 
     # 자동 운전 정지
     def on_automode_stop(self):
-        """
-        인버터 전체 정지
-        
-        :param self: Description
-        """
+        """인버터 전체 정지"""
         for _name, _ in self.slave_ids.items():
             self.motor_stop(_name)
 

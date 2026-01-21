@@ -10,7 +10,6 @@ import importlib
 from pathlib import Path
 from datetime import datetime, timedelta
 from itertools import cycle
-from dataclasses import dataclass
 
 import faulthandler
 import atexit
@@ -27,17 +26,16 @@ from src.function.sharedmemory_manager import SharedMemoryManager
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
 from src.utils.config_util import (
-    CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH
+    CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH, SHM_NAME
 )
 from src.utils.logger import log
 
 
 _LOG_FILE = None
 _LOG_PATH = ""
+
 def cleanup_empty_log():
-    """
-    로그 파일 내용이 비었을 경우 제거
-    """
+    """로그 파일 내용이 비었을 경우 제거"""
     global _LOG_FILE
     if _LOG_FILE:
         _LOG_FILE.flush()
@@ -47,9 +45,7 @@ def cleanup_empty_log():
             os.remove(_LOG_PATH)
 
 def enable_crash_handler():
-    """
-    크래시 로그 생성
-    """
+    """크래시 로그 생성"""
     global _LOG_FILE, _LOG_PATH
     try:
         log_dir = str(LOG_PATH)
@@ -67,16 +63,12 @@ def enable_crash_handler():
 
 
 class ReloadSignal(QObject):
-    """
-    파일 변화 감지 시그널
-    """
+    """파일 변화 감지 시그널"""
     triggered: Signal = Signal(str)
 
 
 class UpdateHandler(FileSystemEventHandler):
-    """
-    파일 변화 감지 핸들러
-    """
+    """파일 변화 감지 핸들러"""
     def __init__(self, signal: ReloadSignal):
         super().__init__()
         self.signal = signal
@@ -114,9 +106,7 @@ class UpdateHandler(FileSystemEventHandler):
 
 
 class App():
-    """
-    메인 앱 클래스
-    """
+    """메인 앱 클래스"""
     is_reload = False
 
     def __init__(self):
@@ -136,9 +126,6 @@ class App():
         # 제품 배출 순서 제어
         self.use_air_sequence = False
         self.set_air_sequence_index()
-
-        self.shm_name = "COMM_SHM"
-        self.shm_manager = SharedMemoryManager(mem_name=self.shm_name, create=True)
 
         self.qt_app = QApplication(sys.argv)
 
@@ -177,7 +164,7 @@ class App():
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.on_periodic_update)
         self.update_timer.start(100)
-        
+
     @property
     def camera_manager(self):
         """UI의 monitoring_page를 camera_manager로 참조"""
@@ -189,9 +176,9 @@ class App():
         """주기적 업데이트"""
         self.ui.update_time()
 
-    def on_update_monitor(self, _list):
-        if hasattr(self.ui, 'monitoring_page'):
-            self.ui.monitoring_page.update_values(_list)
+    # def on_update_monitor(self, _list):
+    #     if hasattr(self.ui, 'monitoring_page'):
+    #         self.ui.monitoring_page.update_values(_list)
 
     def _auto_loop(self):
         if not self.auto_mode or not self.auto_run:
@@ -225,16 +212,11 @@ class App():
 
 # region inverter control
     def on_update_inverter_status(self, _data):
-        """
-        피더, 컨베이어 상태 UI 업데이트
-        
-        :param self: Description
-        :param _data: 상태 데이터
-        """
+        """피더, 컨베이어 상태 UI 업데이트"""
         if hasattr(self.ui, 'settings_page') and self.ui.main_stack.currentIndex() == 2:
             tab_index = self.ui.settings_page.pages.currentIndex()
             if tab_index == 1 or tab_index == 2:
-                self.ui.inverter_updated.emit(_data)
+                self.ui.signals.inverter_updated.emit(_data)
 
     def on_set_freq(self, inverter_name: str, value: float):
         """
@@ -326,18 +308,11 @@ class App():
 
 # region servo control
     def on_update_servo_status(self, servo_id: int, _data):
-        """
-        서보 상태 UI 업데이트
-        
-        :param self: Description
-        :param servo_id: 서보 ID
-        :type servo_id: int
-        :param _data: 상태 데이터
-        """
+        """서보 상태 UI 업데이트"""
         if hasattr(self.ui, 'settings_page') and self.ui.main_stack.currentIndex() == 2:
             tab_index = self.ui.settings_page.pages.currentIndex()
             if tab_index == 0:
-                self.ui.servo_updated.emit(servo_id, _data)
+                self.ui.signals.servo_updated.emit(servo_id, _data)
 
     def servo_on(self, servo_id: int):
         """
@@ -442,7 +417,7 @@ class App():
         if hasattr(self.ui, 'logs_page') and self.ui.main_stack.currentIndex() == 3:
             tab_index = self.ui.logs_page.pages.currentIndex()
             if tab_index == 0:
-                self.ui.input_updated.emit(total_input)
+                self.ui.signals.input_updated.emit(total_input)
 
     def on_update_output_status(self, total_output: int):
         """
@@ -455,7 +430,7 @@ class App():
         if hasattr(self.ui, 'logs_page') and self.ui.main_stack.currentIndex() == 3:
             tab_index = self.ui.logs_page.pages.currentIndex()
             if tab_index == 0:
-                self.ui.output_updated.emit(total_output)
+                self.ui.signals.output_updated.emit(total_output)
 
     def airknife_on(self, air_num: int, on_term: int):
         """
@@ -470,34 +445,18 @@ class App():
         self.ethercat_manager.airknife_on(air_num, on_term)
 
     def on_airknife_off(self, air_num: int):
-        """
-        에어나이프 정지 시 UI 업데이트
-        
-        :param self: Description
-        :param air_num: Description
-        :type air_num: int
-        """
+        """에어나이프 정지 시 UI 업데이트"""
         if hasattr(self.ui, 'settings_page'):
-            self.ui.airknife_updated.emit(air_num)
+            self.ui.signals.airknife_updated.emit(air_num)
 
     def set_auto_mode(self, is_on: bool):
-        """
-        자동/수동 모드 세팅
-        
-        :param self: Description
-        :param is_on: Description
-        :type is_on: bool
-        """
+        """자동/수동 모드 세팅"""
         self.auto_mode = is_on
         mode = "auto" if is_on else "manual"
         log(f"[INFO] set {mode} mode")
 
     def auto_mode_run(self):
-        """
-        자동 모드 운전 시작
-        
-        :param self: Description
-        """
+        """자동 모드 운전 시작"""
         self.auto_run = True
 
         # 피더, 컨베이어 동작 함수
@@ -511,11 +470,7 @@ class App():
         log("[INFO] auto mode run")
 
     def auto_mode_stop(self):
-        """
-        자동 모드 운전 정지
-        
-        :param self: Description
-        """
+        """자동 모드 운전 정지"""
         self._stop_event.set()
 
         if hasattr(self, '_auto_thread') and self._auto_thread.is_alive():
@@ -532,77 +487,45 @@ class App():
         self.auto_run = False
 
     def reset_alarm(self):
-        """
-        알람 리셋
-        
-        :param self: Description
-        """
+        """알람 리셋"""
         log("[INFO] alarm reset")
         # TODO: 알람 리셋
 
     def emergency_stop(self):
-        """
-        비상 정지
-        
-        :param self: Description
-        """
+        """비상 정지"""
         log("[WARNING] !!!EMERGENCY STOP BUTTON PRESSED!!!")
         # TODO: 비상정지 기능 연결
 
     def all_servo_homing(self):
-        """
-        서보 원점 복귀
-        
-        :param self: Description
-        """
+        """서보 원점 복귀"""
         log("[INFO] all servo homing")
 
     def feeder_output(self):
-        """
-        피더 제품 출력 감지 시 호출
-        
-        :param self: Description
-        """
+        """피더 제품 출력 감지 시 호출"""
         if self.auto_mode and self.auto_run:
             with self._lock:
                 self._feeder_output_time = datetime.now()
             log("[INFO] feeder output checked")
 
     def hopper_empty(self):
-        """
-        호퍼 비었을 때 호출
-        
-        :param self: Description
-        """
+        """호퍼 비었을 때 호출"""
         log("[INFO] hopper empty")
         # TODO: 호퍼 문닫기
 
     def hopper_full(self):
-        """
-        호퍼 가득 찼을 때 호출
-        
-        :param self: Description
-        """
+        """호퍼 가득 찼을 때 호출"""
         log("[INFO] hopper full")
         # TODO: 호퍼 문열기
 # endregion
 
     def on_auto_start(self):
-        """
-        자동 모드 시작
-        
-        :param self: Description
-        """
+        """자동 모드 시작"""
         log("auto mode started")
         self.set_auto_mode(True)
         self.auto_mode_run()
 
     def on_auto_stop(self):
-        """
-        자동 모드 종료
-        
-        :param self: Description
-        """
+        """자동 모드 종료"""
         log("auto mode stopped")
         self.auto_mode_stop()
         self.set_auto_mode(False)
@@ -641,11 +564,7 @@ class App():
             log(f"[ERROR] config file save failed: {e}")
 
     def set_air_sequence_index(self):
-        """
-        제품 분류 순서 지정
-        
-        :param self: Description
-        """
+        """제품 분류 순서 지정"""
         _saved_seq = self.config.get("air_sequence", [])
         if _saved_seq:
             self.air_index_iter = cycle(_saved_seq)
@@ -653,13 +572,7 @@ class App():
             self.air_index_iter = None
 
     def reload_ui(self, module_name: str):
-        """
-        UI 리로드
-        
-        :param self: Description
-        :param module_name: Description
-        :type module_name: str
-        """
+        """UI 리로드"""
         if module_name is None:
             return
 
@@ -669,6 +582,9 @@ class App():
 
         self.update_timer.stop()
         self.update_timer.timeout.disconnect()
+
+        if self.camera_manager:
+            self.camera_manager.on_stop_all()
 
         if self.ui:
             self.ui.close()
@@ -683,10 +599,6 @@ class App():
             self.ethercat_manager.disconnect()
             self.ethercat_manager = None
 
-        if self.shm_manager:
-            self.shm_manager.close()
-            self.shm_manager = None
-
         to_delete = [
             name for name in sys.modules \
                 if name.startswith("src") and not name.startswith("src.utils.logger")
@@ -695,21 +607,18 @@ class App():
             del sys.modules[name]
             log(f"cache cleared: {name}")
 
-
-        shm_module = importlib.import_module("src.function.sharedmemory_manager")
+        # 상위 모듈들 리로드
         ui_module = importlib.import_module("src.ui.main_window")
         modbus_module = importlib.import_module("src.function.modbus_manager")
         ethercat_module = importlib.import_module("src.function.ethercat_manager")
         importlib.import_module("src.utils.config_util")
 
-        self.shm_manager = shm_module.SharedMemoryManager(mem_name=self.shm_name, create=True)
+        self.ui: MainWindow = ui_module.MainWindow(self)
 
-        self.ui = ui_module.MainWindow(self)
-
-        self.modbus_manager = modbus_module.ModbusManager(self)
+        self.modbus_manager: ModbusManager = modbus_module.ModbusManager(self)
         self.modbus_manager.connect()
 
-        self.ethercat_manager = ethercat_module.EtherCATManager(self)
+        self.ethercat_manager: EtherCATManager = ethercat_module.EtherCATManager(self)
         self.ethercat_manager.connect()
 
         self.update_timer.timeout.connect(self.on_periodic_update)
@@ -734,15 +643,18 @@ class App():
 
         self.modbus_manager.disconnect()
         self.ethercat_manager.disconnect()
-        self.shm_manager.close()
 
 
 if __name__ == '__main__':
     # 시스템 레벨의 에러 발생 시 파일에 로그 남김
     enable_crash_handler()
 
+    # 공유 메모리 싱글톤 생성
+    shm = SharedMemoryManager(mem_name=SHM_NAME, create=True)
+
     app = App()
 
+    # 파일 갱신 체크 및 리로드
     sig = ReloadSignal()
     sig.triggered.connect(app.reload_ui)
 
@@ -758,5 +670,8 @@ if __name__ == '__main__':
 
     observer.stop()
     observer.join()
+
+    # 공유 메모리 제거
+    shm.close()
 
     sys.exit(exit_code)

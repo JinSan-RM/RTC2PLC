@@ -329,7 +329,8 @@ total_input_type = ('total_input', '<u4')
 total_output_type = ('total_output', '<u4')
 prev_input_type = ('prev_input', '<u4')
 
-SHARED_MEMORY_DTYPE = np.dtype([
+SHM_NAME = "COMM_SHM"
+SHM_DTYPE = np.dtype([
     # 서보 드라이브 관리용 np array 설정
     ('servo_0', [
         ('input_pdo', input_pdo_struct),
