@@ -6,14 +6,20 @@ import json
 import os
 import threading
 import time
+import importlib
+from pathlib import Path
 from datetime import datetime, timedelta
 from itertools import cycle
+from dataclasses import dataclass
 
 import faulthandler
 import atexit
 
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal, QObject
 from PySide6.QtGui import QFont, QFontDatabase
 
 from src.ui.main_window import MainWindow
@@ -61,10 +67,59 @@ def enable_crash_handler():
         log(f"[ERROR] crash handler setup failed: {e}")
 
 
+class ReloadSignal(QObject):
+    """
+    파일 변화 감지 시그널
+    """
+    triggered: Signal = Signal(str)
+
+
+class UpdateHandler(FileSystemEventHandler):
+    """
+    파일 변화 감지 핸들러
+    """
+    def __init__(self, signal: ReloadSignal):
+        super().__init__()
+        self.signal = signal
+        self.last_time = 0
+
+    def _path_to_module_name(self, src_path: bytes | str):
+        if isinstance(src_path, bytes):
+            src_path = src_path.decode("utf-8")
+
+        root_path = Path(__file__).resolve().parent
+        file_path = Path(src_path).resolve()
+
+        try:
+            relative_path = file_path.relative_to(root_path)
+        except ValueError as e:
+            print(f"ValueError: {e}")
+            return None
+
+        module_parts = relative_path.with_suffix('').parts
+
+        return ".".join(module_parts)
+
+    def on_modified(self, event):
+        if event.src_path.endswith(".py"):
+            cur_time = time.time()
+            if cur_time - self.last_time < 0.5:
+                return
+
+            print(f"[{event.src_path}] is changed")
+            module_name = self._path_to_module_name(event.src_path)
+            print(f"modulename: {module_name}")
+            self.signal.triggered.emit(module_name)
+
+            self.last_time = cur_time
+
+
 class App():
     """
     메인 앱 클래스
     """
+    is_reload = False
+
     def __init__(self):
         # 우선적으로 설정값부터 읽어옴
         self.config = {}
@@ -582,16 +637,98 @@ class App():
             log(f"[ERROR] config file save failed: {e}")
 
     def set_air_sequence_index(self):
+        """
+        제품 분류 순서 지정
+        
+        :param self: Description
+        """
         _saved_seq = self.config.get("air_sequence", [])
         if _saved_seq:
             self.air_index_iter = cycle(_saved_seq)
         else:
             self.air_index_iter = None
 
+    def reload_ui(self, module_name: str):
+        """
+        UI 리로드
+        
+        :param self: Description
+        :param module_name: Description
+        :type module_name: str
+        """
+        if module_name is None:
+            return
+
+        log("UI reload start")
+
+        self.is_reload = True
+
+        self.update_timer.stop()
+        self.update_timer.timeout.disconnect()
+
+        if self.camera_manager:
+            self.camera_manager.on_stop_all()
+            self.camera_manager = None
+
+        if self.ui:
+            self.ui.close()
+            self.ui.deleteLater()
+            self.ui = None
+
+        if self.modbus_manager:
+            self.modbus_manager.disconnect()
+            self.modbus_manager = None
+
+        if self.ethercat_manager:
+            self.ethercat_manager.disconnect()
+            self.ethercat_manager = None
+
+        if self.shm_manager:
+            self.shm_manager.close()
+            self.shm_manager = None
+
+        to_delete = [
+            name for name in sys.modules \
+                if name.startswith("src") and not name.startswith("src.utils.logger")
+        ]
+        for name in to_delete:
+            del sys.modules[name]
+            log(f"cache cleared: {name}")
+
+
+        shm_module = importlib.import_module("src.function.sharedmemory_manager")
+        ui_module = importlib.import_module("src.ui.main_window")
+        modbus_module = importlib.import_module("src.function.modbus_manager")
+        ethercat_module = importlib.import_module("src.function.ethercat_manager")
+        camera_module = importlib.import_module("src.ui.page.monitoring_page")
+        importlib.import_module("src.utils.config_util")
+
+        self.shm_manager = shm_module.SharedMemoryManager(mem_name=self.shm_name, create=True)
+
+        self.ui = ui_module.MainWindow(self)
+
+        self.modbus_manager = modbus_module.ModbusManager(self)
+        self.modbus_manager.connect()
+
+        self.ethercat_manager = ethercat_module.EtherCATManager(self)
+        self.ethercat_manager.connect()
+
+        self.camera_manager = camera_module.MonitoringPage(self)
+
+        self.update_timer.timeout.connect(self.on_periodic_update)
+        self.update_timer.start(100)
+
+        self.ui.show()
+        self.ui.activateWindow()
+
+        self.is_reload = False
+
+        log("UI reload end")
+
     def run(self):
         """애플리케이션 실행"""
         self.ui.show()
-        sys.exit(self.qt_app.exec())
+        return self.qt_app.exec()
 
     def quit(self):
         """애플리케이션 종료"""
@@ -608,4 +745,21 @@ if __name__ == '__main__':
     enable_crash_handler()
 
     app = App()
-    app.run()
+
+    sig = ReloadSignal()
+    sig.triggered.connect(app.reload_ui)
+
+    handler = UpdateHandler(sig)
+    observer = Observer()
+    observer.schedule(
+        handler,
+        path=str(Path(__file__).parent.absolute()), recursive=True
+    )
+    observer.start()
+
+    exit_code = app.run()
+
+    observer.stop()
+    observer.join()
+
+    sys.exit(exit_code)
