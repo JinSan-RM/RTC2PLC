@@ -5,7 +5,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QScrollArea, QFrame, QComboBox,
-    QLineEdit
+    QLineEdit, QSizePolicy
 )
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
 from PySide6.QtGui import QPixmap, QImage, QRegularExpressionValidator
@@ -77,7 +77,8 @@ class CameraView(QFrame):
         self.image_label = QLabel()
         self.image_label.setObjectName("camera_frame")
         self.image_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self.image_label.setMinimumSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
+        # self.image_label.setMinimumSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
+        self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.image_label.setText("📷 카메라 대기 중...")
         self.image_label.setStyleSheet(
             """
@@ -205,7 +206,7 @@ class CameraView(QFrame):
             )
             
             self.image_label.setPixmap(scaled_pixmap)
-            self.image_label.setFixedSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
+            # self.image_label.setFixedSize(CAMERA_CONFIGS[self.camera_index]['roi']['width'], CAMERA_CONFIGS[self.camera_index]['roi']['height'])
             
             # FPS 업데이트
             if self.camera_thread:
@@ -432,6 +433,11 @@ class MonitoringPage(QWidget):
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
         
+        rgb_layout.setRowStretch(0, 1)
+        rgb_layout.setRowStretch(1, 1)
+        rgb_layout.setColumnStretch(0, 1)
+        rgb_layout.setColumnStretch(1, 1)
+        
         # 4개의 RGB 카메라
         self.rgb_cameras = []
         
@@ -451,6 +457,7 @@ class MonitoringPage(QWidget):
                 app=self.app,
                 ai_manager=self.ai_manager
             )
+            cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             rgb_layout.addWidget(cam, row, col)
             self.rgb_cameras.append(cam)
         

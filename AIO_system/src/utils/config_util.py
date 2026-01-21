@@ -284,53 +284,63 @@ CAMERA_CONFIGS = {
     0: {  # 카메라 1
         'camera_ip': '192.168.1.100',
         'roi':{
-            'x': 200,
+            'x': 500,
             'y': 0,
-            'width': 1000,
-            'height': 1080
+            'width': 500,
+            'height': 1920
         },
         'boxes': [
             {
                 'box_id': 1,
-                'x': 100,
-                'y': 200,
-                'width': 150,
-                'height': 200,
+                'x': 50,
+                'y': 470,
+                'width': 350,
+                'height': 270,
                 'target_classes': ['PET', 'PE'],
                 'airknife_id': 1
             },
-            {
-                'box_id': 2,
-                'x': 300,
-                'y': 200,
-                'width': 150,
-                'height': 200,
-                'target_classes': ['PP', 'PS'],
-                'airknife_id': 2
-            }
+            # {
+            #     'box_id': 2,
+            #     'x': 300,
+            #     'y': 200,
+            #     'width': 150,
+            #     'height': 200,
+            #     'target_classes': ['PP', 'PS'],
+            #     'airknife_id': 2
+            # }
         ]
     },
     1: {  # 카메라 2
         'camera_ip': '192.168.1.101',
         'roi':{
-            'x': 200,
+            'x': 500,
             'y': 0,
-            'width': 1000,
+            'width': 500,
             'height': 1080
         },
         'boxes': [
             {
-                'box_id': 3,
+                'box_id': 2,
                 'x': 150,
-                'y': 250,
-                'width': 200,
-                'height': 180,
+                'y': 830,
+                'width': 400,
+                'height': 230,
                 'target_classes': ['PET'],
                 'airknife_id': 3
+            },
+            {
+                'box_id': 3,
+                'x': 130,
+                'y': 200,
+                'width': 400,
+                'height': 230,
+                'target_classes': ['PP', 'PS'],
+                'airknife_id': 2
             }
         ]
     }
 }
+
 
 # ============================================================
 # endregion
