@@ -179,7 +179,7 @@ class App():
         self.update_timer.start(100)
         
     @property
-    def camera_manger(self):
+    def camera_manager(self):
         """UI의 monitoring_page를 camera_manager로 참조"""
         if hasattr(self.ui, 'monitoring_page'):
             return self.ui.monitoring_page
