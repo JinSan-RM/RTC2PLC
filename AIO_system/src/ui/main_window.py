@@ -23,8 +23,8 @@ class MainWindow(QMainWindow):
     servo_updated: ClassVar[Signal] = Signal(int, object)
     inverter_updated: ClassVar[Signal] = Signal(object)
     airknife_updated: ClassVar[Signal] = Signal(int)
-    input_updated: ClassVar[Signal] = Signal(int, int)
-    output_updated: ClassVar[Signal] = Signal(int, int)
+    input_updated: ClassVar[Signal] = Signal(int)
+    output_updated: ClassVar[Signal] = Signal(int)
     
     def __init__(self, app):
         super().__init__()

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QDoubleValidator
 from PySide6.QtCore import Qt
 
-from src.utils.config_util import get_servo_modified_value, ToggleButton, STATUS_MASK, check_mask
+from src.utils.config_util import get_servo_modified_value, ToggleButton, StatusMask, check_mask
 from src.utils.logger import log
 
 class ServoTab(QWidget):
@@ -486,7 +486,7 @@ class ServoTab(QWidget):
             self.app.servo_stop(servo_id)
 
     def update_values(self, servo_id: int, _data):
-        servo_on = check_mask(_data[0], STATUS_MASK.STATUS_OPERATION_ENABLED)
+        servo_on = check_mask(_data[0], StatusMask.STATUS_OPERATION_ENABLED)
         btn = self.findChild(ToggleButton, f"toggle_btn_{servo_id}")
         if btn and btn.isChecked() != servo_on:
             btn.setChecked(servo_on)

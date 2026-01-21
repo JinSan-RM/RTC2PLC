@@ -1,3 +1,14 @@
+"""
+각종 설정 및 유틸들
+"""
+from enum import IntEnum
+from pathlib import Path
+import numpy as np
+
+from PySide6.QtWidgets import QAbstractButton
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QRectF
+from PySide6.QtGui import QPainter, QColor, QFont
+
 # ============================================================
 # region Modbus
 # ============================================================
@@ -31,25 +42,25 @@ IF_NAME = '\\Device\\NPF_{C7EBE891-A804-4047-85E5-4D0148B1D3EA}'
 # 통신 사이클 간격
 ETHERCAT_DELAY = 0.01
 
-# 각종 ID
+# LS산전 제조사 ID
 LS_VENDOR_ID = 30101
-L7NH_PRODUCT_CODE = 0x00010001
-D232A_PRODUCT_CODE = 0x10010008
-TR32KA_PRODUCT_CODE = 0x10010009
+
+class LSProductCode(IntEnum):
+    """
+    이더캣 슬레이브 장비 제품 코드
+    """
+    L7NH_PRODUCT_CODE = 0x00010001
+    D232A_PRODUCT_CODE = 0x10010008
+    TR32KA_PRODUCT_CODE = 0x10010009
 
 # Sync Manager 는 0 ~ 3이 있고, 그 중 0과 1은 Mailbox(SDO)에 사용됨.
 EC_RX_INDEX = 0x1C12 # Sync Manager 2 -> RxPDO를 매칭
 EC_TX_INDEX = 0x1C13 # Sync Manager 3 -> TxPDO를 매칭
 
 # RxPDO 매핑은 0x1600 ~ 0x1603의 4개가 존재하고, 일단 기본값인 0x1601을 사용하도록 한다.
-SERVO_RX_MAP = [
-    0x1601,
-] # master -> slave
-
+SERVO_RX_MAP = 0x1601 # master -> slave
 # TxPDO 매핑은 0x1A00 ~ 0x1A03의 4개가 존재하고, 일단 기본값인 0x1A01을 사용하도록 한다.
-SERVO_TX_MAP = [
-    0x1A01,
-] # slave -> master
+SERVO_TX_MAP = 0x1A01 # slave -> master
 
 # 위에서 지정한 PDO 맵 주소에 아래의 매핑 데이터를 넣어준다.
 # PDO 맵 주소의 subindex 0 에는 전체 매핑 개수, subindex 1 부터 매핑 데이터를 1개씩 할당
@@ -70,13 +81,8 @@ SERVO_TX = [
     0x26140010, # 경고 코드(unsigned short)
 ]
 
-OUTPUT_RX_MAP = [
-    0x1700,
-]
-
-INPUT_TX_MAP = [
-    0x1B00,
-]
+OUTPUT_RX_MAP = 0x1700
+INPUT_TX_MAP = 0x1B00
 
 OUTPUT_RX = [
     0x32200101, # 운전 스위치 LAMP
@@ -155,17 +161,33 @@ ENCODER_RESOLUTION = 524288 # 인코더 해상도(1회전당 펄스)
 BALL_SCREW_LEAD = 4*3 # 볼 스크류 1회전당 이동거리(mm)
 UNIT_RATIO = 0.01
 SCALE_FACTOR = (ENCODER_RESOLUTION / BALL_SCREW_LEAD) * UNIT_RATIO
-# 서보로 전달할 값
-def get_servo_unmodified_value(value):
+
+def get_servo_unmodified_value(value: float) -> int:
+    """
+    서보로 전달할 값
+    
+    :param value: Description
+    :type value: float
+    :return: Description
+    :rtype: int
+    """
     return int(round(value*SCALE_FACTOR))
 
-# UI에 출력할 값
-def get_servo_modified_value(value):
+def get_servo_modified_value(value: int | float) -> float:
+    """
+    UI에 출력할 값
+    
+    :param value: Description
+    :type value: int | float
+    :return: Description
+    :rtype: float
+    """
     return value/SCALE_FACTOR
 
-from enum import IntEnum
-# 서보 상태 체크용 bit mask
-class STATUS_MASK(IntEnum):
+class StatusMask(IntEnum):
+    """
+    서보 드라이브 상태 체크를 위한 비트 마스크
+    """
     STATUS_NOT_READY_TO_SWITCH_ON = 0x0000 # 초기화 중
     STATUS_SWITCH_ON_DISABLED = 0x0040 # 초기화 완료, 주전원 투입 불가
     STATUS_READY_TO_SWITCH_ON = 0x0021 # 주전원 투입 가능
@@ -177,11 +199,19 @@ class STATUS_MASK(IntEnum):
     STATUS_WARNING = 0x0080 # 경보(W 코드) 발생
 
 def check_mask(s, m):
+    """
+    STATUS_MASK와 비교하여 현재 서보 드라이브 상태 체크
+    
+    :param s: Description
+    :param m: Description
+    """
     low_bit = s & 0x00FF
     return (low_bit & m) == m
 
-# 서보 state
-class OPERATION_MODE(IntEnum):
+class OperationMode(IntEnum):
+    """
+    서보 운전 상태
+    """
     SERVO_READY = 0
     SERVO_HOMING = 6
     SERVO_CSP = 8
@@ -193,8 +223,10 @@ SERVO_ACCEL = 2000
 # 위치 값이 10 펄스 이내로 들어오면 위치 도달로 추정
 SERVO_IN_POS_WIDTH = get_servo_modified_value(10)
 
-# 입력 체크용
-class INPUT_BIT(IntEnum):
+class InputBitMask(IntEnum):
+    """
+    입력 모듈 체크를 위한 비트 마스크
+    """
     MODE_SELECT = 1 << 0
     AUTO_RUN = 1 << 1
     AUTO_STOP = 1 << 2
@@ -208,10 +240,8 @@ class INPUT_BIT(IntEnum):
 # ============================================================
 
 # ============================================================
-# region Config for load&save
+# region common
 # ============================================================
-from pathlib import Path
-
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 
 APP_CONFIG = {
@@ -271,6 +301,69 @@ FEEDER_TIME_1 = 20 # 피더 제품 미배출 기본 대기 시간
 FEEDER_TIME_2 = 10 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간
 
 LOG_PATH = Path(__file__).resolve().parent.parent.parent / "log"
+
+input_pdo_struct = [
+    ('status_word', '<u2'),
+    ('drive_mode', '<i1'),
+    ('actual_position', '<i4'),
+    ('actual_velocity', '<i4'),
+    ('error_code', '<u2'),
+    ('warning_code', '<u2')
+]
+output_pdo_struct = [
+    ('control_word', '<u2'),
+    ('drive_mode', '<i1'),
+    ('target_position', '<i4'),
+    ('target_velocity', '<i4')
+]
+variable_pdo_struct = [
+    ('init_step', '<u1'),
+    ('state', '<u1'),
+    ('current_position', '<i4'),
+    ('current_velocity', '<i4'),
+    ('target_position', '<i4'),
+    ('target_velocity', '<i4'),
+    ('last_time', '<u8')
+]
+total_input_type = ('total_input', '<u4')
+total_output_type = ('total_output', '<u4')
+prev_input_type = ('prev_input', '<u4')
+
+SHARED_MEMORY_DTYPE = np.dtype([
+    # 서보 드라이브 관리용 np array 설정
+    ('servo_0', [
+        ('input_pdo', input_pdo_struct),
+        ('reserved_1', 'u1'),
+        ('output_pdo', output_pdo_struct),
+        ('reserved_2', 'u1'),
+        ('variables', variable_pdo_struct),
+        ('reserved_3', 'u2')
+    ]),
+    ('servo_1', [
+        ('input_pdo', input_pdo_struct),
+        ('reserved_1', 'u1'),
+        ('output_pdo', output_pdo_struct),
+        ('reserved_2', 'u1'),
+        ('variables', variable_pdo_struct),
+        ('reserved_3', 'u2')
+    ]),
+    # 입출력 모듈 관리용 np array 설정
+    total_input_type,
+    total_output_type,
+    prev_input_type,
+    ('_reserved_4', 'u4')
+])
+
+def sync_shared_memory(dst, raw_src):
+    """
+    PDO 데이터를 공유 메모리에 쓰기
+    
+    :param dst: Description
+    :param raw_src: Description
+    """
+    src = np.frombuffer(raw_src, dtype='u1').view(dst.dtype)[0]
+    for name in dst.dtype.names:
+        dst[name] = src[name]
 
 # ============================================================
 # endregion
@@ -343,11 +436,10 @@ CAMERA_CONFIGS = {
 
 UI_PATH = Path(__file__).resolve().parent.parent / "ui"
 
-from PySide6.QtWidgets import QAbstractButton
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QRectF
-from PySide6.QtGui import QPainter, QColor, QFont
-
 class ToggleButton(QAbstractButton):
+    """
+    UI 알약 모양 토글 버튼 구현
+    """
     def __init__(self, parent=None, width=60, height=28, on_text="ON", off_text="OFF"):
         super().__init__(parent)
         self.setCheckable(True)
@@ -370,6 +462,11 @@ class ToggleButton(QAbstractButton):
     # 애니메이션을 위한 속성(Property) 정의
     @Property(float)
     def handle_position(self):
+        """
+        토글 동그라미 위치
+        
+        :param self: Description
+        """
         return self._handle_position
 
     @handle_position.setter
@@ -442,140 +539,6 @@ class ToggleButton(QAbstractButton):
         circle_size = self.height() - (margin * 2)
         painter.drawEllipse(QRectF(self._handle_position, margin, circle_size, circle_size))
 
-
-import tkinter as tk
-from tkinter import ttk, messagebox
-
-# 변수 입력용 키패드
-class DigitInput(tk.Toplevel):
-    def __init__(self, parent, callback):
-        super().__init__(parent)
-        self.callback = callback
-        self.current_input = ""
-
-        self.title("입력")
-        self.geometry("300x400")
-        self.resizable(False, False)
-
-        # 모달 윈도우로 설정
-        self.transient(parent)
-        self.grab_set()
-
-        self.create_widgets()
-
-        # 창을 부모 중앙에 위치
-        self.center_window(parent)
-
-    # 부모 창 중앙에 위치시키기
-    def center_window(self, parent):
-        self.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() // 2) - (self.winfo_width() // 2)
-        y = parent.winfo_y() + (parent.winfo_height() // 2) - (self.winfo_height() // 2)
-        self.geometry(f"+{x}+{y}")
-
-    # 계산기 UI 구성
-    def create_widgets(self):
-        # 메인 프레임
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # 디스플레이
-        self.display = tk.Entry(main_frame, font=("Arial", 18), justify="right", state="readonly")
-        self.display.pack(fill=tk.X, pady=(0, 10))
-
-        # 버튼 프레임
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.BOTH, expand=True)
-
-        # 버튼 레이아웃
-        buttons = [
-            ['7', '8', '9'],
-            ['4', '5', '6'],
-            ['1', '2', '3'],
-            ['0', '.'],
-        ]
-
-        # 버튼 생성
-        for row_idx, row in enumerate(buttons):
-            for col_idx, btn_text in enumerate(row):
-                btn = tk.Button(button_frame, text=btn_text, font=("Arial", 14, "bold"),
-                                command=lambda t=btn_text: self.button_click(t))
-                btn.grid(row=row_idx, column=col_idx, sticky="nsew", padx=2, pady=2)
-
-        # 그리드 가중치 설정
-        for i in range(4):
-            button_frame.grid_rowconfigure(i, weight=1)
-            button_frame.grid_columnconfigure(i, weight=1)
-
-        # 하단 버튼들
-        bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.pack(fill=tk.X, pady=(10, 0))
-
-        # 지우기 버튼
-        clear_btn = tk.Button(bottom_frame, text="지우기 (C)", 
-                              font=("Arial", 11),
-                              command=self.clear_display)
-        clear_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-
-        # 한 글자 삭제 버튼
-        backspace_btn = tk.Button(bottom_frame, text="← 삭제",
-                                  font=("Arial", 11),
-                                  command=self.backspace)
-        backspace_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-
-        # 확인 버튼
-        ok_btn = tk.Button(bottom_frame, text="확인",
-                           font=("Arial", 11, "bold"),
-                           bg="#4CAF50", fg="white",
-                           command=self.confirm)
-        ok_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
-
-        # 키보드 바인딩
-        self.bind('<Key>', self.key_press)
-        self.bind('<Return>', lambda e: self.confirm())
-        self.bind('<Escape>', lambda e: self.destroy())
-
-    # 버튼 클릭 처리
-    def button_click(self, value):
-        self.current_input += value
-        self.update_display()
-
-    # 디스플레이 초기화
-    def clear_display(self):
-        self.current_input = ""
-        self.update_display()
-
-    # 마지막 글자 삭제
-    def backspace(self):
-        self.current_input = self.current_input[:-1]
-        self.update_display()
-
-    # 디스플레이 업데이트
-    def update_display(self):
-        self.display.config(state="normal")
-        self.display.delete(0, tk.END)
-        self.display.insert(0, self.current_input if self.current_input else "0")
-        self.display.config(state="readonly")
-
-    # 키보드 입력 처리
-    def key_press(self, event):
-        key = event.char.upper()
-        if key in '0123456789.':
-            self.button_click(key)
-        elif event.keysym == 'BackSpace':
-            self.backspace()
-        elif event.keysym == 'Delete':
-            self.clear_display()
-
-    # 확인 버튼 - 입력값 전달
-    def confirm(self):
-        if self.current_input:
-            self.callback(float(self.current_input))
-            self.destroy()
-        else:
-            messagebox.showwarning("입력 오류", "값을 입력해주세요.", parent=self)
-
 # ============================================================
 # endregion
 # ============================================================
-
