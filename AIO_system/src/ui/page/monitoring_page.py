@@ -24,13 +24,14 @@ from src.utils.config_util import CAMERA_CONFIGS, UI_PATH
 
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
-    def __init__(self, camera_id, camera_name, camera_index, app, ai_manager=None):
+    def __init__(self, camera_id, camera_name, camera_index, app, ai_manager=None, is_hyperspectral=False):
         super().__init__()
         self.app = app
         self.camera_id = camera_id
         self.camera_name = camera_name
         self.camera_index = camera_index
         self.ai_manager = ai_manager
+        self.is_hyperspectral = is_hyperspectral
         self.detector = None
         self.detector_frame_generator = None
         self.timer = QTimer()
@@ -71,27 +72,69 @@ class CameraView(QFrame):
         layout.addSpacing(15)
 
         # 카메라 화면
-        self.image_label = QLabel()
-        self.image_label.setObjectName("camera_frame")
-        self.image_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        # self.image_label.setMinimumSize(
-        #     CAMERA_CONFIGS[self.camera_index]['roi']['width'],
-        #     CAMERA_CONFIGS[self.camera_index]['roi']['height']
-        # )
-        self.image_label.setMinimumHeight(500)
-        self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.image_label.setText("📷 카메라 대기 중...")
-        self.image_label.setStyleSheet(
-            """
-            background-color: #FAFAFA;
-            color: #B9B9B9;
-            font-size: 14px;
-            font-weight: medium;
-            border: 1px solid #E2E2E2;
-            border-radius: 7px;
-            """
-        )
-        layout.addWidget(self.image_label)
+        if not self.is_hyperspectral:
+            # 스크롤 영역으로 감싸기
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(False)
+            scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            scroll_area.setStyleSheet("""
+                QScrollArea {
+                    border: 1px solid #E2E2E2;
+                    border-radius: 7px;
+                    background-color: #FAFAFA;
+                }
+                QScrollBar:vertical {
+                    border: none;
+                    background: #F3F4F6;
+                    width: 8px;
+                    margin: 2px;
+                }
+                QScrollBar::handle:vertical {
+                    background: #C0C0C0;
+                    min-height: 30px;
+                    border-radius: 4px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background: #A0A0A0;
+                }
+            """)
+            
+            self.image_label = QLabel()
+            self.image_label.setObjectName("camera_frame")
+            self.image_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+            self.image_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            self.image_label.setText("📷 카메라 대기 중...")
+            self.image_label.setStyleSheet(
+                """
+                background-color: #FAFAFA;
+                color: #B9B9B9;
+                font-size: 14px;
+                font-weight: medium;
+                """
+            )
+            
+            scroll_area.setWidget(self.image_label)
+            layout.addWidget(scroll_area)
+        else:
+            # Hyperspectral 카메라는 기존 방식 유지
+            self.image_label = QLabel()
+            self.image_label.setObjectName("camera_frame")
+            self.image_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+            self.image_label.setMinimumHeight(500)
+            self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.image_label.setText("📷 카메라 대기 중...")
+            self.image_label.setStyleSheet(
+                """
+                background-color: #FAFAFA;
+                color: #B9B9B9;
+                font-size: 14px;
+                font-weight: medium;
+                border: 1px solid #E2E2E2;
+                border-radius: 7px;
+                """
+            )
+            layout.addWidget(self.image_label)
 
         # 하단 정보
         info_layout = QHBoxLayout()
@@ -189,30 +232,36 @@ class CameraView(QFrame):
     def update_frame(self, frame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
-            # BGR -> RGB 변환
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
             qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(qt_image)
             
-            # 스케일링 - 너비는 고정, 높이는 비율 유지
-            target_width = 380  # 적당한 크기
-            scale = target_width / w
-            new_w = target_width
-            new_h = int(h * scale)
+            if not self.is_hyperspectral:
+                # RGB 카메라: 고정 너비로 스케일링
+                target_width = 380
+                scale = target_width / w
+                new_w = target_width
+                new_h = int(h * scale)
+                
+                scaled_pixmap = pixmap.scaled(
+                    new_w, new_h,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                
+                self.image_label.setFixedSize(new_w, new_h)
+                self.image_label.setPixmap(scaled_pixmap)
+            else:
+                # Hyperspectral 카메라: 기존 방식
+                scaled_pixmap = pixmap.scaled(
+                    self.image_label.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                self.image_label.setPixmap(scaled_pixmap)
             
-            scaled_pixmap = pixmap.scaled(
-                new_w, new_h,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
-            
-            # 레이블 크기를 이미지에 맞춤
-            self.image_label.setFixedSize(new_w, new_h)
-            self.image_label.setPixmap(scaled_pixmap)
-            
-            # FPS 업데이트
             if self.camera_thread:
                 fps = self.camera_thread.current_fps
                 self.fps_label.setText(f"FPS: {fps}")
@@ -264,108 +313,58 @@ class MonitoringPage(QWidget):
 
     def _init_ui(self):
         """UI 초기화"""
-        self.setObjectName("camera_view")
-        self.setMinimumSize(400, 600)  # 세로를 더 길게
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        
-        # 헤더
-        header_layout = QHBoxLayout()
-        header_layout.setAlignment(Qt.AlignLeft)
-        
-        # 카메라 이름
-        title = QLabel(self.camera_name)
-        title.setObjectName("camera_title")
-        header_layout.addWidget(title)
-        
-        header_layout.addSpacing(15)
-        
-        # 상태 표시
-        self.status = QLabel("🟢 연결됨")
-        self.status.setObjectName("camera_status")
-        header_layout.addWidget(self.status)
-        
-        layout.addLayout(header_layout)
-        layout.addSpacing(15)
-        
-        # 카메라 화면을 스크롤 영역으로 감싸기
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(False)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #E2E2E2;
-                border-radius: 7px;
-                background-color: #FAFAFA;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #F3F4F6;
-                width: 8px;
-                margin: 2px;
-            }
-            QScrollBar::handle:vertical {
-                background: #C0C0C0;
-                min-height: 30px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #A0A0A0;
-            }
-        """)
-        
-        self.image_label = QLabel()
-        self.image_label.setObjectName("camera_frame")
-        self.image_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self.image_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.image_label.setText("📷 카메라 대기 중...")
-        self.image_label.setStyleSheet(
-            """
-            background-color: #FAFAFA;
-            color: #B9B9B9;
-            font-size: 14px;
-            font-weight: medium;
-            """
-        )
-        
-        scroll_area.setWidget(self.image_label)
-        layout.addWidget(scroll_area)
-        
-        # 하단 정보
-        info_layout = QHBoxLayout()
-        
-        self.fps_label = QLabel("FPS: 0")
-        self.fps_label.setStyleSheet(
-            """
-            color: #989898;
-            font-size: 12px;
-            font-weight: normal;
-            margin-left: 10px;
-            margin-bottom: 25px;
-            """
-        )
-        info_layout.addWidget(self.fps_label)
-        
-        info_layout.addStretch()
-        
-        self.resolution = QLabel("해상도: 1920x1080")
-        self.resolution.setStyleSheet(
-            """
-            color: #989898;
-            font-size: 12px;
-            font-weight: normal;
-            margin-right: 10px;
-            margin-bottom: 25px;
-            """
-        )
-        info_layout.addWidget(self.resolution)
-        
-        layout.addLayout(info_layout)
-        layout.addStretch()
-    
+        # 사이드바
+        self.side_widget = QFrame(self)
+        side_layout = QVBoxLayout(self.side_widget)
+        side_layout.setSpacing(0)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+
+        self._create_side_bar(side_layout)
+
+        side_layout.addStretch()
+
+        # 컨텐츠 영역
+        self.main_widget = QFrame(self)
+        main_layout = QVBoxLayout(self.main_widget)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 스크롤
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        scroll_content = QWidget()
+        scroll_content.setObjectName("scroll_content")
+        scroll_content.setMaximumWidth(1610)
+
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setSpacing(0)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll_layout.addSpacing(25)
+
+        # 상단: 제어 패널
+        self._create_control_panel(scroll_layout)
+
+        scroll_layout.addSpacing(30)
+
+        # 중단: RGB 카메라 (2x2)
+        self._create_rgb_cameras(scroll_layout)
+
+        scroll_layout.addSpacing(30)
+
+        # 하단: 초분광 카메라
+        self._create_hyperspectral_camera(scroll_layout)
+
+        scroll_layout.addSpacing(30)
+
+        scroll.setWidget(scroll_content)
+        main_layout.addWidget(scroll)
+
+        # 스타일 적용
+        self.apply_styles()
+
     def _create_side_bar(self, parent_layout):
         title_layout = QHBoxLayout()
         title_layout.setSpacing(0)
@@ -486,7 +485,7 @@ class MonitoringPage(QWidget):
         rgb_layout.setSpacing(20)
         
         rgb_layout.setRowMinimumHeight(0, 500)
-        rgb_layout.setRowMinimumHeight(1, 500)
+        rgb_layout.setRowMinimumHeight(0, 500)
         
         rgb_layout.setRowStretch(0, 1)
         rgb_layout.setRowStretch(1, 1)
@@ -530,7 +529,7 @@ class MonitoringPage(QWidget):
             "Specim FX17",
             camera_index=0,
             app=self.app,
-            ai_manager=None
+            ai_manager=None,
         )
         self.hyper_camera.setMinimumSize(600, 400)
         camera_layout.addWidget(self.hyper_camera)
