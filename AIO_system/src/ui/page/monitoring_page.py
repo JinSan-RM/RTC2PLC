@@ -196,8 +196,8 @@ class CameraView(QFrame):
             qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(qt_image)
             
-            # 스케일링 - 너비는 레이블에 맞추고, 높이는 비율 유지
-            target_width = 380  # 스크롤 영역에 맞는 적당한 너비
+            # 스케일링 - 너비는 고정, 높이는 비율 유지
+            target_width = 380  # 적당한 크기
             scale = target_width / w
             new_w = target_width
             new_h = int(h * scale)
@@ -288,7 +288,6 @@ class MonitoringPage(QWidget):
         header_layout.addWidget(self.status)
         
         layout.addLayout(header_layout)
-        
         layout.addSpacing(15)
         
         # 카메라 화면을 스크롤 영역으로 감싸기
@@ -321,7 +320,6 @@ class MonitoringPage(QWidget):
         self.image_label = QLabel()
         self.image_label.setObjectName("camera_frame")
         self.image_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self.image_label.setMinimumSize(300, 400)  # 최소 크기
         self.image_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.image_label.setText("📷 카메라 대기 중...")
         self.image_label.setStyleSheet(
@@ -366,9 +364,8 @@ class MonitoringPage(QWidget):
         info_layout.addWidget(self.resolution)
         
         layout.addLayout(info_layout)
-        
         layout.addStretch()
-
+    
     def _create_side_bar(self, parent_layout):
         title_layout = QHBoxLayout()
         title_layout.setSpacing(0)
