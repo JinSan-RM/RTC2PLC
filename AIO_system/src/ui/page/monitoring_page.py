@@ -78,6 +78,7 @@ class CameraView(QFrame):
         #     CAMERA_CONFIGS[self.camera_index]['roi']['width'],
         #     CAMERA_CONFIGS[self.camera_index]['roi']['height']
         # )
+        self.image_label.setMinimumHeight(500)
         self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.image_label.setText("📷 카메라 대기 중...")
         self.image_label.setStyleSheet(
@@ -427,6 +428,9 @@ class MonitoringPage(QWidget):
         rgb_layout = QGridLayout()
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
+        
+        rgb_layout.setRowMinimumHeight(0, 500)
+        rgb_layout.setRowMinimumHeight(1, 500)
         
         rgb_layout.setRowStretch(0, 1)
         rgb_layout.setRowStretch(1, 1)
