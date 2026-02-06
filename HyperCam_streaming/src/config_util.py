@@ -1,11 +1,15 @@
+"""
+각종 설정 값
+"""
 # Breeze Runtime 관련 설정
 HOST = '169.254.188.53'
 COMMAND_PORT = 2000
 EVENT_PORT = 2500
 DATA_STREAM_PORT = 3000
+WORKFLOW_PATH = "C:/Users/USER/Breeze/Data/Runtime/251111.xml"
 
 # ==================== 라인 스캔 타이밍 제어 설정 ====================
-# 라인 스캔 카메라는 고정된 위치에서 촬영하므로 
+# 라인 스캔 카메라는 고정된 위치에서 촬영하므로
 # 스캔 라인 → 에어솔까지의 거리만 중요!
 
 CONVEYOR_SPEED = 40.0           # cm/s - 실측 필요
@@ -15,6 +19,7 @@ PX_CM_RATIO = 10.0              # px대 cm 비율
 
 USE_MIN_INTERVAL = True         # 인접한 두 물체를 하나로 취급할 것인가
 MIN_INTERVAL = 0.5              # sec - 두 물체를 하나로 취급할 시간 간격
+MIN_PULSE_WIDTH = 0.01          # 10ms - PLC 스캔 사이클 고려
 
 # 대형/소형 구분
 GUIDELINE_MIN_X = 420
@@ -49,31 +54,36 @@ CLASS_MAPPING = {
     1: "PP",
     2: "HDPE",
     3: "PS",
-    4: "LDPE",
-    5: "ABS",
-    6: "PET"
+    4: "PET",
+    5: "background",
 }
 
 PLASTIC_VALUE_MAPPING_LARGE = {
     "PP": 0x88,
-    "ABS": 0x89,
-    "HDPE": 0x8A,
-    "PS": 0x90,
-    "LDPE": 0x8C,
-    "PET": 0x8E,
+    "HDPE": 0x89,
+    "PS": 0x8A,
+    "PET": 0x90,
+    # "LDPE": 0x8C,
+    # "PET": 0x8E,
     # "_": 0x88,
 }
 PLASTIC_VALUE_MAPPING_SMALL = {
     "PP": 0x8B,
-    "ABS": 0x8C,
-    "HDPE": 0x8E,
-    "PS": 0x8F,
-    "LDPE": 0x8C,
-    "PET": 0x8E,
+    "HDPE": 0x8C,
+    "PS": 0x8E,
+    "PET": 0x8F,
+    # "LDPE": 0x8C,
+    # "PET": 0x8E,
     # "_": 0x88,
 }
+
+STREAM_TYPE = [ "None", "Raw", "PredictionLines", "Rgb", "StreamStart/End" ]
 
 PLASTIC_SIZE_MAPPING = {
     "large": 0x80,
     "small": 0x81
 }
+
+# UI 관련 설정
+MAX_IMG_LINES = 480 # 이미지 뷰어 화면에 표시할 라인 수
+UI_UPDATE_INTERVAL = 0.033 # 30fps 제한
