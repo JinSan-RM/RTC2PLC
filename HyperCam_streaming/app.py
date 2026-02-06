@@ -29,7 +29,7 @@ class App():
 
     def on_obj_detected(self, info):
         """제품 감지 시 호출"""
-        self.ui.overlay_info.append(info)
+        self.ui.img_data.overlay_info.append(info)
 
     def run(self):
         """메인 루프 실행"""
