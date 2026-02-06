@@ -7,7 +7,7 @@ import time
 import logging
 import traceback
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .config_util import (
@@ -62,7 +62,7 @@ class QueueAndLock:
 @dataclass
 class Trackings:
     """제품 트래킹 관리"""
-    tracked_objects: dict = {}
+    tracked_objects: dict = field(default_factory=dict)
     obj_counter: int = 0
     tracking_lock = threading.Lock()
 

@@ -4,7 +4,7 @@ import time
 # import threading
 import traceback
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import tkinter as tk
 from tkinter import ttk, scrolledtext
@@ -43,8 +43,8 @@ class ChildrenWidget:
 @dataclass
 class StatisticsData:
     """통계용 데이터 모음"""
-    count_dict: dict = {}
-    label_dict: dict = {}
+    count_dict: dict = field(default_factory=dict)
+    label_dict: dict = field(default_factory=dict)
     line_count: int = 0
     last_time: float = 0.0
     fps: float = 0.0
