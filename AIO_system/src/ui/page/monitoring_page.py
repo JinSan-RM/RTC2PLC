@@ -45,7 +45,7 @@ class CameraView(QFrame):
     def _init_ui(self):
         """UI 초기화"""
         self.setObjectName("camera_view")
-        self.setMinimumSize(400, 300)
+        self.setMinimumSize(350, 600)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -239,23 +239,23 @@ class CameraView(QFrame):
             pixmap = QPixmap.fromImage(qt_image)
             
             if not self.is_hyperspectral:
-                # RGB 카메라: 표시 영역에 맞춰 fit (비율 유지)
-                target_width = 380
-                target_height = 300  # 표시 영역 최대 높이 제한
+                # RGB 카메라: 부모 영역에 맞춰 fit
+                parent_size = self.image_label.parent().size()
+                available_width = parent_size.width() - 20   # 여백
+                available_height = parent_size.height() - 20
                 
                 scaled_pixmap = pixmap.scaled(
-                    target_width, target_height,
+                    available_width, available_height,
                     Qt.KeepAspectRatio,
                     Qt.SmoothTransformation
                 )
                 
                 self.image_label.setFixedSize(
-                    scaled_pixmap.width(), 
+                    scaled_pixmap.width(),
                     scaled_pixmap.height()
                 )
                 self.image_label.setPixmap(scaled_pixmap)
             else:
-                # Hyperspectral 카메라: 기존 방식
                 scaled_pixmap = pixmap.scaled(
                     self.image_label.size(),
                     Qt.KeepAspectRatio,
