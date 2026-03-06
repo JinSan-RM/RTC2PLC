@@ -415,7 +415,7 @@ class ServoController(QWidget):
             position = pos_txt.text()
             speed = speed_txt.text()
             log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
-            self.app.servo_move_to_position(0, float(position)*(10**3), float(speed)*(10**3))
+            self.app.servo_move_to_position(self.servo_id, float(position)*(10**3), float(speed)*(10**3))
 
     def save_jog_speed(self):
         """조그 속도 저장"""

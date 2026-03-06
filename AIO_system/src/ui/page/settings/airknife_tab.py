@@ -118,7 +118,8 @@ class AirknifeController(QWidget):
             max_val=100000,
             func=self.on_apply_settings
         )
-        self._create_edit_area(layout, timing_info)
+        _timing_edit = self._create_edit_area(layout, timing_info)
+        setattr(self, f"airknife_{self.num}_timing", _timing_edit)
 
         layout.addSpacing(40)
 
@@ -130,7 +131,8 @@ class AirknifeController(QWidget):
             max_val=100000,
             func=self.on_apply_settings
         )
-        self._create_edit_area(layout, duration_info)
+        _duration_edit = self._create_edit_area(layout, duration_info)
+        setattr(self, f"airknife_{self.num}_duration", _duration_edit)
 
         layout.addStretch()
 
@@ -154,12 +156,14 @@ class AirknifeController(QWidget):
         _edit.setObjectName("input_field")
         _edit.setFixedSize(300, 40)
         _edit.returnPressed.connect(info.func)
-        setattr(self, f"airknife_{self.num}_timing", _edit)
+
         parent_layout.addWidget(_edit)
 
         _unit = QLabel("ms")
         _unit.setObjectName("unit_label")
         parent_layout.addWidget(_unit)
+
+        return _edit
 
     # 이벤트 핸들러
     def on_apply_settings(self):
