@@ -10,7 +10,7 @@ from PySide6.QtCore import QDateTime
 class Logger:
     """싱글톤 로거 클래스"""
     _instance = None
-    _log_callback: Callable | None = None
+    _log_callback: Callable = None
 
     @classmethod
     def get_instance(cls):

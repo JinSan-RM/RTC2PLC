@@ -99,7 +99,7 @@ class CameraView(QFrame):
                     background: #A0A0A0;
                 }
             """)
-            
+
             self.image_label = QLabel()
             self.image_label.setObjectName("camera_frame")
             self.image_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
@@ -113,7 +113,7 @@ class CameraView(QFrame):
                 font-weight: medium;
                 """
             )
-            
+
             scroll_area.setWidget(self.image_label)
             layout.addWidget(scroll_area)
         else:
@@ -232,25 +232,25 @@ class CameraView(QFrame):
     def update_frame(self, frame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # pylint: disable=no-member
             h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
             qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(qt_image)
-            
+
             if not self.is_hyperspectral:
                 # RGB 카메라: 고정 너비로 스케일링
                 target_width = 380
                 scale = target_width / w
                 new_w = target_width
                 new_h = int(h * scale)
-                
+
                 scaled_pixmap = pixmap.scaled(
                     new_w, new_h,
                     Qt.KeepAspectRatio,
                     Qt.SmoothTransformation
                 )
-                
+
                 self.image_label.setFixedSize(new_w, new_h)
                 self.image_label.setPixmap(scaled_pixmap)
             else:
@@ -261,11 +261,11 @@ class CameraView(QFrame):
                     Qt.SmoothTransformation
                 )
                 self.image_label.setPixmap(scaled_pixmap)
-            
+
             if self.camera_thread:
                 fps = self.camera_thread.current_fps
                 self.fps_label.setText(f"FPS: {fps}")
-            
+
         except Exception as e:
             log(f"프레임 업데이트 오류: {e}")
 
@@ -483,15 +483,15 @@ class MonitoringPage(QWidget):
         rgb_layout = QGridLayout()
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
-        
+
         rgb_layout.setRowMinimumHeight(0, 500)
         rgb_layout.setRowMinimumHeight(0, 500)
-        
+
         rgb_layout.setRowStretch(0, 1)
         rgb_layout.setRowStretch(1, 1)
         rgb_layout.setColumnStretch(0, 1)
         rgb_layout.setColumnStretch(1, 1)
-        
+
         # 4개의 RGB 카메라
         self.rgb_cameras = []
 

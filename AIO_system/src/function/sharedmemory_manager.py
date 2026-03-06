@@ -8,6 +8,7 @@ from src.utils.config_util import SHM_DTYPE
 from src.utils.logger import log
 
 
+# pylint: disable=bare-except
 class SharedMemoryManager:
     """프로세스 간 공유 메모리 관리자"""
     _instance = None
@@ -29,7 +30,8 @@ class SharedMemoryManager:
                 if old_mem:
                     old_mem.close()
                     old_mem.unlink()
-            except: pass
+            except:
+                pass
 
             self.shm = shared_memory.SharedMemory(
                 name=mem_name,
@@ -58,5 +60,6 @@ class SharedMemoryManager:
             self.shm.close()
             try:
                 self.shm.unlink()
-            except: pass
+            except:
+                pass
         log("SharedMemoryManager closed")

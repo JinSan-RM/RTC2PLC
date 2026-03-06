@@ -18,14 +18,14 @@ from src.utils.config_util import UI_PATH
 
 class SettingsPage(QWidget):
     """설정 페이지 - 메인"""
-    
+
     def __init__(self, app, title: QLabel, explain: QLabel):
         super().__init__()
         self.app = app
         self.title = title
         self.explain = explain
         self.init_ui()
-    
+
     def init_ui(self):
         """UI 초기화"""
         # 사이드바
@@ -34,11 +34,11 @@ class SettingsPage(QWidget):
         side_layout.setSpacing(0)
         side_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.create_sidebar(side_layout)
+        self._create_sidebar(side_layout)
 
         side_layout.addSpacing(20)
 
-        self.create_side_tab(side_layout)
+        self._create_side_tab(side_layout)
 
         side_layout.addStretch()
 
@@ -47,26 +47,26 @@ class SettingsPage(QWidget):
         main_layout = QVBoxLayout(self.main_widget)
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.pages = QStackedWidget()
-        
+
         # 각 탭 추가
         self.servo_tab = ServoTab(self.app)
         self.feeder_tab = FeederTab(self.app)
         self.conveyor_tab = ConveyorTab(self.app)
         self.airknife_tab = AirKnifeTab(self.app)
-        
+
         self.pages.addWidget(self.servo_tab)
         self.pages.addWidget(self.feeder_tab)
         self.pages.addWidget(self.conveyor_tab)
         self.pages.addWidget(self.airknife_tab)
-        
+
         main_layout.addWidget(self.pages)
-        
+
         # 스타일 적용
         self.apply_styles()
-    
-    def create_sidebar(self, parent_layout):
+
+    def _create_sidebar(self, parent_layout):
         title_layout = QHBoxLayout()
         title_layout.setSpacing(0)
         title_layout.setContentsMargins(0, 0, 0, 0)
@@ -95,8 +95,8 @@ class SettingsPage(QWidget):
         "컨베이어 제어",
         "에어나이프 제어",
     ]
-    
-    def create_side_tab(self, parent_layout):
+
+    def _create_side_tab(self, parent_layout):
         self.btn_group = QButtonGroup()
         self.btn_group.setExclusive(True)
         self.btn_group.idClicked.connect(self.show_page)
@@ -106,25 +106,24 @@ class SettingsPage(QWidget):
             btn.setObjectName("nav_button")
             btn.setCheckable(True)
             btn.setFixedHeight(44)
-            
+
             parent_layout.addWidget(btn)
             self.btn_group.addButton(btn, i)
-
 
     def show_page(self, index):
         """페이지 전환"""
         self.pages.setCurrentIndex(index)
-        
+
         # 페이지 제목 업데이트
         if index < len(self.nav_list):
             self.title.setText(self.nav_list[index])
-        
+
         # 에어나이프 탭일 때에만 설명 텍스트 업데이트
         if index == 3:
             self.explain.setText("에어나이프는 플라스틱 분류 신호를 받은 후 설정된 타이밍에 에어를 분사합니다.")
         else:
             self.explain.setText("")
-    
+
     def apply_styles(self):
         """스타일시트 적용"""
         self.side_widget.setStyleSheet(

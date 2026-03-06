@@ -448,9 +448,7 @@ CAMERA_CONFIGS = {
 UI_PATH = Path(__file__).resolve().parent.parent / "ui"
 
 class ToggleButton(QAbstractButton):
-    """
-    UI 알약 모양 토글 버튼 구현
-    """
+    """UI 알약 모양 토글 버튼 구현"""
     def __init__(self, parent=None, width=60, height=28, on_text="ON", off_text="OFF"):
         super().__init__(parent)
         self.setCheckable(True)
@@ -473,11 +471,7 @@ class ToggleButton(QAbstractButton):
     # 애니메이션을 위한 속성(Property) 정의
     @Property(float)
     def handle_position(self):
-        """
-        토글 동그라미 위치
-        
-        :param self: Description
-        """
+        """토글 동그라미 위치"""
         return self._handle_position
 
     @handle_position.setter
@@ -506,7 +500,7 @@ class ToggleButton(QAbstractButton):
         self._handle_position = self._get_end_pos()
         super().resizeEvent(event)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event): # pylint: disable=unused-argument
         # 직접 위젯 그리기
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing) # 부드럽게 처리

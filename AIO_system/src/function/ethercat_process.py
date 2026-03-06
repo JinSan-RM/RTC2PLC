@@ -43,6 +43,7 @@ class ProcessVars:
     output_modules: list[SlaveInfo] = None
 
 
+# pylint: disable=broad-exception-caught, broad-exception-raised
 class EtherCATProcess(Process):
     """이더캣 통신을 위한, 분리된 프로세스"""
     _initialized = False
