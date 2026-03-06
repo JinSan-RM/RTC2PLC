@@ -187,7 +187,7 @@ def listen_for_data_stream():
                         break
                     header += chunk
                 if len(header) != expected_header_size:
-                    log.warning("Incomplete header received")
+                    log("Incomplete header received")
                     continue
                 stream_type = header[0]
                 frame_number = int.from_bytes(header[1:9], byteorder='little', signed=True)
@@ -212,7 +212,7 @@ def handle_response(response):
     if not response.get("Success", False):
         log(f"Camera command not successful: {message}")
         raise RuntimeError(f"Command not successful: {message}")
-    log.debug(f"Id: {response.get('Id')} successfully received message body: '{message[:100]}'")
+    log(f"Id: {response.get('Id')} successfully received message body: '{message[:100]}'")
     return message
 
 def main():
@@ -258,7 +258,7 @@ def main():
                 response = send_command(command_socket, {"Command": "StopPredict"})
                 handle_response(response)
             except (ValueError, RuntimeError) as e:
-                log.error(f"Error during stop prediction: {e}")
+                log(f"Error during stop prediction: {e}")
 
     except KeyboardInterrupt:
         log("Keyboard interrupt detected")
