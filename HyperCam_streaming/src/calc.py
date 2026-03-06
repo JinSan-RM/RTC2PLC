@@ -1,7 +1,12 @@
+"""
+계산 함수
+"""
 from datetime import datetime, timedelta
 from dateutil import tz
 
-from .config_util import GUIDELINE_MAX_X, GUIDELINE_MIN_X, GUIDELINE_X, LENGTH_PIXEL, PX_CM_RATIO, CONVEYOR_SPEED
+from .config_util import (
+    GUIDELINE_MAX_X, GUIDELINE_MIN_X, GUIDELINE_X, LENGTH_PIXEL, PX_CM_RATIO, CONVEYOR_SPEED
+)
 
 def calculate_shape_metrics(border, size_event=False):
     """
@@ -60,28 +65,33 @@ def classify_object_size(center_x):
     # 가이드라인 영역 (무시)
     if GUIDELINE_MIN_X <= center_x <= GUIDELINE_MAX_X:
         return None
-    
+
     # 중심점이 가이드라인 왼쪽 = 대형
     if center_x < GUIDELINE_X:
         return "large"
-    
+
     # 중심점이 가이드라인 오른쪽 = 소형
     else:
         return "small"
 
 def calc_delay(y_position):
+    """제품이 비전 룸을 벗어날 때까지의 딜레이 계산"""
     remain_px = LENGTH_PIXEL - y_position   # 객체 중심이 끝점 지나기까지 남은 거리(px)
     if remain_px < 0:
         return 0
-    
+
     remain_cm = remain_px / PX_CM_RATIO     # cm 단위로 변환
     delay = remain_cm / CONVEYOR_SPEED      # 딜레이 초 단위로 구함
     return delay
 
 def convert_ticks_to_datetime(ticks):
-        return (datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)).replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
+    """주어진 ticks를 datetime으로 변환"""
+    return (
+        datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)
+    ).replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal())
 
 def get_border_coords(border):
+    """제품 테두리의 x, y 좌표 최대 최소값"""
     x_coords = [p[0] for p in border]
     y_coords = [p[1] for p in border]
     return min(x_coords), max(x_coords), min(y_coords), max(y_coords)
