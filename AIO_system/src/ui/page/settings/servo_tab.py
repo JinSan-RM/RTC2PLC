@@ -396,8 +396,8 @@ class ServoController(QWidget):
         """이동 위치 및 속도 저장"""
         _name = "폭 조정" if self.servo_id == 0 else "높이 조정"
 
-        pos_txt = self.findChild(QLabel, f"servo_{self.servo_id}_target_pos_{idx}")
-        speed_txt = self.findChild(QLabel, f"servo_{self.servo_id}_target_speed_{idx}")
+        pos_txt = getattr(self, f"servo_{self.servo_id}_target_pos_{idx}")
+        speed_txt = getattr(self, f"servo_{self.servo_id}_target_speed_{idx}")
         if pos_txt and speed_txt:
             position = pos_txt.text()
             speed = speed_txt.text()
@@ -409,8 +409,8 @@ class ServoController(QWidget):
 
     def on_move_to_position(self, idx):
         """지정 위치로 이동"""
-        pos_txt = self.findChild(QLabel, f"servo_{self.servo_id}_target_pos_{idx}")
-        speed_txt = self.findChild(QLabel, f"servo_{self.servo_id}_target_speed_{idx}")
+        pos_txt = getattr(self, f"servo_{self.servo_id}_target_pos_{idx}")
+        speed_txt = getattr(self, f"servo_{self.servo_id}_target_speed_{idx}")
         if pos_txt and speed_txt:
             position = pos_txt.text()
             speed = speed_txt.text()
@@ -419,7 +419,7 @@ class ServoController(QWidget):
 
     def save_jog_speed(self):
         """조그 속도 저장"""
-        jog_speed = self.findChild(QLabel, f"servo_{self.servo_id}_jog_speed")
+        jog_speed = getattr(self, f"servo_{self.servo_id}_jog_speed")
         if jog_speed:
             self.app.config["servo_config"][f"servo_{self.servo_id}"]["jog_speed"] = \
                 float(jog_speed.text())
@@ -428,7 +428,7 @@ class ServoController(QWidget):
 
     def save_inch_distance(self):
         """인칭 거리 저장"""
-        inch_dist = self.findChild(QLabel, f"servo_{self.servo_id}_inch_dist")
+        inch_dist = getattr(self, f"servo_{self.servo_id}_inch_dist")
         if inch_dist:
             self.app.config["servo_config"][f"servo_{self.servo_id}"]["inch_distance"] = \
                 float(inch_dist.text())
@@ -437,8 +437,8 @@ class ServoController(QWidget):
 
     def on_jog_move(self, direction):
         """조그 이동"""
-        is_jog = self.findChild(QRadioButton, f"servo_{self.servo_id}_is_jog")
-        jog_speed = self.findChild(QLabel, f"servo_{self.servo_id}_jog_speed")
+        is_jog = getattr(self, f"servo_{self.servo_id}_is_jog")
+        jog_speed = getattr(self, f"servo_{self.servo_id}_jog_speed")
         if is_jog and is_jog.isChecked():
             log(f"조그 이동: {direction}")
             _dir = 1 if direction == "right" else -1
@@ -450,8 +450,8 @@ class ServoController(QWidget):
 
     def on_inch_move(self, direction):
         """인칭 이동"""
-        is_inch = self.findChild(QRadioButton, f"servo_{self.servo_id}_is_inch")
-        inch_dist = self.findChild(QLabel, f"servo_{self.servo_id}_inch_dist")
+        is_inch = getattr(self, f"servo_{self.servo_id}_is_inch")
+        inch_dist = getattr(self, f"servo_{self.servo_id}_inch_dist")
         if is_inch and is_inch.isChecked():
             log(f"인칭 이동: {direction}")
             _dir = 1 if direction == "right" else -1
@@ -463,7 +463,7 @@ class ServoController(QWidget):
 
     def on_jog_stop(self):
         """조그 정지"""
-        is_jog = self.findChild(QRadioButton, f"servo_{self.servo_id}_is_jog")
+        is_jog = getattr(self, f"servo_{self.servo_id}_is_jog")
         if is_jog and is_jog.isChecked():
             log("조그 이동 정지")
             self.app.servo_stop(self.servo_id)
