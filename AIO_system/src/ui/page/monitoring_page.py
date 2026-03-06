@@ -239,19 +239,20 @@ class CameraView(QFrame):
             pixmap = QPixmap.fromImage(qt_image)
             
             if not self.is_hyperspectral:
-                # RGB 카메라: 고정 너비로 스케일링
+                # RGB 카메라: 표시 영역에 맞춰 fit (비율 유지)
                 target_width = 380
-                scale = target_width / w
-                new_w = target_width
-                new_h = int(h * scale)
+                target_height = 300  # 표시 영역 최대 높이 제한
                 
                 scaled_pixmap = pixmap.scaled(
-                    new_w, new_h,
+                    target_width, target_height,
                     Qt.KeepAspectRatio,
                     Qt.SmoothTransformation
                 )
                 
-                self.image_label.setFixedSize(new_w, new_h)
+                self.image_label.setFixedSize(
+                    scaled_pixmap.width(), 
+                    scaled_pixmap.height()
+                )
                 self.image_label.setPixmap(scaled_pixmap)
             else:
                 # Hyperspectral 카메라: 기존 방식
