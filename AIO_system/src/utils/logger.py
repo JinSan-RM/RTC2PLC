@@ -11,6 +11,8 @@ class Logger:
     """싱글톤 로거 클래스"""
     _instance = None
     _log_callback: Callable = None
+    _last_logs: dict[tuple, QDateTime] = {}
+    _throttle_ms = 2000
 
     @classmethod
     def get_instance(cls):
@@ -38,8 +40,20 @@ class Logger:
         lineno = frame.f_lineno
         funcname = frame.f_code.co_name
 
+        # 스로틀링 처리
+        now = QDateTime.currentDateTime()
+        log_key = (filename, lineno, message)
+        if log_key in cls._last_logs:
+            last_time = cls._last_logs[log_key]
+            if last_time.msecsTo(now) < cls._throttle_ms:
+                return None
+
+        cls._last_logs[log_key] = now
+        if len(cls._last_logs) > 100:
+            cls._last_logs.clear()
+
         # 타임스탬프
-        timestamp = QDateTime.currentDateTime().toString("HH:mm:ss.zzz")
+        timestamp = now.toString("HH:mm:ss.zzz")
 
         # 포맷팅
         level = re.search(r'\[([^\]]*)\]', message)
