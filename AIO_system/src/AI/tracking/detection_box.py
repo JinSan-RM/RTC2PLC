@@ -15,7 +15,9 @@ class ConveyorBoxZone:
     
     def __init__(self, box_id: int, x: int, y: int,
                 width: int, height: int,
-                target_classes: List[str] = ['PET', 'PE', 'PP', 'PS'],
+                # target_classes: List[str] = ['PET', 'PE', 'PP', 'PS'],
+                # TensorRT 변경 부분 =========
+                target_classes: List[str] = ['PLASTIC'],
                 ):
         
         self.box_id = box_id

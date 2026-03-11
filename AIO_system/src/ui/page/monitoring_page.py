@@ -300,7 +300,8 @@ class MonitoringPage(QWidget):
             img_size=480,
             max_det=50
         )
-        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        # model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
         if not self.ai_manager.initialize(model_path):
             log("AI 매니저 초기화 실패")
             # 초기화 실패해도 UI는 표시

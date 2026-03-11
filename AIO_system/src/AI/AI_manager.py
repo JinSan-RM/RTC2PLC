@@ -52,7 +52,8 @@ class BatchAIManager:
         # 모델 로드
         self.model = None
         self.device = None
-        self.CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
+        # self.CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
+        self.CLASS_NAMES = ['Plastic']
         
         self.running = False
         self.inference_thread = None
@@ -147,18 +148,30 @@ class BatchAIManager:
                 
                 t_start = time.time()
                 
+                # results = self.model.track(
+                #     source=frame_list,  # ← 리스트로 전달!
+                #     conf=self.confidence_threshold,
+                #     imgsz=self.img_size,
+                #     device=self.device,
+                #     verbose=False,
+                #     half=False,
+                #     max_det=self.max_det,
+                #     persist=True,
+                #     tracker="bytetrack.yaml",
+                #     agnostic_nms=True,
+                #     classes=[0, 1, 2, 3],
+                #     stream=False,  # 배치 모드
+                # )
+                # Tensor RT 변경 버전 ===========
                 results = self.model.track(
                     source=frame_list,  # ← 리스트로 전달!
                     conf=self.confidence_threshold,
                     imgsz=self.img_size,
-                    device=self.device,
                     verbose=False,
-                    half=False,
                     max_det=self.max_det,
                     persist=True,
                     tracker="bytetrack.yaml",
                     agnostic_nms=True,
-                    classes=[0, 1, 2, 3],
                     stream=False,  # 배치 모드
                 )
                 

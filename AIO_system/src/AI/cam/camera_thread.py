@@ -19,11 +19,15 @@ class CameraThread(QThread):
     error_occurred = Signal(str)
     
     # 클래스 상수
+    # CLASS_COLORS = {
+    #     'PET': (0, 165, 255),
+    #     'PE': (255, 0, 0),
+    #     'PP': (0, 255, 0),
+    #     'PS': (255, 0, 255)
+    # }
+    
     CLASS_COLORS = {
-        'PET': (0, 165, 255),
-        'PE': (255, 0, 0),
-        'PP': (0, 255, 0),
-        'PS': (255, 0, 255)
+        'PLASTIC': (255, 255, 255)
     }
     
     def __init__(
@@ -56,7 +60,7 @@ class CameraThread(QThread):
         # 캐싱된 결과 (프레임 스킵용)
         self.last_detected_objects = []
         self.frame_count = 0
-        self.inference_interval = 3  # 2프레임마다 추론
+        self.inference_interval = 2  # 2프레임마다 추론
         
         # 통계
         self.fps_counter = 0

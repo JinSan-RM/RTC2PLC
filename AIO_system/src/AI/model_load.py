@@ -1,3 +1,4 @@
+import os
 import torch
 from ultralytics import YOLO
 from src.utils.logger import log
@@ -16,10 +17,13 @@ def load_yolov11(model_path, half_precision=True):
         
         # YOLOv11 모델 로드
         log(f"\nYOLOv11 모델 로드 중: {model_path}")
-        model = YOLO(model_path)
+        model = YOLO(model_path, task="detect")
         
-        # GPU로 모델 이동
-        model.to(device)
+        ext = os.path.splitext(model_path)[1].lower()
+        
+        # TensorRT Engine이면 model.to() 강제하지 않음
+        if ext != ".engine":
+            model.to(device)
         
         # FP16 최적화 (GPU 메모리 50% 절감 + 속도 2배 예상)
         # if half_precision and device == 'cuda':

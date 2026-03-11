@@ -97,12 +97,16 @@ class PlasticSortingSystem:
 class AIPlasticDetectionSystem:
     """YOLOv11 기반 AI Hub 폐플라스틱 감지 시스템 (GPU 가속)"""
     
-    CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
+    # CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
+    # CLASS_COLORS = {
+    #     'PET': (0, 165, 255),
+    #     'PE': (255, 0, 0),
+    #     'PP': (0, 255, 0),
+    #     'PS': (255, 0, 255)
+    # }
+    CLASS_NAMES = ['PLASTIC']
     CLASS_COLORS = {
-        'PET': (0, 165, 255),
-        'PE': (255, 0, 0),
-        'PP': (0, 255, 0),
-        'PS': (255, 0, 255)
+        'PLASTIC': (255, 255, 255)
     }
     
     def __init__(
@@ -116,7 +120,8 @@ class AIPlasticDetectionSystem:
     ):
         self.app = app
         self.camera_index = camera_index
-        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        # self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.engine"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
         if self.model is None:
@@ -150,8 +155,11 @@ class AIPlasticDetectionSystem:
         # 모델 워밍업
         log("모델 워밍업 중...")
         dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
+        # for _ in range(3):
+        #     _ = self.model.predict(dummy_img, verbose=False, device=self.device, imgsz=self.img_size)
+        # TensorRT 변경 부분 ========
         for _ in range(3):
-            _ = self.model.predict(dummy_img, verbose=False, device=self.device, imgsz=self.img_size)
+            _ = self.model.predict(dummy_img, verbose=False, imgsz=self.img_size)
         log("워밍업 완료!")
         
         # 모델 클래스명 가져오기
@@ -179,19 +187,31 @@ class AIPlasticDetectionSystem:
         """YOLOv11을 사용한 객체 감지 + 추적 (GPU 가속)"""
         try:
             # YOLOv11 추론 + 추적
-            results = self.model.track(  # ← predict → track 변경!
+            # results = self.model.track(  # ← predict → track 변경!
+            #     source=frame,
+            #     conf=self.confidence_threshold,
+            #     imgsz=self.img_size,
+            #     device=self.device,
+            #     verbose=False,
+            #     half=True,  # FP16
+            #     max_det=50,
+            #     persist=True,  # ← 추적 ID 유지 (중요!)
+            #     tracker="bytetrack.yaml",  # 또는 "botsort.yaml"
+            #     agnostic_nms=True,
+            #     classes=[0, 1, 2, 3]
+            # )
+            # TensorRT 변경 부분           
+            results = self.model.track(
                 source=frame,
                 conf=self.confidence_threshold,
                 imgsz=self.img_size,
-                device=self.device,
                 verbose=False,
-                half=True,  # FP16
                 max_det=50,
-                persist=True,  # ← 추적 ID 유지 (중요!)
-                tracker="bytetrack.yaml",  # 또는 "botsort.yaml"
-                agnostic_nms=True,
-                classes=[0, 1, 2, 3]
+                persist=True,
+                tracker="bytetrack.yaml",
+                agnostic_nms=True
             )
+            
             
             detected_objects = []
             
