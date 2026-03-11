@@ -108,6 +108,8 @@ class UpdateHandler(FileSystemEventHandler):
 class App():
     """메인 앱 클래스"""
     is_reload = False
+    FEEDER_AIR_TERM = 10 # 10초마다 피더 배출부에 에어를 쏴서 막힘을 제거
+    FEEDER_AIR_DURATION = 1
 
     def __init__(self):
         # 우선적으로 설정값부터 읽어옴
@@ -122,6 +124,7 @@ class App():
         self._stop_event = threading.Event()
         self._feeder_output_time = datetime.now()
         self._current_size = 0
+        self._feeder_air_time = datetime.now()
 
         # 제품 배출 순서 제어
         self.use_air_sequence = False
@@ -206,6 +209,10 @@ class App():
                     """)
 
                 self._feeder_output_time = current_time
+
+            if (current_time - self._feeder_air_time).total_seconds() > self.FEEDER_AIR_TERM:
+                # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
+                self.airknife_on(4, self.FEEDER_AIR_DURATION * 1000)
 
             time.sleep(0.033)
 
@@ -476,7 +483,7 @@ class App():
         """자동 모드 운전 정지"""
         self._stop_event.set()
 
-        if hasattr(self, '_auto_thread') and self._auto_thread.is_alive():
+        if self._auto_thread is not None and self._auto_thread.is_alive():
             log("[INFO] auto thread to terminate...")
             self._auto_thread.join(timeout=5)
             if self._auto_thread.is_alive():
