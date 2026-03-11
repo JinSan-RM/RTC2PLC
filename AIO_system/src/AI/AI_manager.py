@@ -115,9 +115,91 @@ class BatchAIManager:
         )
         self.inference_thread.start()
 
+    # def _batch_inference_loop(self):
+    #     """배치 추론 메인 루프"""
+    #     log("배치 추론 루프 실행 중...")
+
+    #     while self.running:
+    #         try:
+    #             # 1. 모든 카메라에서 프레임 수집 (논블로킹)
+    #             frames = {}
+    #             deadline = time.time() + 0.020  # 20ms 데드라인
+
+    #             while time.time() < deadline and len(frames) < self.num_cameras:
+    #                 for cam_id in range(self.num_cameras):
+    #                     if cam_id in frames:
+    #                         continue
+    #                     try:
+    #                         remaining_time = deadline - time.time()
+    #                         if remaining_time <= 0:
+    #                             break
+
+    #                         frame = self.input_queues[cam_id].get(
+    #                             timeout=max(0.001, remaining_time)
+    #                         )
+    #                         frames[cam_id] = frame
+    #                     except queue.Empty:
+    #                         continue
+
+    #                 # 모든 카메라 프레임 수집 완료
+    #                 if len(frames) == self.num_cameras:
+    #                     break
+
+    #             # 프레임이 하나도 없으면 다음 루프
+    #             if not frames:
+    #                 continue
+
+    #             # 배치 구성 및 추론
+    #             cam_ids = list(frames.keys())
+    #             frame_list = [frames[cam_id] for cam_id in cam_ids]
+
+    #             t_start = time.time()
+                
+    #             results = self.model.track(
+    #                 source=frame_list,  # ← 리스트로 전달!
+    #                 conf=self.confidence_threshold,
+    #                 imgsz=self.img_size,
+    #                 verbose=False,
+    #                 max_det=self.max_det,
+    #                 persist=True,
+    #                 tracker="bytetrack.yaml",
+    #                 agnostic_nms=True,
+    #                 stream=False,  # 배치 모드
+    #             )
+
+    #             inference_time = (time.time() - t_start) * 1000
+
+    #             # 통계 업데이트
+    #             self.batch_count += 1
+    #             self.total_inferences += len(frame_list)
+
+    #             # 100번째 배치마다 통계 출력
+    #             # if self.batch_count % 100 == 0:
+    #             #     avg_batch_size = self.total_inferences / self.batch_count
+    #             #     log(f"배치 통계: {self.batch_count}번째 배치, "
+    #             #         f"평균 배치 크기: {avg_batch_size:.2f}, "
+    #             #         f"추론 시간: {inference_time:.2f}ms")
+
+    #             # 4. 결과 파싱 및 분배
+    #             for i, cam_id in enumerate(cam_ids):
+    #                 if i < len(results):
+    #                     # 결과 파싱
+    #                     detected_objects = self._parse_result(results[i])
+
+    #                     # 큐에 넣기 (큐 가득 차면 오래된 결과 버림)
+    #                     if self.output_queues[cam_id].full():
+    #                         try:
+    #                             self.output_queues[cam_id].get_nowait()
+    #                         except queue.Empty:
+    #                             pass
+
+    #                     self.output_queues[cam_id].put(detected_objects)
+
+    #         except Exception as e:
+    #             log(f"배치 추론 오류: {e}")
     def _batch_inference_loop(self):
-        """배치 추론 메인 루프"""
-        log("배치 추론 루프 실행 중...")
+        """배치 추론 메인 루프 (TensorRT batch=1 엔진 대응)"""
+        log("배치 추론 루프 실행 중.")
 
         while self.running:
             try:
@@ -149,44 +231,26 @@ class BatchAIManager:
                 if not frames:
                     continue
 
-                # 배치 구성 및 추론
-                cam_ids = list(frames.keys())
-                frame_list = [frames[cam_id] for cam_id in cam_ids]
+                # 2. TensorRT batch=1 엔진 대응:
+                #    카메라별로 단일 프레임씩 순차 추론
+                for cam_id, frame in frames.items():
+                    try:
+                        results = self.model.track(
+                            source=frame,   # 리스트(frame_list) 대신 단일 frame
+                            conf=self.confidence_threshold,
+                            imgsz=self.img_size,
+                            verbose=False,
+                            max_det=self.max_det,
+                            persist=True,
+                            tracker="bytetrack.yaml",
+                            agnostic_nms=True
+                        )
 
-                t_start = time.time()
-                
-                results = self.model.track(
-                    source=frame_list,  # ← 리스트로 전달!
-                    conf=self.confidence_threshold,
-                    imgsz=self.img_size,
-                    verbose=False,
-                    max_det=self.max_det,
-                    persist=True,
-                    tracker="bytetrack.yaml",
-                    agnostic_nms=True,
-                    stream=False,  # 배치 모드
-                )
+                        detected_objects = []
+                        if results is not None and len(results) > 0:
+                            detected_objects = self._parse_result(results[0])
 
-                inference_time = (time.time() - t_start) * 1000
-
-                # 통계 업데이트
-                self.batch_count += 1
-                self.total_inferences += len(frame_list)
-
-                # 100번째 배치마다 통계 출력
-                # if self.batch_count % 100 == 0:
-                #     avg_batch_size = self.total_inferences / self.batch_count
-                #     log(f"배치 통계: {self.batch_count}번째 배치, "
-                #         f"평균 배치 크기: {avg_batch_size:.2f}, "
-                #         f"추론 시간: {inference_time:.2f}ms")
-
-                # 4. 결과 파싱 및 분배
-                for i, cam_id in enumerate(cam_ids):
-                    if i < len(results):
-                        # 결과 파싱
-                        detected_objects = self._parse_result(results[i])
-
-                        # 큐에 넣기 (큐 가득 차면 오래된 결과 버림)
+                        # 큐에 넣기 (가득 차면 오래된 결과 버림)
                         if self.output_queues[cam_id].full():
                             try:
                                 self.output_queues[cam_id].get_nowait()
@@ -194,6 +258,12 @@ class BatchAIManager:
                                 pass
 
                         self.output_queues[cam_id].put(detected_objects)
+                        self.total_inferences += 1
+
+                    except Exception as cam_e:
+                        log(f"카메라 {cam_id} 추론 오류: {cam_e}")
+
+                self.batch_count += 1
 
             except Exception as e:
                 log(f"배치 추론 오류: {e}")
