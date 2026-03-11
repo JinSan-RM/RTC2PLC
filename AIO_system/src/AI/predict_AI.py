@@ -113,7 +113,7 @@ class AIPlasticDetectionSystem:
         self,
         model_path: str = None,
         confidence_threshold: float = 0.5,
-        img_size: int = 480,
+        img_size: int = 640,
         airknife_callback=None,
         app=None,
         camera_index: int = 0

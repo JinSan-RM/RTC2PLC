@@ -39,7 +39,7 @@ class BatchAIManager:
         self,
         num_cameras: int = 2,
         confidence_threshold: float = 0.5,
-        img_size: int = 480,
+        img_size: int = 640,
         max_det: int = 50
     ):
         self.num_cameras = num_cameras
