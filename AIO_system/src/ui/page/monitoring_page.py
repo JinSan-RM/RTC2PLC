@@ -297,7 +297,7 @@ class MonitoringPage(QWidget):
         self.ai_manager = BatchAIManager(
             num_cameras=2,
             confidence_threshold=0.6,
-            img_size=480,
+            img_size=640,
             max_det=50
         )
         # model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
