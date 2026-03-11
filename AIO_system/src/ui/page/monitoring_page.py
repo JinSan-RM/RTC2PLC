@@ -45,7 +45,7 @@ class CameraView(QFrame):
     def _init_ui(self):
         """UI 초기화"""
         self.setObjectName("camera_view")
-        self.setMinimumSize(350, 600)
+        self.setMinimumSize(350, 700)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -485,8 +485,8 @@ class MonitoringPage(QWidget):
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
         
-        rgb_layout.setRowMinimumHeight(0, 500)
-        rgb_layout.setRowMinimumHeight(0, 500)
+        rgb_layout.setRowMinimumHeight(0, 800)
+        rgb_layout.setRowMinimumHeight(0, 800)
         
         rgb_layout.setRowStretch(0, 1)
         rgb_layout.setRowStretch(1, 1)
