@@ -45,7 +45,7 @@ class CameraView(QFrame):
     def _init_ui(self):
         """UI 초기화"""
         self.setObjectName("camera_view")
-        self.setMinimumSize(350, 700)
+        self.setMinimumSize(350, 1000)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

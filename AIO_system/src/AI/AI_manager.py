@@ -174,11 +174,11 @@ class BatchAIManager:
                 self.total_inferences += len(frame_list)
 
                 # 100번째 배치마다 통계 출력
-                if self.batch_count % 100 == 0:
-                    avg_batch_size = self.total_inferences / self.batch_count
-                    log(f"배치 통계: {self.batch_count}번째 배치, "
-                        f"평균 배치 크기: {avg_batch_size:.2f}, "
-                        f"추론 시간: {inference_time:.2f}ms")
+                # if self.batch_count % 100 == 0:
+                #     avg_batch_size = self.total_inferences / self.batch_count
+                #     log(f"배치 통계: {self.batch_count}번째 배치, "
+                #         f"평균 배치 크기: {avg_batch_size:.2f}, "
+                #         f"추론 시간: {inference_time:.2f}ms")
 
                 # 4. 결과 파싱 및 분배
                 for i, cam_id in enumerate(cam_ids):
@@ -281,8 +281,8 @@ class BatchAIManager:
                 self.dropped_frames[camera_id] += 1
 
                 # ✅ 50번마다 한 번만 로그
-                if self.dropped_frames[camera_id] % 50 == 0:
-                    log(f"⚠️ 카메라 {camera_id}: 총 {self.dropped_frames[camera_id]}개 프레임 드롭")
+                # if self.dropped_frames[camera_id] % 50 == 0:
+                #     log(f"⚠️ 카메라 {camera_id}: 총 {self.dropped_frames[camera_id]}개 프레임 드롭")
             except queue.Empty:
                 pass
 

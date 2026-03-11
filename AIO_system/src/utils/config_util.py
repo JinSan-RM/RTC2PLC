@@ -381,10 +381,11 @@ CAMERA_CONFIGS = {
             {
                 'box_id': 1,
                 'x': 50,
-                'y': 470,
+                'y': 300,
                 'width': 350,
-                'height': 270,
-                'target_classes': ['PET', 'PE'],
+                'height': 400,
+                # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
+                'target_classes': ['PE'],
                 'airknife_id': 1
             },
             # {
@@ -409,25 +410,28 @@ CAMERA_CONFIGS = {
         'boxes': [
             {
                 'box_id': 2,
-                'x': 150,
-                'y': 830,
+                'x': 50,
+                'y': 750,
                 'width': 400,
-                'height': 230,
-                'target_classes': ['PET'],
+                'height': 330,
+                # 'target_classes': ['PE'],
+                'target_classes': ['PP', 'PS', 'PET', 'PE', 'BOTTLE_PET'],
                 'airknife_id': 3
             },
             {
                 'box_id': 3,
-                'x': 130,
-                'y': 200,
+                'x': 30,
+                'y': 70,
                 'width': 400,
-                'height': 230,
-                'target_classes': ['PP', 'PS'],
+                'height': 430,
+                'target_classes': ['PP', 'PS', 'PET', 'PE', 'BOTTLE_PET'],
+                # 'target_classes': ['PP', 'PE', 'BOTTLE_PET'],
                 'airknife_id': 2
             }
         ]
     }
 }
+
 
 
 # ============================================================
