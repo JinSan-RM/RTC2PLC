@@ -14,7 +14,7 @@ import numpy as np
 import pysoem
 
 from src.utils.config_util import (
-    IF_NAME, ETHERCAT_DELAY, LS_VENDOR_ID,
+    IF_NAME, ETHERCAT_DELAY, HEALTH_CHECK_TERM, WKC_MISS_COUNT_MAX, LS_VENDOR_ID,
     EC_RX_INDEX, EC_TX_INDEX, SERVO_RX_MAP, SERVO_TX_MAP, SERVO_RX, SERVO_TX,
     OUTPUT_RX_MAP, INPUT_TX_MAP, OUTPUT_RX, INPUT_TX,
     SERVO_ACCEL, SERVO_IN_POS_WIDTH, SHM_NAME, SHM_DTYPE,
@@ -43,6 +43,18 @@ class ProcessVars:
     output_modules: list[SlaveInfo] = None
 
 
+@dataclass
+class WkcVars:
+    """working counter 관리 속성 모음"""
+    last_ok_time: float
+    miss_count: int = 0
+    recover_count: int = 0
+    comm_degraded: bool = False
+    hard_fault: bool = False
+    reconnect_required: bool = False
+
+
+# pylint: disable=broad-exception-caught, broad-exception-raised
 class EtherCATProcess(Process):
     """이더캣 통신을 위한, 분리된 프로세스"""
     _initialized = False
@@ -52,10 +64,9 @@ class EtherCATProcess(Process):
             super().__init__()
 
             self.recv = 0
-
             self.vars = None
-
             self.stop_event: synchronize.Event = mp.Event()
+            self.wkc_vars = WkcVars(last_ok_time=time.monotonic())
 
             self._initialized = True
 
@@ -167,25 +178,51 @@ class EtherCATProcess(Process):
         # request OP STATE for all slaves
         self.vars.master.write_state()
 
+    def _try_send_processdata(self):
+        try:
+            self.vars.master.send_processdata()
+        except Exception as e:
+            log(f"[ERROR] send_processdata failed after exception: {e}")
+            self.wkc_vars.hard_fault = True
+
     def _process_loop(self):
-        self.recv = self.vars.master.receive_processdata(timeout=100_000)
-        if not self.recv == self.vars.master.expected_wkc:
-            log(f"""
-                [WARNING] incorrect wkc. 
-                recv: {self.recv} expected: {self.vars.master.expected_wkc}
-                """)
-            return
+        try:
+            recv = self.vars.master.receive_processdata(timeout=100_000)
+            self.recv = recv
+            expected = self.vars.master.expected_wkc
 
-        for module in self.vars.input_modules:
-            self._input_worker(module)
+            if recv == expected:
+                self.wkc_vars.miss_count = 0
+                self.wkc_vars.last_ok_time = time.monotonic()
 
-        for module in self.vars.output_modules:
-            self._output_worker(module)
+                for module in self.vars.input_modules:
+                    self._input_worker(module)
 
-        for i, servo in enumerate(self.vars.servo_drives):
-            self._servo_worker(i, servo)
+                for module in self.vars.output_modules:
+                    self._output_worker(module)
 
-        self.vars.master.send_processdata()
+                for i, servo in enumerate(self.vars.servo_drives):
+                    self._servo_worker(i, servo)
+            else:
+                self.wkc_vars.miss_count += 1
+                if self.wkc_vars.miss_count >= WKC_MISS_COUNT_MAX:
+                    # 5회 이상 카운터 불일치 시 복구 시도하도록
+                    self.vars.master.do_check_state = True
+                    self.wkc_vars.comm_degraded = True
+
+                    log(f"""
+                        [WARNING] incorrect wkc. 
+                        recv: {self.recv} expected: {self.vars.master.expected_wkc} 
+                        miss_count: {self.wkc_vars.miss_count}
+                    """)
+
+            self.vars.master.send_processdata()
+
+        except Exception as e:
+            self.vars.master.do_check_state = True
+            log(f"[ERROR] EtherCAT process loop exception: {e}")
+
+            self._try_send_processdata()
 
     def _disconnect(self):
         log("EtherCAT disconnect start")
@@ -214,11 +251,7 @@ class EtherCATProcess(Process):
             log(f"[ERROR] EtherCAT disconnection error: {e}")
 
     def stop(self):
-        """
-        이더캣 통신 프로세스 정지
-        
-        :param self: Description
-        """
+        """이더캣 통신 프로세스 정지"""
         self.stop_event.set()
 
     def _create_slave_info(self, slave: pysoem.CdefSlave) -> SlaveInfo:
@@ -228,45 +261,57 @@ class EtherCATProcess(Process):
     @staticmethod
     def _check_slave(slave, pos):
         if slave.state == (pysoem.SAFEOP_STATE + pysoem.STATE_ERROR):
+            # 에러 발생 시 에러 비트를 끄고 SAFEOP_STATE로 전환되도록 처리하는 부분
             log(f"[ERROR] slave {pos} is in SAFE_OP + ERROR, attempting ack.")
             slave.state = pysoem.SAFEOP_STATE + pysoem.STATE_ACK
             slave.write_state()
         elif slave.state == pysoem.SAFEOP_STATE:
+            # SAFEOP_STATE로 성공적으로 전환되었다면 다시 OP_STATE로 복구
             log(f"WARNING : slave {pos} is in SAFE_OP, try change to OPERATIONAL.")
             slave.state = pysoem.OP_STATE
             slave.write_state()
         elif slave.state > pysoem.NONE_STATE:
+            # 아예 연결이 끊기지는 않았으나 재설정이 필요한 경우(NONE_STATE에서 recover() 성공한 경우)
             if slave.reconfig():
                 slave.is_lost = False
                 log(f"MESSAGE : slave {pos} reconfigured")
         elif not slave.is_lost:
             slave.state_check(pysoem.OP_STATE)
             if slave.state == pysoem.NONE_STATE:
+                # 연결 끊김
                 slave.is_lost = True
                 log(f"ERROR : slave {pos} lost")
+
         if slave.is_lost:
+            # 다음 헬스 체크 때 slave.reconfig() 실행
             if slave.state == pysoem.NONE_STATE:
                 if slave.recover():
+                    # 연결 복구 성공
                     slave.is_lost = False
                     log(f"MESSAGE : slave {pos} recovered")
             else:
+                # slave.recover() 실행 전에 연결이 다시 된 상태
                 slave.is_lost = False
                 log(f"MESSAGE : slave {pos} found")
 
     # 슬레이브 상태 체크 스레드
     def _check_slave_loop(self):
         while not self.stop_event.is_set():
-            if self.vars.master.in_op and \
-            ((self.recv < self.vars.master.expected_wkc) or self.vars.master.do_check_state):
-                self.vars.master.do_check_state = False
-                self.vars.master.read_state()
-                for i, slave in enumerate(self.vars.master.slaves):
-                    if slave.state != pysoem.OP_STATE:
-                        self.vars.master.do_check_state = True
-                        EtherCATProcess._check_slave(slave, i)
-                if not self.vars.master.do_check_state:
-                    log("[INFO] OK : all slaves resumed OPERATIONAL.")
-            time.sleep(ETHERCAT_DELAY)
+            if self.vars.master.in_op:
+                if self.vars.master.do_check_state:
+                    self.vars.master.read_state()
+                    all_slaves_ok = True
+
+                    for i, slave in enumerate(self.vars.master.slaves):
+                        if slave.state != pysoem.OP_STATE:
+                            all_slaves_ok = False
+                            EtherCATProcess._check_slave(slave, i)
+
+                    if all_slaves_ok:
+                        self.vars.master.do_check_state = False
+                        self.wkc_vars.comm_degraded = False
+
+            time.sleep(HEALTH_CHECK_TERM)
 
     # 위치 제어 시 위치 계산 함수
     def _calc_move_pos(self, servo_id: int):

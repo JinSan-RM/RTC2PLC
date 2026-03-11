@@ -10,10 +10,10 @@ from pymodbus.client import ModbusSerialClient
 from src.utils.config_util import MODBUS_RTU_CONFIG
 from src.utils.logger import log
 
+
+# pylint: disable=broad-exception-caught, broad-exception-raised, bare-except
 class ModbusManager:
-    """
-    시리얼 통신 매니저
-    """
+    """시리얼 통신 매니저"""
     _lock = threading.Lock()
     _initialized = False
 
@@ -26,6 +26,7 @@ class ModbusManager:
             self.stop_event = threading.Event()
             self.tasks: queue.Queue[dict] = queue.Queue()
             self.client = None
+            self.slave_ids = {}
 
             self._initialized = True
 
@@ -44,12 +45,11 @@ class ModbusManager:
             self.client.connect()
 
             # 연결된 슬레이브만 딕셔너리에 넣어서 사용
-            self.slave_ids = {}
-            for name, id in self.config['slave_ids'].items():
+            for name, slave_id in self.config['slave_ids'].items():
                 try:
-                    ret = self.client.read_holding_registers(0x0001, count=1, device_id=id)
+                    ret = self.client.read_holding_registers(0x0001, count=1, device_id=slave_id)
                     if not ret.isError():
-                        self.slave_ids[name] = id
+                        self.slave_ids[name] = slave_id
                 except:
                     continue
 
@@ -58,11 +58,7 @@ class ModbusManager:
             log(f"Modbus connection error: {e}")
 
     def run(self):
-        """
-        시리얼 통신 시작
-        
-        :param self: Description
-        """
+        """시리얼 통신 시작"""
         try:
             # 시작 시 인버터들 설정 값 세팅
             for name, _ in self.slave_ids.items():

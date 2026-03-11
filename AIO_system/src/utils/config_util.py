@@ -41,14 +41,14 @@ IF_NAME = '\\Device\\NPF_{C7EBE891-A804-4047-85E5-4D0148B1D3EA}'
 
 # 통신 사이클 간격
 ETHERCAT_DELAY = 0.01
+HEALTH_CHECK_TERM = ETHERCAT_DELAY * 10  # 10 주기마다 한 번 체크
+WKC_MISS_COUNT_MAX = 5
 
 # LS산전 제조사 ID
 LS_VENDOR_ID = 30101
 
 class LSProductCode(IntEnum):
-    """
-    이더캣 슬레이브 장비 제품 코드
-    """
+    """이더캣 슬레이브 장비 제품 코드"""
     L7NH_PRODUCT_CODE = 0x00010001
     D232A_PRODUCT_CODE = 0x10010008
     TR32KA_PRODUCT_CODE = 0x10010009
@@ -158,7 +158,7 @@ INPUT_TX = [
 # 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
 # UI에서 입력 시 값 1당 1 μm 를 의미하게 됨
 ENCODER_RESOLUTION = 524288 # 인코더 해상도(1회전당 펄스)
-BALL_SCREW_LEAD = 4*3 # 볼 스크류 1회전당 이동거리(mm)
+BALL_SCREW_LEAD = 20 # 볼 스크류 1회전당 이동거리(mm)
 UNIT_RATIO = 0.01
 SCALE_FACTOR = (ENCODER_RESOLUTION / BALL_SCREW_LEAD) * UNIT_RATIO
 
@@ -166,9 +166,9 @@ def get_servo_unmodified_value(value: float) -> int:
     """
     서보로 전달할 값
     
-    :param value: Description
+    :param value: 앱 내에서 사용하는 값(μm 단위)
     :type value: float
-    :return: Description
+    :return: 서보가 사용하는 값(펄스 단위)
     :rtype: int
     """
     return int(round(value*SCALE_FACTOR))
@@ -177,17 +177,15 @@ def get_servo_modified_value(value: int | float) -> float:
     """
     UI에 출력할 값
     
-    :param value: Description
+    :param value: 서보가 사용하는 값(펄스 단위)
     :type value: int | float
-    :return: Description
+    :return: 앱 내에서 사용하는 값(μm 단위)
     :rtype: float
     """
     return value/SCALE_FACTOR
 
 class StatusMask(IntEnum):
-    """
-    서보 드라이브 상태 체크를 위한 비트 마스크
-    """
+    """서보 드라이브 상태 체크를 위한 비트 마스크"""
     STATUS_NOT_READY_TO_SWITCH_ON = 0x0000 # 초기화 중
     STATUS_SWITCH_ON_DISABLED = 0x0040 # 초기화 완료, 주전원 투입 불가
     STATUS_READY_TO_SWITCH_ON = 0x0021 # 주전원 투입 가능
@@ -198,20 +196,18 @@ class StatusMask(IntEnum):
     STATUS_FAULT = 0x0008 # 서보 알람(AL 코드) 발생
     STATUS_WARNING = 0x0080 # 경보(W 코드) 발생
 
-def check_mask(s, m):
+def check_mask(s, m) -> bool:
     """
     STATUS_MASK와 비교하여 현재 서보 드라이브 상태 체크
     
-    :param s: Description
-    :param m: Description
+    :param s: 대상 비트
+    :param m: 비교할 비트 마스크
     """
     low_bit = s & 0x00FF
     return (low_bit & m) == m
 
 class OperationMode(IntEnum):
-    """
-    서보 운전 상태
-    """
+    """서보 운전 상태"""
     SERVO_READY = 0
     SERVO_HOMING = 6
     SERVO_CSP = 8
@@ -224,9 +220,7 @@ SERVO_ACCEL = 2000
 SERVO_IN_POS_WIDTH = get_servo_modified_value(10)
 
 class InputBitMask(IntEnum):
-    """
-    입력 모듈 체크를 위한 비트 마스크
-    """
+    """입력 모듈 체크를 위한 비트 마스크"""
     MODE_SELECT = 1 << 0
     AUTO_RUN = 1 << 1
     AUTO_STOP = 1 << 2
@@ -297,8 +291,8 @@ APP_CONFIG = {
     },
 }
 
-FEEDER_TIME_1 = 20 # 피더 제품 미배출 기본 대기 시간
-FEEDER_TIME_2 = 10 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간
+FEEDER_TIME_1 = 90 # 피더 제품 미배출 기본 대기 시간(sec)
+FEEDER_TIME_2 = 5 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간(sec)
 
 LOG_PATH = Path(__file__).resolve().parent.parent.parent / "log"
 
@@ -359,8 +353,8 @@ def sync_shared_memory(dst, raw_src):
     """
     PDO 데이터를 공유 메모리에 쓰기
     
-    :param dst: Description
-    :param raw_src: Description
+    :param dst: 복사할 메모리
+    :param raw_src: 원본 데이터
     """
     src = np.frombuffer(raw_src, dtype='u1').view(dst.dtype)[0]
     for name in dst.dtype.names:
@@ -448,9 +442,7 @@ CAMERA_CONFIGS = {
 UI_PATH = Path(__file__).resolve().parent.parent / "ui"
 
 class ToggleButton(QAbstractButton):
-    """
-    UI 알약 모양 토글 버튼 구현
-    """
+    """UI 알약 모양 토글 버튼 구현"""
     def __init__(self, parent=None, width=60, height=28, on_text="ON", off_text="OFF"):
         super().__init__(parent)
         self.setCheckable(True)
@@ -460,7 +452,7 @@ class ToggleButton(QAbstractButton):
         self.off_text = off_text
 
         # 애니메이션 설정: 흰색 원의 위치를 제어
-        self._handle_position = self.width() - self.height() + 3 # 초기 위치 (왼쪽)
+        self._handle_position = self._get_end_pos() # 초기 위치 (왼쪽)
         self.animation = QPropertyAnimation(self, b"handle_position", self)
         self.animation.setDuration(100) # 이동 속도 (ms)
         self.animation.setEasingCurve(QEasingCurve.InOutSine)
@@ -473,11 +465,7 @@ class ToggleButton(QAbstractButton):
     # 애니메이션을 위한 속성(Property) 정의
     @Property(float)
     def handle_position(self):
-        """
-        토글 동그라미 위치
-        
-        :param self: Description
-        """
+        """토글 동그라미 위치"""
         return self._handle_position
 
     @handle_position.setter
@@ -488,25 +476,27 @@ class ToggleButton(QAbstractButton):
     def _get_end_pos(self):
         return 3 if self.isChecked() else self.width() - self.height() + 3
 
-    def setChecked(self, checked):
-        super().setChecked(checked)
-        self._handle_position = self._get_end_pos()
-        self.update()
-
-    def nextCheckState(self):
-        # 클릭 시 상태 전환 및 애니메이션 시작
-        super().nextCheckState()
-
+    def _start_transition(self):
         self.animation.stop()
         self.animation.setStartValue(self._handle_position)
         self.animation.setEndValue(self._get_end_pos())
         self.animation.start()
 
+    def setChecked(self, checked):
+        if self.isChecked() != checked:
+            super().setChecked(checked)
+            self._start_transition()
+
+    def nextCheckState(self):
+        # 클릭 시 상태 전환 및 애니메이션 시작
+        super().nextCheckState()
+        self._start_transition()
+
     def resizeEvent(self, event):
         self._handle_position = self._get_end_pos()
         super().resizeEvent(event)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event): # pylint: disable=unused-argument
         # 직접 위젯 그리기
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing) # 부드럽게 처리

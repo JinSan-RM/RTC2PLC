@@ -108,6 +108,8 @@ class UpdateHandler(FileSystemEventHandler):
 class App():
     """메인 앱 클래스"""
     is_reload = False
+    FEEDER_AIR_TERM = 10 # 10초마다 피더 배출부에 에어를 쏴서 막힘을 제거
+    FEEDER_AIR_DURATION = 1
 
     def __init__(self):
         # 우선적으로 설정값부터 읽어옴
@@ -122,6 +124,7 @@ class App():
         self._stop_event = threading.Event()
         self._feeder_output_time = datetime.now()
         self._current_size = 0
+        self._feeder_air_time = datetime.now()
 
         # 제품 배출 순서 제어
         self.use_air_sequence = False
@@ -168,8 +171,8 @@ class App():
     @property
     def camera_manager(self):
         """UI의 monitoring_page를 camera_manager로 참조"""
-        if hasattr(self.ui, 'monitoring_page'):
-            return self.ui.monitoring_page
+        if self.ui.pages.monitoring_page:
+            return self.ui.pages.monitoring_page
         return None
 
     def on_periodic_update(self):
@@ -194,7 +197,6 @@ class App():
 
             if current_time > check_time:
                 # 배출물 사이즈 변경
-                # TODO: 제품 감지 박스 연동, 서보 위치 이동
                 self._current_size = (cur_size + 1) % 6
 
                 for i in range(2):
@@ -208,14 +210,19 @@ class App():
 
                 self._feeder_output_time = current_time
 
+            if (current_time - self._feeder_air_time).total_seconds() > self.FEEDER_AIR_TERM:
+                # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
+                self.airknife_on(4, self.FEEDER_AIR_DURATION * 1000)
+
             time.sleep(0.033)
 
 # region inverter control
     def on_update_inverter_status(self, _data):
         """피더, 컨베이어 상태 UI 업데이트"""
-        if hasattr(self.ui, 'settings_page') and self.ui.main_stack.currentIndex() == 2:
-            tab_index = self.ui.settings_page.pages.currentIndex()
-            if tab_index == 1 or tab_index == 2:
+        if self.ui.pages.settings_page is not None and \
+            self.ui.children_widget.main_stack.currentIndex() == 2:
+            tab_index = self.ui.pages.settings_page.pages.currentIndex()
+            if tab_index in (1, 2):
                 self.ui.signals.inverter_updated.emit(_data)
 
     def on_set_freq(self, inverter_name: str, value: float):
@@ -309,8 +316,9 @@ class App():
 # region servo control
     def on_update_servo_status(self, servo_id: int, _data):
         """서보 상태 UI 업데이트"""
-        if hasattr(self.ui, 'settings_page') and self.ui.main_stack.currentIndex() == 2:
-            tab_index = self.ui.settings_page.pages.currentIndex()
+        if self.ui.pages.settings_page and \
+            self.ui.children_widget.main_stack.currentIndex() == 2:
+            tab_index = self.ui.pages.settings_page.pages.currentIndex()
             if tab_index == 0:
                 self.ui.signals.servo_updated.emit(servo_id, _data)
 
@@ -414,8 +422,9 @@ class App():
         :param total_input: 입력 모듈 bit 값
         :type total_input: int
         """
-        if hasattr(self.ui, 'logs_page') and self.ui.main_stack.currentIndex() == 3:
-            tab_index = self.ui.logs_page.pages.currentIndex()
+        if self.ui.pages.logs_page is not None and \
+            self.ui.children_widget.main_stack.currentIndex() == 3:
+            tab_index = self.ui.pages.logs_page.pages.currentIndex()
             if tab_index == 0:
                 self.ui.signals.input_updated.emit(total_input)
 
@@ -427,8 +436,9 @@ class App():
         :param total_output: 출력 모듈 bit 값
         :type total_output: int
         """
-        if hasattr(self.ui, 'logs_page') and self.ui.main_stack.currentIndex() == 3:
-            tab_index = self.ui.logs_page.pages.currentIndex()
+        if self.ui.pages.logs_page is not None and \
+            self.ui.children_widget.main_stack.currentIndex() == 3:
+            tab_index = self.ui.pages.logs_page.pages.currentIndex()
             if tab_index == 0:
                 self.ui.signals.output_updated.emit(total_output)
 
@@ -446,7 +456,7 @@ class App():
 
     def on_airknife_off(self, air_num: int):
         """에어나이프 정지 시 UI 업데이트"""
-        if hasattr(self.ui, 'settings_page'):
+        if self.ui.pages.settings_page is not None:
             self.ui.signals.airknife_updated.emit(air_num)
 
     def set_auto_mode(self, is_on: bool):
@@ -473,7 +483,7 @@ class App():
         """자동 모드 운전 정지"""
         self._stop_event.set()
 
-        if hasattr(self, '_auto_thread') and self._auto_thread.is_alive():
+        if self._auto_thread is not None and self._auto_thread.is_alive():
             log("[INFO] auto thread to terminate...")
             self._auto_thread.join(timeout=5)
             if self._auto_thread.is_alive():
