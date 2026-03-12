@@ -197,6 +197,7 @@ class BatchAIManager:
 
     #         except Exception as e:
     #             log(f"배치 추론 오류: {e}")
+    
     def _batch_inference_loop(self):
         """배치 추론 메인 루프 (TensorRT batch=1 엔진 대응)"""
         log("배치 추론 루프 실행 중.")

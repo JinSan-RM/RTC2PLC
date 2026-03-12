@@ -89,7 +89,7 @@ class BaslerCameraManager:
             width_inc = self.camera.Width.GetInc()
             height_inc = self.camera.Height.GetInc()
             
-            log(f"📏 카메라 해상도 제약:")
+            log(f"카메라 해상도 제약:")
             log(f"  Width: {min_width} ~ {max_width} (증분: {width_inc})")
             log(f"  Height: {min_height} ~ {max_height} (증분: {height_inc})")
 
@@ -117,7 +117,7 @@ class BaslerCameraManager:
                     width = self.roi.get('width', 1280)
                     height = self.roi.get('height', 1080)
                     
-                    log(f"\n🎯 요청 ROI:")
+                    log(f"\n요청 ROI:")
                     log(f"  Offset: ({offset_x}, {offset_y})")
                     log(f"  Size: {width} x {height}")
                     
@@ -200,7 +200,7 @@ class BaslerCameraManager:
                             log(f"⚠️ OffsetY 재조정: {adjusted_offset_y}")
                         
                         self.camera.OffsetY.SetValue(adjusted_offset_y)
-                        log(f"✓ OffsetY = {adjusted_offset_y}")
+                        log(f"OffsetY = {adjusted_offset_y}")
                     
                     # 최종 확인
                     final_offset_x = self.camera.OffsetX.Value if hasattr(self.camera, 'OffsetX') else 0
@@ -208,13 +208,13 @@ class BaslerCameraManager:
                     final_width = self.camera.Width.Value
                     final_height = self.camera.Height.Value
                     
-                    log(f"\n✅ 최종 ROI 설정:")
+                    log(f"\n최종 ROI 설정:")
                     log(f"  Offset: ({final_offset_x}, {final_offset_y})")
                     log(f"  Size: {final_width} x {final_height}")
                     log(f"  영역: X[{final_offset_x}~{final_offset_x+final_width}], Y[{final_offset_y}~{final_offset_y+final_height}]")
                     
                 except Exception as e:
-                    log(f"❌ ROI 설정 실패: {e}")
+                    log(f"ROI 설정 실패: {e}")
                     import traceback
                     traceback.print_exc()
                     # ROI 실패 시 기본 해상도
