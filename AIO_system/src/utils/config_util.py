@@ -371,9 +371,10 @@ def sync_shared_memory(dst, raw_src):
 @dataclass
 class ProcessCheckVars:
     """process health check 속성 모음"""
-    last_prcs_check_time: float
-    last_prcs_counter: int = 0
-    prcs_dead_count: int = 0
+    last_check_time: float
+    last_counter: int = 0
+    dead_count: int = 0
+    start_delay_count: int = 5
 
 # ============================================================
 # endregion

@@ -81,7 +81,7 @@ class EtherCATProcess(Process):
                 shm_data=np.frombuffer(shm.buf, dtype=SHM_DTYPE)[0]
             )
             self.wkc_vars = WkcVars(last_ok_time=time.monotonic())
-            self.prcs_vars = ProcessCheckVars(last_prcs_check_time=time.time())
+            self.prcs_vars = ProcessCheckVars(last_check_time=time.time())
 
             self._connect()
 
@@ -317,23 +317,29 @@ class EtherCATProcess(Process):
 
             # 정해진 시간마다 프로세스 생존 여부 체크
             cur_time = time.time()
-            if cur_time - self.prcs_vars.last_prcs_check_time >= PRCS_HTH_CHECK_TERM:
-                # 서브 프로세스의 카운터 증가
+            if cur_time - self.prcs_vars.last_check_time >= PRCS_HTH_CHECK_TERM:
+                # 현재 프로세스의 카운터 증가
                 self.vars.shm_data['hth_counter']['sub_counter'] += 1
 
-                # 메인 프로세스 카운터 체크
+                # 상대 프로세스 카운터 체크
                 cur_count = self.vars.shm_data['hth_counter']['main_counter']
-                if self.prcs_vars.last_prcs_counter == cur_count:
-                    # 카운터가 동일하다면 일단 dead_count 증가
-                    self.prcs_vars.prcs_dead_count += 1
-                    if self.prcs_vars.prcs_dead_count >= MAX_PRCS_DEAD_COUNT:
-                        log("[ERROR] main process is dead")
+                if self.prcs_vars.last_counter == cur_count:
+                    if self.prcs_vars.start_delay_count > 0:
+                        # 프로세스 시작 유예 카운트가 남았으면 유예 카운트만 감소
+                        self.prcs_vars.start_delay_count -= 1
+                    else:
+                        # 카운터가 동일하다면 dead_count 증가
+                        self.prcs_vars.dead_count += 1
+                        if self.prcs_vars.dead_count >= MAX_PRCS_DEAD_COUNT:
+                            # dead_count가 최대치에 도달하면 상대 프로세스 응답없음으로 판정
+                            log("[ERROR] main process is dead")
                 else:
-                    # 카운터가 변화했다면 카운터 값 업데이트
-                    self.prcs_vars.last_prcs_counter = cur_count
-                    self.prcs_vars.prcs_dead_count = 0
+                    # 카운터가 변화했다면 dead_count 및 유예 카운트 0 으로
+                    self.prcs_vars.dead_count = 0
+                    self.prcs_vars.start_delay_count = 0
 
-                self.prcs_vars.last_prcs_check_time = cur_time
+                self.prcs_vars.last_counter = cur_count
+                self.prcs_vars.last_check_time = cur_time
 
             time.sleep(HEALTH_CHECK_TERM)
 
