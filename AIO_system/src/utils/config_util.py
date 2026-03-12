@@ -3,6 +3,7 @@
 """
 from enum import IntEnum
 from pathlib import Path
+from dataclasses import dataclass
 import numpy as np
 
 from PySide6.QtWidgets import QAbstractButton
@@ -217,7 +218,7 @@ class OperationMode(IntEnum):
 SERVO_ACCEL = 2000
 
 # 위치 값이 10 펄스 이내로 들어오면 위치 도달로 추정
-SERVO_IN_POS_WIDTH = get_servo_modified_value(10)
+SERVO_IN_POS_WIDTH = 10
 
 class InputBitMask(IntEnum):
     """입력 모듈 체크를 위한 비트 마스크"""
@@ -294,6 +295,9 @@ APP_CONFIG = {
 FEEDER_TIME_1 = 90 # 피더 제품 미배출 기본 대기 시간(sec)
 FEEDER_TIME_2 = 5 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간(sec)
 
+PRCS_HTH_CHECK_TERM = 1
+MAX_PRCS_DEAD_COUNT = 3
+
 LOG_PATH = Path(__file__).resolve().parent.parent.parent / "log"
 
 input_pdo_struct = [
@@ -322,6 +326,10 @@ variable_pdo_struct = [
 total_input_type = ('total_input', '<u4')
 total_output_type = ('total_output', '<u4')
 prev_input_type = ('prev_input', '<u4')
+hth_check_type = [
+    ('main_counter', '<u2'),
+    ('sub_counter', '<u2')
+]
 
 SHM_NAME = "COMM_SHM"
 SHM_DTYPE = np.dtype([
@@ -346,7 +354,7 @@ SHM_DTYPE = np.dtype([
     total_input_type,
     total_output_type,
     prev_input_type,
-    ('_reserved_4', 'u4')
+    ('hth_counter', hth_check_type)
 ])
 
 def sync_shared_memory(dst, raw_src):
@@ -359,6 +367,13 @@ def sync_shared_memory(dst, raw_src):
     src = np.frombuffer(raw_src, dtype='u1').view(dst.dtype)[0]
     for name in dst.dtype.names:
         dst[name] = src[name]
+
+@dataclass
+class ProcessCheckVars:
+    """process health check 속성 모음"""
+    last_prcs_check_time: float
+    last_prcs_counter: int = 0
+    prcs_dead_count: int = 0
 
 # ============================================================
 # endregion

@@ -497,8 +497,7 @@ class EtherCATManager:
         """서보 알람 리셋"""
         try:
             self.servo_manager.set_servo_rx_pdo(servo_id, RxPdoData(ctrl=0x008F))
-            self.servo_manager.shm_data[f'servo_{servo_id}']['variables']['state'] = \
-                OperationMode.SERVO_READY
+            self._reserve_task(0.1, self.servo_shutdown, servo_id)
             log(f"[INFO] servo {servo_id} reset")
         except Exception as e:
             log(f"[ERROR] servo {servo_id} reset failed: {e}")
