@@ -26,7 +26,9 @@ from src.function.sharedmemory_manager import SharedMemoryManager
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
 from src.utils.config_util import (
-    CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH, SHM_NAME
+    CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH, SHM_NAME,
+    PRCS_HTH_CHECK_TERM, MAX_PRCS_DEAD_COUNT,
+    ProcessCheckVars
 )
 from src.utils.logger import log
 
@@ -116,6 +118,9 @@ class App():
         self.config = {}
         self._load_config()
 
+        self.shm_data = SharedMemoryManager(mem_name=SHM_NAME).data
+        self.prcs_vars = ProcessCheckVars(last_check_time=time.time())
+
         # 자동 운전 관련
         self.auto_mode = False
         self.auto_run = False
@@ -178,10 +183,38 @@ class App():
     def on_periodic_update(self):
         """주기적 업데이트"""
         self.ui.update_time()
+        self._check_sub_process()
 
     # def on_update_monitor(self, _list):
     #     if hasattr(self.ui, 'monitoring_page'):
     #         self.ui.monitoring_page.update_values(_list)
+
+    def _check_sub_process(self):
+        # 정해진 시간마다 프로세스 생존 여부 체크
+        cur_time = time.time()
+        if cur_time - self.prcs_vars.last_check_time >= PRCS_HTH_CHECK_TERM:
+            # 현재 프로세스의 카운터 증가
+            self.shm_data['hth_counter']['main_counter'] += 1
+
+            # 상대 프로세스 카운터 체크
+            cur_count = self.shm_data['hth_counter']['sub_counter']
+            if self.prcs_vars.last_counter == cur_count:
+                if self.prcs_vars.start_delay_count > 0:
+                    # 프로세스 시작 유예 카운트가 남았으면 유예 카운트만 감소
+                    self.prcs_vars.start_delay_count -= 1
+                else:
+                    # 카운터가 동일하다면 dead_count 증가
+                    self.prcs_vars.dead_count += 1
+                    if self.prcs_vars.dead_count >= MAX_PRCS_DEAD_COUNT:
+                        # dead_count가 최대치에 도달하면 상대 프로세스 응답없음으로 판정
+                        log("[ERROR] EtherCAT sub process is dead")
+            else:
+                # 카운터가 변화했다면 dead_count 및 유예 카운트 0 으로
+                self.prcs_vars.dead_count = 0
+                self.prcs_vars.start_delay_count = 0
+
+            self.prcs_vars.last_counter = cur_count
+            self.prcs_vars.last_check_time = cur_time
 
     def _auto_loop(self):
         if not self.auto_mode or not self.auto_run:
@@ -213,6 +246,7 @@ class App():
             if (current_time - self._feeder_air_time).total_seconds() > self.FEEDER_AIR_TERM:
                 # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
                 self.airknife_on(4, self.FEEDER_AIR_DURATION * 1000)
+                self._feeder_air_time = current_time
 
             time.sleep(0.033)
 
@@ -653,6 +687,10 @@ class App():
 
         self.modbus_manager.disconnect()
         self.ethercat_manager.disconnect()
+
+        self.update_timer.stop()
+        if hasattr(self, 'shm_data'):
+            del self.shm_data
 
 
 if __name__ == '__main__':

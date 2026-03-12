@@ -14,12 +14,13 @@ import numpy as np
 import pysoem
 
 from src.utils.config_util import (
-    IF_NAME, ETHERCAT_DELAY, HEALTH_CHECK_TERM, WKC_MISS_COUNT_MAX, LS_VENDOR_ID,
+    IF_NAME, ETHERCAT_DELAY, LS_VENDOR_ID,
+    PRCS_HTH_CHECK_TERM, MAX_PRCS_DEAD_COUNT, HEALTH_CHECK_TERM, WKC_MISS_COUNT_MAX,
     EC_RX_INDEX, EC_TX_INDEX, SERVO_RX_MAP, SERVO_TX_MAP, SERVO_RX, SERVO_TX,
     OUTPUT_RX_MAP, INPUT_TX_MAP, OUTPUT_RX, INPUT_TX,
     SERVO_ACCEL, SERVO_IN_POS_WIDTH, SHM_NAME, SHM_DTYPE,
-    LSProductCode, StatusMask,  OperationMode,
-    get_servo_unmodified_value, get_servo_modified_value, check_mask, sync_shared_memory
+    LSProductCode, StatusMask,  OperationMode, ProcessCheckVars,
+    get_servo_unmodified_value, check_mask, sync_shared_memory
 )
 from src.utils.logger import log
 
@@ -45,7 +46,7 @@ class ProcessVars:
 
 @dataclass
 class WkcVars:
-    """working counter 관리 속성 모음"""
+    """slave health check 속성 모음"""
     last_ok_time: float
     miss_count: int = 0
     recover_count: int = 0
@@ -65,8 +66,9 @@ class EtherCATProcess(Process):
 
             self.recv = 0
             self.vars = None
+            self.wkc_vars = None
+            self.prcs_vars = None
             self.stop_event: synchronize.Event = mp.Event()
-            self.wkc_vars = WkcVars(last_ok_time=time.monotonic())
 
             self._initialized = True
 
@@ -78,6 +80,8 @@ class EtherCATProcess(Process):
                 shm=shm,
                 shm_data=np.frombuffer(shm.buf, dtype=SHM_DTYPE)[0]
             )
+            self.wkc_vars = WkcVars(last_ok_time=time.monotonic())
+            self.prcs_vars = ProcessCheckVars(last_check_time=time.time())
 
             self._connect()
 
@@ -90,7 +94,7 @@ class EtherCATProcess(Process):
                 if self.vars.master.state == pysoem.OP_STATE:
                     break
 
-            self.vars.check_thread = threading.Thread(target=self._check_slave_loop, daemon=True)
+            self.vars.check_thread = threading.Thread(target=self._health_check_loop, daemon=True)
             self.vars.check_thread.start()
 
             # send - receive 합을 맞추기 위해 먼저 1회 보냄
@@ -294,8 +298,8 @@ class EtherCATProcess(Process):
                 slave.is_lost = False
                 log(f"MESSAGE : slave {pos} found")
 
-    # 슬레이브 상태 체크 스레드
-    def _check_slave_loop(self):
+    # health check 스레드
+    def _health_check_loop(self):
         while not self.stop_event.is_set():
             if self.vars.master.in_op:
                 if self.vars.master.do_check_state:
@@ -310,6 +314,32 @@ class EtherCATProcess(Process):
                     if all_slaves_ok:
                         self.vars.master.do_check_state = False
                         self.wkc_vars.comm_degraded = False
+
+            # 정해진 시간마다 프로세스 생존 여부 체크
+            cur_time = time.time()
+            if cur_time - self.prcs_vars.last_check_time >= PRCS_HTH_CHECK_TERM:
+                # 현재 프로세스의 카운터 증가
+                self.vars.shm_data['hth_counter']['sub_counter'] += 1
+
+                # 상대 프로세스 카운터 체크
+                cur_count = self.vars.shm_data['hth_counter']['main_counter']
+                if self.prcs_vars.last_counter == cur_count:
+                    if self.prcs_vars.start_delay_count > 0:
+                        # 프로세스 시작 유예 카운트가 남았으면 유예 카운트만 감소
+                        self.prcs_vars.start_delay_count -= 1
+                    else:
+                        # 카운터가 동일하다면 dead_count 증가
+                        self.prcs_vars.dead_count += 1
+                        if self.prcs_vars.dead_count >= MAX_PRCS_DEAD_COUNT:
+                            # dead_count가 최대치에 도달하면 상대 프로세스 응답없음으로 판정
+                            log("[ERROR] main process is dead")
+                else:
+                    # 카운터가 변화했다면 dead_count 및 유예 카운트 0 으로
+                    self.prcs_vars.dead_count = 0
+                    self.prcs_vars.start_delay_count = 0
+
+                self.prcs_vars.last_counter = cur_count
+                self.prcs_vars.last_check_time = cur_time
 
             time.sleep(HEALTH_CHECK_TERM)
 
@@ -370,12 +400,13 @@ class EtherCATProcess(Process):
     def _homing_check(self, servo_id: int):
         cur_state = self.vars.shm_data[f'servo_{servo_id}']['input_pdo']['status_word']
         cur_pos = self.vars.shm_data[f'servo_{servo_id}']['input_pdo']['actual_position']
-        cur_pos = int(round(get_servo_modified_value(cur_pos)))
 
         homing_mask = 0x1400 # 12번과 10번 비트가 1인 경우 원점 복귀 완료
         if (cur_state & homing_mask) == homing_mask and abs(cur_pos) < SERVO_IN_POS_WIDTH:
             self.vars.shm_data[f'servo_{servo_id}']['variables']['state'] = \
                 OperationMode.SERVO_READY
+            self.vars.shm_data[f'servo_{servo_id}']['output_pdo']['target_position'] = \
+                cur_pos
             log(f"[INFO] servo {servo_id} homing completed")
 
     def _servo_state_check(self, servo_id: int):
