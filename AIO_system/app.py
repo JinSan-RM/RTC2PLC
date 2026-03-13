@@ -7,6 +7,7 @@ import time
 # import importlib
 from pathlib import Path
 from datetime import datetime
+from itertools import cycle
 
 import faulthandler
 import atexit
@@ -104,6 +105,13 @@ class App():
 
     def __init__(self):
         self.qt_app = QApplication(sys.argv)
+        self.config = self._build_default_config()
+        self.use_air_sequence = False
+        self.air_index_iter = None
+        self.auto_mode = False
+        self.auto_run = False
+        self.monitoring_enabled = True
+        self.set_air_sequence_index()
 
         font_files = [
             "fonts/Poppins-Bold.ttf",
@@ -149,6 +157,37 @@ class App():
         """주기적 업데이트"""
         self.ui.update_time()
 
+    def _build_default_config(self):
+        inverter_config = {f"inverter_00{i}": [0.0, 1.0, 1.0] for i in range(1, 7)}
+        base_positions = [[0.0, 0.0] for _ in range(6)]
+        airknife_config = {
+            f"airknife_{i}": {"timing": 0, "duration": 100}
+            for i in range(1, 4)
+        }
+
+        return {
+            "air_sequence": [],
+            "inverter_config": inverter_config,
+            "servo_config": {
+                "servo_0": {
+                    "position": [pos[:] for pos in base_positions],
+                    "jog_speed": 0.0,
+                    "inch_distance": 0.0,
+                },
+                "servo_1": {
+                    "position": [pos[:] for pos in base_positions],
+                    "jog_speed": 0.0,
+                    "inch_distance": 0.0,
+                },
+            },
+            "airknife_config": airknife_config,
+        }
+
+    def set_air_sequence_index(self):
+        """배출 순서 iterator 갱신"""
+        seq = self.config.get("air_sequence", [])
+        self.air_index_iter = cycle(seq) if seq else None
+
     def on_btn_clicked(self, pixel_format):
         """픽셀 형식 버튼 클릭"""
         self.comm_manager.change_pixel_format(pixel_format)
@@ -160,10 +199,127 @@ class App():
     def on_pixel_line_data(self, info):
         """데이터를 UI로 전달 (메인 스레드에서 처리)"""
         self.ui.signals.hypercam_updated.emit(info)
+        
+    def on_obj_detected(self, info, classification):
+        self.ui.signals.obj_detected.emit(info, classification)
+        
+    def on_legend_info(self, legend_info_list):
+        self.ui.signals.legend_updated.emit(legend_info_list)
 
-    def on_obj_detected(self, info):
-        """제품 감지 시 호출"""
-        self.ui.img_data.overlay_info.append(info)
+    def _update_inverter_config(self, inverter_name: str, index: int, value: float):
+        conf = self.config.setdefault("inverter_config", {}).setdefault(
+            inverter_name, [0.0, 1.0, 1.0]
+        )
+        while len(conf) < 3:
+            conf.append(0.0)
+        conf[index] = float(value)
+
+    def on_set_freq(self, inverter_name: str, freq: float):
+        self._update_inverter_config(inverter_name, 0, freq)
+
+    def on_set_acc(self, inverter_name: str, acc: float):
+        self._update_inverter_config(inverter_name, 1, acc)
+
+    def on_set_dec(self, inverter_name: str, dec: float):
+        self._update_inverter_config(inverter_name, 2, dec)
+
+    def motor_start(self, inverter_name: str):
+        log(f"{inverter_name} start 요청")
+
+    def motor_stop(self, inverter_name: str):
+        log(f"{inverter_name} stop 요청")
+
+    def airknife_on(self, air_num: int, on_term: int):
+        log(f"airknife on 요청: no={air_num}, duration={on_term}ms")
+
+    def on_airknife_off(self, air_num: int):
+        log(f"airknife off: no={air_num}")
+        self.ui.signals.airknife_updated.emit(air_num)
+
+    def servo_on(self, servo_id: int):
+        log(f"servo {servo_id} on 요청")
+
+    def servo_off(self, servo_id: int):
+        log(f"servo {servo_id} off 요청")
+
+    def servo_reset(self, servo_id: int):
+        log(f"servo {servo_id} reset 요청")
+
+    def servo_stop(self, servo_id: int):
+        log(f"servo {servo_id} stop 요청")
+
+    def servo_homing(self, servo_id: int):
+        log(f"servo {servo_id} homing 요청")
+
+    def servo_move_to_position(self, servo_id: int, pos: float, vel: float):
+        log(f"servo {servo_id} move abs 요청: pos={pos}, vel={vel}")
+
+    def servo_jog_move(self, servo_id: int, vel: float):
+        log(f"servo {servo_id} jog 요청: vel={vel}")
+
+    def servo_inch_move(self, servo_id: int, dist: float):
+        log(f"servo {servo_id} inch 요청: dist={dist}")
+
+    def on_auto_start(self):
+        self.auto_mode = True
+        self.auto_run = True
+        log("auto start")
+
+    def on_auto_stop(self):
+        self.auto_run = False
+        log("auto stop")
+
+    def set_auto_mode(self, onoff: bool):
+        self.auto_mode = bool(onoff)
+        if not self.auto_mode:
+            self.auto_run = False
+        log(f"auto mode: {self.auto_mode}")
+
+    def auto_mode_run(self):
+        self.auto_mode = True
+        self.auto_run = True
+        log("auto mode run")
+
+    def auto_mode_stop(self):
+        self.auto_run = False
+        log("auto mode stop")
+
+    def emergency_stop(self):
+        self.auto_run = False
+        log("emergency stop")
+
+    def reset_alarm(self):
+        log("alarm reset")
+
+    def all_servo_homing(self):
+        log("all servo homing 요청")
+
+    def feeder_output(self):
+        log("feeder output 요청")
+
+    def hopper_empty(self):
+        log("hopper empty 감지")
+
+    def hopper_full(self):
+        log("hopper full 감지")
+
+    def on_update_servo_status(self, servo_id: int, data):
+        self.ui.signals.servo_updated.emit(servo_id, data)
+
+    def on_update_inverter_status(self, values):
+        self.ui.signals.inverter_updated.emit(values)
+
+    def on_update_input_status(self, value: int):
+        self.ui.signals.input_updated.emit(value)
+
+    def on_update_output_status(self, value: int):
+        self.ui.signals.output_updated.emit(value)
+
+    def on_log(self, message: str, level: str = "info"):
+        self.ui.signals.log_updated.emit(message, level)
+
+    def on_on_log(self, message: str):
+        self.on_log(message)
 
     def reload_ui(self, module_name: str):
         """UI 리로드"""

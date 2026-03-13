@@ -34,7 +34,7 @@ class Threads:
     cleanup_thread: threading.Thread = None
     event_listener_thread: threading.Thread = None
     data_stream_listener_thread: threading.Thread = None
-    stop_event: threading.Event = threading.Event()
+    stop_event: threading.Event = field(default_factory=threading.Event)
     check_time: float = 0
 
 
@@ -43,10 +43,10 @@ class QueueAndLock:
     """큐와 락 모음"""
     # USE_MIN_INTERVAL = True일 때 사용할 부분
     timestamp_queue: deque = None
-    timestamp_lock = threading.Lock()
+    timestamp_lock: threading.Lock = field(default_factory=threading.Lock)
     # 분석 완료 대기 큐
     analysis_queue: deque = None
-    queue_lock = threading.Lock()
+    queue_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 @dataclass
@@ -54,7 +54,7 @@ class Trackings:
     """제품 트래킹 관리"""
     tracked_objects: dict = field(default_factory=dict)
     obj_counter: int = 0
-    tracking_lock = threading.Lock()
+    tracking_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 @dataclass
@@ -307,7 +307,7 @@ class CommManager(threading.Thread):
                 message_buffer += decoded_data
 
                 # 메시지 버퍼 처리
-                self._process_event_buffer(message_buffer)
+                message_buffer = self._process_event_buffer(message_buffer)
 
             except socket.timeout:
                 pass
@@ -324,9 +324,15 @@ class CommManager(threading.Thread):
                 event = message_json.get('Event', '')
                 inner_message = json.loads(message_json.get('Message', '{}'))
 
+                if not getattr(self.app, "monitoring_enabled", True):
+                    continue
+
                 if event == "PredictionObject":
                     descriptors = inner_message.get('Descriptors', [])
-                    descriptor_value = int(descriptors[0]) if descriptors else 0
+                    try:
+                        descriptor_value = int(descriptors[0]) if descriptors else 0
+                    except (TypeError, ValueError, IndexError):
+                        descriptor_value = 0
                     classification = CLASS_MAPPING.get(descriptor_value, "Unknown")
 
                     shape = inner_message.get('Shape', {})
@@ -382,6 +388,9 @@ class CommManager(threading.Thread):
                         }
 
                     border = shape.get("Border", [])
+                    if not border:
+                        log("[WARNING] No border coordinates in shape data")
+                        continue
                     x0, x1, y0, y1 = get_border_coords(border)
                     start_frame = inner_message.get("StartLine", 0)
                     end_frame = inner_message.get("EndLine", 0)
@@ -412,6 +421,7 @@ class CommManager(threading.Thread):
             except Exception as e:
                 log(f"[ERROR] Error processing event: {str(e)}")
                 traceback.print_exc()
+        return message_buffer
 # endregion
 
 # region data stream listener
@@ -430,7 +440,8 @@ class CommManager(threading.Thread):
 
         expected_header_size = 25
         last_processed_time = 0
-        throttle_interval = 1.0
+        # UI 스트리밍은 약 30fps로 제한
+        throttle_interval = 1.0 / 30.0
 
         while not self.threads.stop_event.is_set():
             self.comm_sockets.stream_socket.settimeout(1)
@@ -446,7 +457,11 @@ class CommManager(threading.Thread):
                     log("[WARNING] Incomplete header received")
                     continue
 
-                stream_type = STREAM_TYPE[header[0]]
+                stream_type_idx = header[0]
+                if stream_type_idx >= len(STREAM_TYPE):
+                    log(f"[WARNING] Unknown stream type index: {stream_type_idx}")
+                    continue
+                stream_type = STREAM_TYPE[stream_type_idx]
                 if not stream_type or stream_type == "None":
                     continue
 
@@ -477,18 +492,22 @@ class CommManager(threading.Thread):
                 #         data_body : {data_body}""")
                 # print(f"stream_type: {stream_type}\ndata_body; {data_body}")
                 # 완전한 데이터를 받은 후에 한 번만 호출
-                if len(data_body) == data_body_size:
-                    info = {
-                        "frame_number": frame_number,
-                        "data_body": data_body
-                    }
-                    self.app.on_pixel_line_data(info)
+                if len(data_body) != data_body_size:
+                    continue
 
                 current_time = time.time()
-                if current_time - last_processed_time >= throttle_interval:
-                    last_processed_time = current_time
-                else:
-                    log(f"Skipping frame {frame_number} due to throttle limit")
+                if current_time - last_processed_time < throttle_interval:
+                    continue
+                last_processed_time = current_time
+
+                if not getattr(self.app, "monitoring_enabled", True):
+                    continue
+
+                info = {
+                    "frame_number": frame_number,
+                    "data_body": data_body
+                }
+                self.app.on_pixel_line_data(info)
 
             except socket.timeout:
                 continue
@@ -578,9 +597,14 @@ class CommManager(threading.Thread):
                 )
                 log(f"workflow: {workflow_json}")
                 workflow_info = json.loads(workflow_json)
-                obj_format = workflow_info.get("ObjectFormat", '')
-                desc_info = obj_format.get("Descriptors", [])[0]
-                legend_info_list = desc_info.get("Classes", [])
+                obj_format = workflow_info.get("ObjectFormat", {}) or {}
+                descriptors = obj_format.get("Descriptors", []) \
+                    if isinstance(obj_format, dict) else []
+                desc_info = descriptors[0] if descriptors else {}
+                legend_info_list = desc_info.get("Classes", []) \
+                    if isinstance(desc_info, dict) else []
+                if not legend_info_list:
+                    log("[WARNING] No legend class info in workflow")
                 self.app.on_legend_info(legend_info_list)
 
                 # log("Visualization Variable setting")

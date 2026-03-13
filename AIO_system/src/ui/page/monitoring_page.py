@@ -1,4 +1,4 @@
-"""
+﻿"""
 모니터링 페이지 - 카메라 스트림
 """
 import traceback
@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
 from PySide6.QtGui import QPixmap, QImage, QRegularExpressionValidator, QPen, QColor
 
-from PIL import Image, ImageTk
+# from PIL import Image, ImageTk
 
 # from src.AI.predict_AI import AIPlasticDetectionSystem
 # from src.AI.cam.camera_thread_old import CameraThread
@@ -36,6 +36,7 @@ class HyperSpectralWidget:
     """초분광 관련 PySide 위젯"""
     view: QGraphicsView = None
     img_item: QGraphicsPixmapItem = None
+    scene: QGraphicsScene = None
 
 
 @dataclass
@@ -47,6 +48,7 @@ class HyperSpectralData:
     last_update_time: float = 0.0
     update_interval: float = 0.0
     overlay_items: list = None
+    overlay_info: deque = None
 
 
 class CameraView(QFrame):
@@ -59,6 +61,15 @@ class CameraView(QFrame):
         self.camera_index = camera_index
         self.ai_manager = ai_manager
         self.is_hyperspectral = is_hyperspectral
+        if self.is_hyperspectral:
+            self.img_data = HyperSpectralData(max_lines=MAX_IMG_LINES)
+            self.img_data.line_buffer = deque(maxlen=self.img_data.max_lines)
+            self.img_data.overlay_info = deque(maxlen=self.img_data.max_lines * 10)
+            self.img_data.overlay_items = []
+            self.img_data.update_interval = 0.033
+        else:
+            self.img_data = None
+        self.image_label = None
         self.detector = None
         self.detector_frame_generator = None
         self.timer = QTimer()
@@ -144,29 +155,16 @@ class CameraView(QFrame):
             scroll_area.setWidget(self.image_label)
             layout.addWidget(scroll_area)
         else:
-            # Hyperspectral 카메라는 기존 방식 유지
-            self.image_label = QGraphicsScene(0, 0, 640, 480)
-            self.image_label.setObjectName("camera_frame")
-            self.image_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-            self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            self.image_label.setText("📷 카메라 대기 중...")
-            self.image_label.setStyleSheet(
-                """
-                background-color: #FAFAFA;
-                color: #B9B9B9;
-                font-size: 14px;
-                font-weight: medium;
-                border: 1px solid #E2E2E2;
-                border-radius: 7px;
-                """
-            )
-
             self.hyper_widget = HyperSpectralWidget()
-            self.hyper_widget.view = QGraphicsView(self.image_label)
+            self.hyper_widget.scene = QGraphicsScene(0, 0, 640, 480, self)
             self.hyper_widget.img_item = QGraphicsPixmapItem()
-            self.image_label.addItem(self.hyper_widget.img_item)
+            self.hyper_widget.scene.addItem(self.hyper_widget.img_item)
 
-            layout.addWidget(self.image_label)
+            self.hyper_widget.view = QGraphicsView(self.hyper_widget.scene, self)
+            self.hyper_widget.view.setObjectName("camera_frame")
+            self.hyper_widget.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+            self.hyper_widget.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            layout.addWidget(self.hyper_widget.view)
 
         # 하단 정보
         info_layout = QHBoxLayout()
@@ -210,19 +208,23 @@ class CameraView(QFrame):
         try:
             log(f"{self.camera_name} 시작 (인덱스: {self.camera_index})")
 
+            # 하이퍼스펙트럴은 CommManager 스트림으로만 수신한다.
+            if self.is_hyperspectral:
+                self.is_running = True
+                self.update_status(True)
+                log(f"{self.camera_name} 시작 완료 (CommManager 수신 대기)")
+                return
+
             # CameraThread 생성
             self.camera_thread = CameraThread(
                 camera_index=self.camera_index,
                 airknife_callback=self.app.airknife_on,
                 app=self.app,
-                ai_manager = self.ai_manager
+                ai_manager = self.ai_manager,
             )
 
             # 시그널 연결
-            if not self.is_hyperspectral:
-                self.camera_thread.frame_ready.connect(self.update_frame)
-            else:
-                self.camera_thread.frame_ready.connect(self.process_hyperspectral_line)
+            self.camera_thread.frame_ready.connect(self.update_frame)
             self.camera_thread.error_occurred.connect(self.on_error)
 
             # 스레드 시작
@@ -254,11 +256,23 @@ class CameraView(QFrame):
                     log(f"{self.camera_name} 강제 종료")
                     self.camera_thread.terminate()
                     self.camera_thread.wait(1000)
+                    
+            if self.is_hyperspectral:
+                if self.hyper_widget and self.hyper_widget.img_item:
+                    self.hyper_widget.img_item.setPixmap(QPixmap())
+                if self.img_data:
+                    for item in self.img_data.overlay_items:
+                        if self.hyper_widget and self.hyper_widget.scene:
+                            self.hyper_widget.scene.removeItem(item)
+                    self.img_data.overlay_items.clear()
+                    self.img_data.overlay_info.clear()
+                    self.img_data.line_buffer.clear()
+            else:
+                self.image_label.setText("📷 카메라 대기 중...")
+                self.image_label.setPixmap(QPixmap())
 
             self.is_running = False
             self.update_status(False)
-            self.image_label.setText("📷 카메라 대기 중...")
-            self.image_label.setPixmap(QPixmap())
             log(f"{self.camera_name} 정지 완료")
 
         except Exception as e:
@@ -291,12 +305,13 @@ class CameraView(QFrame):
                 )
                 self.image_label.setPixmap(scaled_pixmap)
             else:
-                scaled_pixmap = pixmap.scaled(
-                    self.image_label.size(),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
-                self.image_label.setPixmap(scaled_pixmap)
+                if self.hyper_widget and self.hyper_widget.img_item and self.hyper_widget.view:
+                    scaled_pixmap = pixmap.scaled(
+                        self.hyper_widget.view.viewport().size(),
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                    self.hyper_widget.img_item.setPixmap(scaled_pixmap)
 
             if self.camera_thread:
                 fps = self.camera_thread.current_fps
@@ -317,13 +332,19 @@ class CameraView(QFrame):
     def on_error(self, error_msg):
         """에러 처리"""
         log(f"{self.camera_name} 오류: {error_msg}")
-        self.image_label.setText(f"오류:\n{error_msg}")
+        if self.is_hyperspectral:
+            if self.hyper_widget and self.hyper_widget.img_item:
+                self.hyper_widget.img_item.setPixmap(QPixmap())
+        else:
+            self.image_label.setText(f"오류:\n{error_msg}")
         self.is_running = False
         self.update_status(False)
 
     def process_hyperspectral_line(self, info):
         """라인 데이터 처리"""
         # pixel_format = self.format_var.get()
+        if self.img_data is None:
+            return
         line_data = info["data_body"]
 
         try:
@@ -336,7 +357,7 @@ class CameraView(QFrame):
                 # 이 줄만 쓰면 픽셀 변환 그대로
                 line_rgb = np.stack([line_array, line_array, line_array], axis=1)
             elif len(line_array) == 640*3:
-                # RGB 640*3픽셀
+            # RGB 640*3픽셀
                 line_rgb = line_array.reshape(640, 3)
             else:
                 log(f"⚠️ 잘못된 라인 크기: {len(line_array)} (예상: 640 또는 1920)")
@@ -387,22 +408,26 @@ class CameraView(QFrame):
             # QImage로 변환
             h, w, ch = img_data.shape
             bytes_per_line = 3 * w
-            q_img = QImage(img_data.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            q_img = QImage(
+                img_data.data,
+                w,
+                h,
+                bytes_per_line,
+                QImage.Format_RGB888
+            ).copy()
+            pixmap = QPixmap.fromImage(q_img)
 
-            # 크기 조정
-            img = img.resize((640, 480), Image.NEAREST) # pylint: disable=no-member
-
-            photo = ImageTk.PhotoImage(img)
-
-            # Canvas 업데이트
-            if self.img_data.canvas_image_id is None:
-                self.img_data.canvas_image_id = self.children_widget.canvas.create_image(
-                    0, 0, anchor=tk.NW, image=photo
+            if isinstance(self.image_label, QLabel):
+                # QLabel 기반 렌더 경로
+                scaled = pixmap.scaled(
+                    self.image_label.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.FastTransformation
                 )
-            else:
-                self.children_widget.canvas.itemconfig(self.img_data.canvas_image_id, image=photo)
-
-            self.children_widget.canvas.image = photo  # 참조 유지
+                self.image_label.setPixmap(scaled)
+            elif getattr(self, "hyper_widget", None) and self.hyper_widget.img_item is not None:
+                # QGraphicsScene 기반 렌더 경로
+                self.hyper_widget.img_item.setPixmap(pixmap)
 
         except Exception as e:
             log(f"이미지 업데이트 오류: {str(e)}")
@@ -410,28 +435,48 @@ class CameraView(QFrame):
 
     def update_hyperspectral_overlay(self):
         """물체 감지 오버레이"""
+        # 현재 화면 범위를 벗어난 오래된 오버레이 정보 정리
+        while self.img_data.overlay_info:
+            oldest = self.img_data.overlay_info[0]
+            end_frame = oldest.get("end_frame", 0)
+            if self.img_data.current_line - end_frame > self.img_data.max_lines:
+                self.img_data.overlay_info.popleft()
+            else:
+                break
+
         # 1. 기존 오버레이 삭제 (간단한 구현을 위해 일단 모두 제거)
-        for item in self.img_data.overlay_info:
-            self.scene.removeItem(item)
-        self.overlay_items.clear()
+        for item in self.img_data.overlay_items:
+            self.hyper_widget.scene.removeItem(item)
+        self.img_data.overlay_items.clear()
 
         # 점선 펜 설정
         pen = QPen(QColor("white"), 2)
         pen.setStyle(Qt.DashLine)
 
         for info in self.img_data.overlay_info:
-            if self.img_data.current_line < info["start_frame"]:
+            start_frame = info.get("start_frame")
+            end_frame = info.get("end_frame")
+            x0 = info.get("x0")
+            x1 = info.get("x1")
+            if start_frame is None or end_frame is None or x0 is None or x1 is None:
                 continue
 
-            y0 = self.img_data.max_lines - (self.img_data.current_line - info["start_frame"])
-            height = (info["end_frame"] - info["start_frame"] + 1)
+            if self.img_data.current_line < start_frame:
+                continue
+
+            y0 = self.img_data.max_lines - (self.img_data.current_line - start_frame)
+            height = (end_frame - start_frame + 1)
+            if height <= 0:
+                continue
+            if y0 > self.img_data.max_lines or y0 + height < 0:
+                continue
 
             # 2. RectItem 생성 및 추가
-            rect_item = QGraphicsRectItem(info["x0"], y0, info["x1"] - info["x0"], height)
+            rect_item = QGraphicsRectItem(x0, y0, x1 - x0, height)
             rect_item.setPen(pen)
 
-            self.scene.addItem(rect_item)
-            self.overlay_items.append(rect_item)
+            self.hyper_widget.scene.addItem(rect_item)
+            self.img_data.overlay_items.append(rect_item)
 
 
 class MonitoringPage(QWidget):
@@ -455,20 +500,7 @@ class MonitoringPage(QWidget):
         else:
             log("BatchAIManager 초기화 완료!")
 
-        # 이미지 버퍼를 deque로 변경 (FIFO)
-        self.hyper_data = HyperSpectralData(max_lines=MAX_IMG_LINES) # 화면에 표시할 라인 수
-        self.hyper_data.line_buffer = deque(maxlen=self.img_data.max_lines)  # 자동으로 오래된 라인 제거
-
-        self.hyper_widget = HyperSpectralWidget()
-        self.hyper_widget.scene = QGraphicsScene(0, 0, )
-
-        # 물체 감지 overlay
-        self.img_data.overlay_info = deque()
-
         self._init_ui()
-
-        self.plastic_counts = {}             # 플라스틱 종류별 카운트 라벨
-        self.total_count = QLabel()          # 총 처리량 라벨
 
     def _init_ui(self):
         """UI 초기화"""
@@ -689,6 +721,7 @@ class MonitoringPage(QWidget):
             camera_index=0,
             app=self.app,
             ai_manager=None,
+            is_hyperspectral=True
         )
         self.hyper_camera.setMinimumSize(600, 400)
         camera_layout.addWidget(self.hyper_camera)
@@ -799,22 +832,39 @@ class MonitoringPage(QWidget):
     def on_start_all(self):
         """전체 시작"""
         log("모든 카메라 시작")
+        self.app.monitoring_enabled = True
+
         if self.ai_manager:
             self.ai_manager.start()
-
+            
         for camera in self.rgb_cameras:
             camera.start_camera()
 
+        if self.hyper_camera:
+            self.hyper_camera.start_camera()
+                
     def on_stop_all(self):
         """전체 정지"""
         log("모든 카메라 정지")
+        self.app.monitoring_enabled = False
         if self.ai_manager:
             self.ai_manager.stop()
 
         for camera in self.rgb_cameras:
             camera.stop_camera()
-        # if self.hyper_camera:
-        #     self.hyper_camera.stop_camera
+            
+        if self.hyper_camera:
+            self.hyper_camera.stop_camera()
+            
+    def on_hypercam_updated(self, info):
+        if self.hyper_camera and self.hyper_camera.is_running:
+            self.hyper_camera.process_hyperspectral_line(info)
+
+    def on_object_detected(self, info, classification):
+        if self.hyper_camera and self.hyper_camera.is_running and self.hyper_camera.img_data:
+            payload = dict(info)
+            payload["classification"] = classification
+            self.hyper_camera.img_data.overlay_info.append(payload)
 
     # def update_cameras(self):
     #     """카메라 프레임 업데이트"""
@@ -867,6 +917,9 @@ class MonitoringPage(QWidget):
         self.toggle_btn.setText(state)
         self.app.use_air_sequence = onoff
         log(f"배출 제어 순서 {state}")
+        
+    def on_legend_info(self, legend_info_list):
+        self.legend_info_list = legend_info_list
 
     def update_values(self, values):
         """모니터링 값 업데이트"""

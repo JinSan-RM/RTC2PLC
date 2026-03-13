@@ -50,6 +50,10 @@ class UpdateSignals(QObject):
     airknife_updated: Signal = Signal(int)
     input_updated: Signal = Signal(int)
     output_updated: Signal = Signal(int)
+    hypercam_updated = Signal(object)
+    obj_detected = Signal(object, str)
+    legend_updated = Signal(object)
+
 
 
 class MainWindow(QMainWindow):
@@ -66,12 +70,15 @@ class MainWindow(QMainWindow):
         self.signals = UpdateSignals()
 
         self.signals.log_updated.connect(self.pages.logs_page.add_log)
-        # self.signals.servo_updated.connect(self.pages.settings_page.servo_tab.update_values)
-        # self.signals.inverter_updated.connect(self.pages.settings_page.feeder_tab.update_values)
-        # self.signals.inverter_updated.connect(self.pages.settings_page.conveyor_tab.update_values)
-        # self.signals.airknife_updated.connect(self.pages.settings_page.airknife_tab.on_airknife_off)
-        # self.signals.input_updated.connect(self.pages.logs_page.io_tab.update_input_status)
-        # self.signals.output_updated.connect(self.pages.logs_page.io_tab.update_output_status)
+        self.signals.hypercam_updated.connect(self.pages.monitoring_page.on_hypercam_updated)
+        self.signals.obj_detected.connect(self.pages.monitoring_page.on_object_detected)
+        self.signals.legend_updated.connect(self.pages.monitoring_page.on_legend_info)
+        self.signals.servo_updated.connect(self.pages.settings_page.servo_tab.update_values)
+        self.signals.inverter_updated.connect(self.pages.settings_page.feeder_tab.update_values)
+        self.signals.inverter_updated.connect(self.pages.settings_page.conveyor_tab.update_values)
+        self.signals.airknife_updated.connect(self.pages.settings_page.airknife_tab.on_airknife_off)
+        self.signals.input_updated.connect(self.pages.logs_page.io_tab.update_input_status)
+        self.signals.output_updated.connect(self.pages.logs_page.io_tab.update_output_status)
 
         Logger.set_callback(self.add_log_to_ui)
         # 시간 업데이트 타이머

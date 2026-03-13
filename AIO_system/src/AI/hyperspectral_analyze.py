@@ -5,14 +5,14 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from dateutil import tz
+
 from src.utils.logger import log
 
-# Breeze Runtime 관련 설정
-HOST = '192.168.250.130'  # 카메라 IP, 실제 IP로 변경 필요
-COMMAND_PORT = 2000
-EVENT_PORT = 2500
-DATA_STREAM_PORT = 3000
+from src.utils.config_util import HOST, COMMAND_PORT, EVENT_PORT, DATA_STREAM_PORT
+
 stop_event = threading.Event()
+event_socket = None
+stream_socket = None
 
 def start_command_client():
     log(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
