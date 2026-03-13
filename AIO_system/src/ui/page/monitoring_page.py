@@ -13,7 +13,8 @@ import cv2
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QScrollArea, QFrame, QComboBox,
-    QLineEdit, QSizePolicy, QGraphicsRectItem
+    QLineEdit, QSizePolicy,
+    QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem
 )
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
 from PySide6.QtGui import QPixmap, QImage, QRegularExpressionValidator, QPen, QColor
@@ -31,15 +32,21 @@ from src.utils.config_util import (
 
 
 @dataclass
+class HyperSpectralWidget:
+    """초분광 관련 PySide 위젯"""
+    view: QGraphicsView = None
+    img_item: QGraphicsPixmapItem = None
+
+
+@dataclass
 class HyperSpectralData:
-    """초분광 관련 모음"""
+    """초분광 관련 속성"""
     max_lines: int
     line_buffer: deque = None
-    canvas_image_id: int | None = None
     current_line: int = 0
-    overlay_info: deque = None
     last_update_time: float = 0.0
     update_interval: float = 0.0
+    overlay_items: list = None
 
 
 class CameraView(QFrame):
@@ -138,10 +145,9 @@ class CameraView(QFrame):
             layout.addWidget(scroll_area)
         else:
             # Hyperspectral 카메라는 기존 방식 유지
-            self.image_label = QLabel()
+            self.image_label = QGraphicsScene(0, 0, 640, 480)
             self.image_label.setObjectName("camera_frame")
             self.image_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-            self.image_label.setMinimumHeight(500)
             self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.image_label.setText("📷 카메라 대기 중...")
             self.image_label.setStyleSheet(
@@ -154,6 +160,12 @@ class CameraView(QFrame):
                 border-radius: 7px;
                 """
             )
+
+            self.hyper_widget = HyperSpectralWidget()
+            self.hyper_widget.view = QGraphicsView(self.image_label)
+            self.hyper_widget.img_item = QGraphicsPixmapItem()
+            self.image_label.addItem(self.hyper_widget.img_item)
+
             layout.addWidget(self.image_label)
 
         # 하단 정보
@@ -207,7 +219,10 @@ class CameraView(QFrame):
             )
 
             # 시그널 연결
-            self.camera_thread.frame_ready.connect(self.update_frame)
+            if not self.is_hyperspectral:
+                self.camera_thread.frame_ready.connect(self.update_frame)
+            else:
+                self.camera_thread.frame_ready.connect(self.process_hyperspectral_line)
             self.camera_thread.error_occurred.connect(self.on_error)
 
             # 스레드 시작
@@ -263,13 +278,13 @@ class CameraView(QFrame):
                 parent_size = self.image_label.parent().size()
                 available_width = parent_size.width() - 20   # 여백
                 available_height = parent_size.height() - 20
-                
+
                 scaled_pixmap = pixmap.scaled(
                     available_width, available_height,
                     Qt.KeepAspectRatio,
                     Qt.SmoothTransformation
                 )
-                
+
                 self.image_label.setFixedSize(
                     scaled_pixmap.width(),
                     scaled_pixmap.height()
@@ -306,6 +321,118 @@ class CameraView(QFrame):
         self.is_running = False
         self.update_status(False)
 
+    def process_hyperspectral_line(self, info):
+        """라인 데이터 처리"""
+        # pixel_format = self.format_var.get()
+        line_data = info["data_body"]
+
+        try:
+            line_array = np.frombuffer(line_data, dtype=np.uint8)
+            if len(line_array) == 640:
+                # Grayscale 640픽셀
+                # 색상 반전 (검정↔흰색) + 밝기 증폭
+                line_array = 255 - (line_array * 36)  # 0→255, 7→3 (반전 후 증폭)
+                line_array = np.clip(line_array, 0, 255).astype(np.uint8)
+                # 이 줄만 쓰면 픽셀 변환 그대로
+                line_rgb = np.stack([line_array, line_array, line_array], axis=1)
+            elif len(line_array) == 640*3:
+                # RGB 640*3픽셀
+                line_rgb = line_array.reshape(640, 3)
+            else:
+                log(f"⚠️ 잘못된 라인 크기: {len(line_array)} (예상: 640 또는 1920)")
+                return
+
+            # ✓ 수정: deque에 라인 추가 (자동으로 오래된 라인 제거)
+            self.img_data.line_buffer.append(line_rgb)
+            self.img_data.current_line = info["frame_number"]
+
+            current_time = time.time()
+
+            # 이미지 업데이트 (30fps 제한)
+            if current_time - self.img_data.last_update_time >= self.img_data.update_interval:
+                self.update_hyperspectral_image()
+                self.update_hyperspectral_overlay()
+                self.img_data.last_update_time = current_time
+
+        except Exception as e:
+            log(f"라인 처리 오류: {str(e)}")
+            log(traceback.format_exc())
+
+    # def update_stats(self):
+    #     """통계 업데이트"""
+    #     self.stats_label.config(
+    #         text=f"수신된 라인: {self.img_data.current_line} | FPS: {self.statistics_data.fps:.1f}"
+    #     )
+
+    def update_hyperspectral_image(self):
+        """이미지 표시 업데이트 - 스크롤 효과"""
+        try:
+            if len(self.img_data.line_buffer) == 0:
+                return
+
+            # deque → numpy array (최신 라인이 아래로)
+            img_data = np.array(list(self.img_data.line_buffer), dtype=np.uint8)
+
+            # 라인이 480개 미만이면 위쪽을 검은색으로 채움
+            if len(img_data) < self.img_data.max_lines:
+                padding = np.zeros(
+                    (self.img_data.max_lines - len(img_data), 640, 3),
+                    dtype=np.uint8
+                )
+                img_data = np.vstack([padding, img_data])
+
+            # 가이드라인 영역을 빨간색으로 표시
+            # img_data[:, GUIDELINE_MIN_X:GUIDELINE_MAX_X, :] = [255, 0, 0]
+
+            # QImage로 변환
+            h, w, ch = img_data.shape
+            bytes_per_line = 3 * w
+            q_img = QImage(img_data.data, w, h, bytes_per_line, QImage.Format_RGB888)
+
+            # 크기 조정
+            img = img.resize((640, 480), Image.NEAREST) # pylint: disable=no-member
+
+            photo = ImageTk.PhotoImage(img)
+
+            # Canvas 업데이트
+            if self.img_data.canvas_image_id is None:
+                self.img_data.canvas_image_id = self.children_widget.canvas.create_image(
+                    0, 0, anchor=tk.NW, image=photo
+                )
+            else:
+                self.children_widget.canvas.itemconfig(self.img_data.canvas_image_id, image=photo)
+
+            self.children_widget.canvas.image = photo  # 참조 유지
+
+        except Exception as e:
+            log(f"이미지 업데이트 오류: {str(e)}")
+            log(traceback.format_exc())
+
+    def update_hyperspectral_overlay(self):
+        """물체 감지 오버레이"""
+        # 1. 기존 오버레이 삭제 (간단한 구현을 위해 일단 모두 제거)
+        for item in self.img_data.overlay_info:
+            self.scene.removeItem(item)
+        self.overlay_items.clear()
+
+        # 점선 펜 설정
+        pen = QPen(QColor("white"), 2)
+        pen.setStyle(Qt.DashLine)
+
+        for info in self.img_data.overlay_info:
+            if self.img_data.current_line < info["start_frame"]:
+                continue
+
+            y0 = self.img_data.max_lines - (self.img_data.current_line - info["start_frame"])
+            height = (info["end_frame"] - info["start_frame"] + 1)
+
+            # 2. RectItem 생성 및 추가
+            rect_item = QGraphicsRectItem(info["x0"], y0, info["x1"] - info["x0"], height)
+            rect_item.setPen(pen)
+
+            self.scene.addItem(rect_item)
+            self.overlay_items.append(rect_item)
+
 
 class MonitoringPage(QWidget):
     """모니터링 페이지 - 카메라 스트림"""
@@ -329,8 +456,11 @@ class MonitoringPage(QWidget):
             log("BatchAIManager 초기화 완료!")
 
         # 이미지 버퍼를 deque로 변경 (FIFO)
-        self.img_data = HyperSpectralData(max_lines=MAX_IMG_LINES) # 화면에 표시할 라인 수
-        self.img_data.line_buffer = deque(maxlen=self.img_data.max_lines)  # 자동으로 오래된 라인 제거
+        self.hyper_data = HyperSpectralData(max_lines=MAX_IMG_LINES) # 화면에 표시할 라인 수
+        self.hyper_data.line_buffer = deque(maxlen=self.img_data.max_lines)  # 자동으로 오래된 라인 제거
+
+        self.hyper_widget = HyperSpectralWidget()
+        self.hyper_widget.scene = QGraphicsScene(0, 0, )
 
         # 물체 감지 overlay
         self.img_data.overlay_info = deque()
@@ -737,118 +867,6 @@ class MonitoringPage(QWidget):
         self.toggle_btn.setText(state)
         self.app.use_air_sequence = onoff
         log(f"배출 제어 순서 {state}")
-
-    def process_hyperspectral_line(self, info):
-        """라인 데이터 처리"""
-        # pixel_format = self.format_var.get()
-        line_data = info["data_body"]
-
-        try:
-            line_array = np.frombuffer(line_data, dtype=np.uint8)
-            if len(line_array) == 640:
-                # Grayscale 640픽셀
-                # 색상 반전 (검정↔흰색) + 밝기 증폭
-                line_array = 255 - (line_array * 36)  # 0→255, 7→3 (반전 후 증폭)
-                line_array = np.clip(line_array, 0, 255).astype(np.uint8)
-                # 이 줄만 쓰면 픽셀 변환 그대로
-                line_rgb = np.stack([line_array, line_array, line_array], axis=1)
-            elif len(line_array) == 640*3:
-                # RGB 640*3픽셀
-                line_rgb = line_array.reshape(640, 3)
-            else:
-                log(f"⚠️ 잘못된 라인 크기: {len(line_array)} (예상: 640 또는 1920)")
-                return
-
-            # ✓ 수정: deque에 라인 추가 (자동으로 오래된 라인 제거)
-            self.img_data.line_buffer.append(line_rgb)
-            self.img_data.current_line = info["frame_number"]
-
-            current_time = time.time()
-
-            # 이미지 업데이트 (30fps 제한)
-            if current_time - self.img_data.last_update_time >= self.img_data.update_interval:
-                self.update_hyperspectral_image()
-                self.update_hyperspectral_overlay()
-                self.img_data.last_update_time = current_time
-
-        except Exception as e:
-            log(f"라인 처리 오류: {str(e)}")
-            log(traceback.format_exc())
-
-    # def update_stats(self):
-    #     """통계 업데이트"""
-    #     self.stats_label.config(
-    #         text=f"수신된 라인: {self.img_data.current_line} | FPS: {self.statistics_data.fps:.1f}"
-    #     )
-
-    def update_hyperspectral_image(self):
-        """이미지 표시 업데이트 - 스크롤 효과"""
-        try:
-            if len(self.img_data.line_buffer) == 0:
-                return
-
-            # deque → numpy array (최신 라인이 아래로)
-            img_data = np.array(list(self.img_data.line_buffer), dtype=np.uint8)
-
-            # 라인이 480개 미만이면 위쪽을 검은색으로 채움
-            if len(img_data) < self.img_data.max_lines:
-                padding = np.zeros(
-                    (self.img_data.max_lines - len(img_data), 640, 3),
-                    dtype=np.uint8
-                )
-                img_data = np.vstack([padding, img_data])
-
-            # 가이드라인 영역을 빨간색으로 표시
-            # img_data[:, GUIDELINE_MIN_X:GUIDELINE_MAX_X, :] = [255, 0, 0]
-
-            # QImage로 변환
-            h, w, ch = img_data.shape
-            bytes_per_line = 3 * w
-            q_img = QImage(img_data.data, w, h, bytes_per_line, QImage.Format_RGB888)
-
-            # 크기 조정
-            img = img.resize((640, 480), Image.NEAREST) # pylint: disable=no-member
-
-            photo = ImageTk.PhotoImage(img)
-
-            # Canvas 업데이트
-            if self.img_data.canvas_image_id is None:
-                self.img_data.canvas_image_id = self.children_widget.canvas.create_image(
-                    0, 0, anchor=tk.NW, image=photo
-                )
-            else:
-                self.children_widget.canvas.itemconfig(self.img_data.canvas_image_id, image=photo)
-
-            self.children_widget.canvas.image = photo  # 참조 유지
-
-        except Exception as e:
-            log(f"이미지 업데이트 오류: {str(e)}")
-            log(traceback.format_exc())
-
-    def update_hyperspectral_overlay(self):
-        """물체 감지 오버레이"""
-        # 1. 기존 오버레이 삭제 (간단한 구현을 위해 일단 모두 제거)
-        for item in self.img_data.overlay_info:
-            self.scene.removeItem(item)
-        self.overlay_items.clear()
-
-        # 점선 펜 설정
-        pen = QPen(QColor("white"), 2)
-        pen.setStyle(Qt.DashLine)
-
-        for info in self.img_data.overlay_info:
-            if self.img_data.current_line < info["start_frame"]:
-                continue
-
-            y0 = self.img_data.max_lines - (self.img_data.current_line - info["start_frame"])
-            height = (info["end_frame"] - info["start_frame"] + 1)
-
-            # 2. RectItem 생성 및 추가
-            rect_item = QGraphicsRectItem(info["x0"], y0, info["x1"] - info["x0"], height)
-            rect_item.setPen(pen)
-
-            self.scene.addItem(rect_item)
-            self.overlay_items.append(rect_item)
 
     def update_values(self, values):
         """모니터링 값 업데이트"""
