@@ -20,7 +20,7 @@ from PySide6.QtCore import QTimer, Signal, QObject
 from PySide6.QtGui import QFont, QFontDatabase
 
 from src.ui.main_window import MainWindow
-from src.function.comm_manager import CommManager
+from src.function.comm_manager import CommManager, LineScanSimulator
 from src.utils.config_util import UI_PATH, LOG_PATH
 from src.utils.logger import log
 
@@ -102,6 +102,7 @@ class UpdateHandler(FileSystemEventHandler):
 class App():
     """메인 앱 클래스"""
     is_reload = False
+    _use_linescan_simulator = True # 라인스캔 이미지/오버레이 확인용 시뮬레이터 사용 여부
 
     def __init__(self):
         self.qt_app = QApplication(sys.argv)
@@ -139,7 +140,11 @@ class App():
         self.qt_app.setFont(font)
 
         self.ui = MainWindow(self)
-        self.comm_manager = CommManager(self)
+        # _use_linescan_simulator == True 인 경우 라인 스캔 시뮬레이터를 사용하여 UI 화면 업데이트 확인 가능
+        if self._use_linescan_simulator:
+            self.comm_manager = LineScanSimulator(self, width=640)
+        else:
+            self.comm_manager = CommManager(self)
         self.comm_manager.start()
 
         self.update_timer = QTimer()
@@ -199,10 +204,10 @@ class App():
     def on_pixel_line_data(self, info):
         """데이터를 UI로 전달 (메인 스레드에서 처리)"""
         self.ui.signals.hypercam_updated.emit(info)
-        
+
     def on_obj_detected(self, info, classification):
         self.ui.signals.obj_detected.emit(info, classification)
-        
+
     def on_legend_info(self, legend_info_list):
         self.ui.signals.legend_updated.emit(legend_info_list)
 

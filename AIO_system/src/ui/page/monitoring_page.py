@@ -51,6 +51,7 @@ class HyperSpectralData:
     overlay_info: deque = None
 
 
+# pylint: disable=broad-exception-caught
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     def __init__(self, camera_id, camera_name, camera_index, app, ai_manager=None, is_hyperspectral=False):
@@ -256,7 +257,7 @@ class CameraView(QFrame):
                     log(f"{self.camera_name} 강제 종료")
                     self.camera_thread.terminate()
                     self.camera_thread.wait(1000)
-                    
+
             if self.is_hyperspectral:
                 if self.hyper_widget and self.hyper_widget.img_item:
                     self.hyper_widget.img_item.setPixmap(QPixmap())
@@ -345,7 +346,18 @@ class CameraView(QFrame):
         # pixel_format = self.format_var.get()
         if self.img_data is None:
             return
+
+        cur_line = info["frame_number"]
         line_data = info["data_body"]
+        prev_line = self.img_data.current_line
+
+        if prev_line != 0:
+            line_gap = cur_line - prev_line - 1
+            if 0 < line_gap < 500:
+                padding_line = self.img_data.line_buffer[-1] \
+                    if self.img_data.line_buffer else np.zeros((640, 3), dtype=np.uint8)
+                for _ in range(line_gap):
+                    self.img_data.line_buffer.append(padding_line)
 
         try:
             line_array = np.frombuffer(line_data, dtype=np.uint8)
@@ -365,7 +377,7 @@ class CameraView(QFrame):
 
             # ✓ 수정: deque에 라인 추가 (자동으로 오래된 라인 제거)
             self.img_data.line_buffer.append(line_rgb)
-            self.img_data.current_line = info["frame_number"]
+            self.img_data.current_line = cur_line
 
             current_time = time.time()
 
@@ -465,7 +477,7 @@ class CameraView(QFrame):
                 continue
 
             y0 = self.img_data.max_lines - (self.img_data.current_line - start_frame)
-            height = (end_frame - start_frame + 1)
+            height = end_frame - start_frame + 1
             if height <= 0:
                 continue
             if y0 > self.img_data.max_lines or y0 + height < 0:
@@ -674,10 +686,10 @@ class MonitoringPage(QWidget):
         rgb_layout = QGridLayout()
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
-        
+
         rgb_layout.setRowMinimumHeight(0, 800)
         rgb_layout.setRowMinimumHeight(0, 800)
-        
+
         rgb_layout.setRowStretch(0, 1)
         rgb_layout.setRowStretch(1, 1)
         rgb_layout.setColumnStretch(0, 1)
@@ -836,13 +848,13 @@ class MonitoringPage(QWidget):
 
         if self.ai_manager:
             self.ai_manager.start()
-            
+
         for camera in self.rgb_cameras:
             camera.start_camera()
 
         if self.hyper_camera:
             self.hyper_camera.start_camera()
-                
+
     def on_stop_all(self):
         """전체 정지"""
         log("모든 카메라 정지")
@@ -852,15 +864,17 @@ class MonitoringPage(QWidget):
 
         for camera in self.rgb_cameras:
             camera.stop_camera()
-            
+
         if self.hyper_camera:
             self.hyper_camera.stop_camera()
-            
+
     def on_hypercam_updated(self, info):
+        """초분광 카메라 스트리밍 출력"""
         if self.hyper_camera and self.hyper_camera.is_running:
             self.hyper_camera.process_hyperspectral_line(info)
 
     def on_object_detected(self, info, classification):
+        """물체 감지됨"""
         if self.hyper_camera and self.hyper_camera.is_running and self.hyper_camera.img_data:
             payload = dict(info)
             payload["classification"] = classification
@@ -917,7 +931,7 @@ class MonitoringPage(QWidget):
         self.toggle_btn.setText(state)
         self.app.use_air_sequence = onoff
         log(f"배출 제어 순서 {state}")
-        
+
     def on_legend_info(self, legend_info_list):
         self.legend_info_list = legend_info_list
 
