@@ -193,22 +193,28 @@ class App():
         seq = self.config.get("air_sequence", [])
         self.air_index_iter = cycle(seq) if seq else None
 
-    def on_btn_clicked(self, pixel_format):
-        """픽셀 형식 버튼 클릭"""
-        self.comm_manager.change_pixel_format(pixel_format)
+    def on_monitoring_start(self):
+        """모니터링 시작"""
+        self.monitoring_enabled = True
+        self.comm_manager.start_hypercam()
 
-    def on_blend_btn_clicked(self, onoff):
-        """블렌드 버튼 클릭"""
-        self.comm_manager.set_visualization_blend(onoff)
+    def on_monitoring_stop(self):
+        """모니터링 종료"""
+        if self.comm_manager is not None:
+            self.comm_manager.stop_hypercam()
+
+        self.monitoring_enabled = False
 
     def on_pixel_line_data(self, info):
         """데이터를 UI로 전달 (메인 스레드에서 처리)"""
         self.ui.signals.hypercam_updated.emit(info)
 
     def on_obj_detected(self, info, classification):
+        """제품 감지"""
         self.ui.signals.obj_detected.emit(info, classification)
 
     def on_legend_info(self, legend_info_list):
+        """제품 범례 설정"""
         self.ui.signals.legend_updated.emit(legend_info_list)
 
     def _update_inverter_config(self, inverter_name: str, index: int, value: float):
@@ -378,10 +384,11 @@ class App():
 
     def quit(self):
         """애플리케이션 종료"""
-        self.comm_manager.quit()
-        self.comm_manager.join(timeout=5)
-        if self.comm_manager.is_alive():
-            log("comm manager thread did not terminate properly")
+        if self.comm_manager is not None:
+            self.comm_manager.quit()
+            self.comm_manager.join(timeout=5)
+            if self.comm_manager.is_alive():
+                log("comm manager thread did not terminate properly")
 
         self.update_timer.stop()
 

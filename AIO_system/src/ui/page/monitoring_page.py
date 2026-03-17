@@ -728,57 +728,24 @@ class MonitoringPage(QWidget):
 
         parent_layout.addLayout(rgb_layout)
 
-    def _create_hyperspectral_camera(self, parent_layout):
-        """초분광 카메라"""
-        hyper_layout = QVBoxLayout()
+    def _create_statistics_box(self, legend_info_list):
+        if not self.stats_frame:
+            return
 
-        # 카메라 뷰
-        camera_layout = QHBoxLayout()
-
-        self.hyper_camera = CameraView(
-            "hyperspectral",
-            "Specim FX17",
-            camera_index=0,
-            app=self.app,
-            ai_manager=None,
-            is_hyperspectral=True
-        )
-        self.hyper_camera.setMinimumSize(600, 400)
-        camera_layout.addWidget(self.hyper_camera)
-
-        camera_layout.addSpacing(20)
-
-        # 우측: 분류 통계
-        stats_layout = QVBoxLayout()
-        stats_layout.setSpacing(0)
-        stats_layout.setContentsMargins(0, 0, 0, 0)
-        stats_title = QLabel("실시간 분류 통계")
-        stats_title.setStyleSheet(
-            """
-            color: #000000;
-            font-size: 16px;
-            font-weight: medium;
-            """
-        )
-        stats_layout.addWidget(stats_title)
-
-        stats_layout.addSpacing(15)
-
-        stats_frame = QFrame()
-        stats_frame.setObjectName("stats_frame")
-        stats_frame.setFixedSize(415, 422)
-
-        stats_frame_layout = QVBoxLayout(stats_frame)
+        stats_frame_layout = QVBoxLayout()
 
         # 플라스틱 종류별 카운트
         self.plastic_counts = {}
-        plastics = ["PET", "PE", "PP", "PS", "PVC", "기타"]
-        colors = ["#258FD0", "#1CB786", "#E43C3C", "#F5A50F", "#BE5EC3", "#878787"]
+        # plastics = ["PET", "PE", "PP", "PS", "PVC", "기타"]
+        # colors = ["#258FD0", "#1CB786", "#E43C3C", "#F5A50F", "#BE5EC3", "#878787"]
 
-        for plastic, color in zip(plastics, colors):
+        for _info in legend_info_list:
+            name = _info["Name"]
+            color = _info["Color"]
+
             count_layout = QHBoxLayout()
 
-            label = QLabel(plastic)
+            label = QLabel(name)
             label.setStyleSheet(
                 f"""
                 color: {color};
@@ -798,7 +765,7 @@ class MonitoringPage(QWidget):
                 font-weight: medium;
                 """
             )
-            self.plastic_counts[plastic] = count
+            self.plastic_counts[name] = count
             count_layout.addWidget(count)
 
             stats_frame_layout.addLayout(count_layout)
@@ -840,7 +807,49 @@ class MonitoringPage(QWidget):
         reset_btn.clicked.connect(self.on_reset_counter)
         stats_frame_layout.addWidget(reset_btn)
 
-        stats_layout.addWidget(stats_frame)
+        self.stats_frame.setLayout(stats_frame_layout)
+
+    def _create_hyperspectral_camera(self, parent_layout):
+        """초분광 카메라"""
+        hyper_layout = QVBoxLayout()
+
+        # 카메라 뷰
+        camera_layout = QHBoxLayout()
+
+        self.hyper_camera = CameraView(
+            "hyperspectral",
+            "Specim FX17",
+            camera_index=0,
+            app=self.app,
+            ai_manager=None,
+            is_hyperspectral=True
+        )
+        self.hyper_camera.setMinimumSize(600, 400)
+        camera_layout.addWidget(self.hyper_camera)
+
+        camera_layout.addSpacing(20)
+
+        # 우측: 분류 통계
+        stats_layout = QVBoxLayout()
+        stats_layout.setSpacing(0)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        stats_title = QLabel("실시간 분류 통계")
+        stats_title.setStyleSheet(
+            """
+            color: #000000;
+            font-size: 16px;
+            font-weight: medium;
+            """
+        )
+        stats_layout.addWidget(stats_title)
+
+        stats_layout.addSpacing(15)
+
+        self.stats_frame = QFrame()
+        self.stats_frame.setObjectName("stats_frame")
+        self.stats_frame.setFixedSize(415, 422)
+
+        stats_layout.addWidget(self.stats_frame)
 
         stats_layout.addStretch()
 
@@ -852,7 +861,7 @@ class MonitoringPage(QWidget):
     def on_start_all(self):
         """전체 시작"""
         log("모든 카메라 시작")
-        self.app.monitoring_enabled = True
+        self.app.on_monitoring_start()
 
         if self.ai_manager:
             self.ai_manager.start()
@@ -866,7 +875,7 @@ class MonitoringPage(QWidget):
     def on_stop_all(self):
         """전체 정지"""
         log("모든 카메라 정지")
-        self.app.monitoring_enabled = False
+        self.app.on_monitoring_stop()
         if self.ai_manager:
             self.ai_manager.stop()
 
@@ -887,6 +896,12 @@ class MonitoringPage(QWidget):
             payload = dict(info)
             payload["classification"] = classification
             self.hyper_camera.img_data.overlay_info.append(payload)
+
+            cur_count = int(self.plastic_counts[classification].text())
+            self.plastic_counts[classification].setText(f"{cur_count+1}")
+
+            total_count = int(self.total_count.text())
+            self.total_count.setText(f"{total_count+1}")
 
     # def update_cameras(self):
     #     """카메라 프레임 업데이트"""
@@ -941,7 +956,8 @@ class MonitoringPage(QWidget):
         log(f"배출 제어 순서 {state}")
 
     def on_legend_info(self, legend_info_list):
-        self.legend_info_list = legend_info_list
+        """재질 별 범례 설정"""
+        self._create_statistics_box(legend_info_list)
 
     def update_values(self, values):
         """모니터링 값 업데이트"""

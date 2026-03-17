@@ -24,6 +24,7 @@ from src.utils.logger import log
 from .XGT_run import XGTTester
 
 
+# region data classes
 @dataclass
 class CommSockets:
     """소켓 모음"""
@@ -35,11 +36,10 @@ class CommSockets:
 @dataclass
 class Threads:
     """스레드 모음"""
-    cleanup_thread: threading.Thread = None
     event_listener_thread: threading.Thread = None
     data_stream_listener_thread: threading.Thread = None
     stop_event: threading.Event = field(default_factory=threading.Event)
-    check_time: float = 0
+    main_stop_event: threading.Event = field(default_factory=threading.Event)
 
 
 @dataclass
@@ -70,8 +70,10 @@ class ObjectInfo:
     size: str = ""              # 사이즈(large/small)
     size_addr: int = 0          # 사이즈에 따른 배출 알림 PLC 주소
     y_position: int = 0         # 제품 중심 y좌표
+# endregion data classes
 
 
+# region Comm Manager
 # pylint: disable=broad-exception-caught
 class CommManager(threading.Thread):
     """통신 관리자"""
@@ -94,21 +96,8 @@ class CommManager(threading.Thread):
 
         self.xgt_tester = XGTTester()
 
-    def start_command_client(self) -> socket.socket:
-        """요청 관리자 시작"""
-        log(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
-        try:
-            soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            soc.connect((HOST, COMMAND_PORT))
-            soc.settimeout(120)
-            log("Camera connection successful")
-            return soc
-        except Exception as e:
-            log(f"[ERROR] Camera connection failed: {str(e)}")
-            raise
-
-    def send_command(self, command_socket: socket.socket, command: dict):
+# region command client
+    def _send_command(self, command_socket: socket.socket, command: dict):
         """카메라로 요청 전송"""
         command_id = uuid.uuid4().hex[:8]
         log(f"Sending command '{command.get('Command')}' with id {command_id}")
@@ -145,7 +134,7 @@ class CommManager(threading.Thread):
             return None
         return None
 
-    def handle_response(self, response):
+    def _handle_response(self, response):
         """카메라로부터의 응답"""
         if not response:
             log("[ERROR] No response or incorrect response ID received from camera")
@@ -158,6 +147,100 @@ class CommManager(threading.Thread):
 
         return message
 
+    def _start_command_client(self) -> socket.socket:
+        """요청 관리자 시작"""
+        log(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
+        try:
+            soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            soc.connect((HOST, COMMAND_PORT))
+            soc.settimeout(120)
+            log("Camera connection successful")
+            return soc
+        except Exception as e:
+            log(f"[ERROR] Camera connection failed: {str(e)}")
+            raise
+
+    def _command_client(self):
+        # ==================== 설정 확인 ====================
+        log("="*70)
+        log("🎯 라인 스캔 카메라 타이밍 제어")
+        log(f"  - 컨베이어 속도: {CONVEYOR_SPEED:.2f} cm/s")
+        log(f"  - 스캔라인 → 에어솔 거리: {SCAN_LINE_TO_AIRSOL:.2f} cm")
+        log("")
+        log("  작동 방식:")
+        log("  1. 객체가 스캔 라인을 지나가면 즉시 분석")
+        log("  2. 딜레이(초) 후 PLC 신호 전송")
+        log("  3. 모든 객체가 동일한 타이밍에 신호 전송됨")
+        log("="*70)
+        # =================================================
+
+        try:
+            # 소켓을 인스턴스 변수에 저장
+            self.comm_sockets.command_socket = self._start_command_client()
+            with self.comm_sockets.command_socket as command_socket:
+                log("Sending InitializeCamera command")
+                self._handle_response(
+                    self._send_command(
+                        command_socket,
+                        {"Command": "InitializeCamera"}
+                    )
+                )
+
+                log("Sending GetProperty command")
+                self._handle_response(
+                    self._send_command(
+                        command_socket,
+                        {"Command": "GetProperty", "Property": "WorkspacePath"}
+                    )
+                )
+
+                workflow_path = WORKFLOW_PATH
+                log(f"Loading workflow: {workflow_path}")
+                workflow_json = self._handle_response(
+                    self._send_command(
+                        command_socket,
+                        {"Command": "LoadWorkflow", "FilePath": workflow_path}
+                    )
+                )
+                log(f"workflow: {workflow_json}")
+                workflow_info = json.loads(workflow_json)
+                obj_format = workflow_info.get("ObjectFormat", {}) or {}
+                descriptors = obj_format.get("Descriptors", []) \
+                    if isinstance(obj_format, dict) else []
+                desc_info = descriptors[0] if descriptors else {}
+                legend_info_list = desc_info.get("Classes", []) \
+                    if isinstance(desc_info, dict) else []
+                if not legend_info_list:
+                    log("[WARNING] No legend class info in workflow")
+                self.app.on_legend_info(legend_info_list)
+
+                log("Starting prediction")
+                self._handle_response(
+                    self._send_command(
+                        command_socket,
+                        {"Command": "StartPredict", "IncludeObjectShape": True}
+                    )
+                )
+
+                self.threads.event_listener_thread = threading.Thread(
+                target=self._listen_for_events,
+                daemon=True
+                )
+                self.threads.data_stream_listener_thread = threading.Thread(
+                    target=self._listen_for_data_stream,
+                    daemon=True
+                )
+
+                log("Starting event and data stream threads")
+                self.threads.event_listener_thread.start()
+                self.threads.data_stream_listener_thread.start()
+        except Exception as e:
+            log(f"{e}")
+# endregion command client
+
+# region event listener
+    # ==================== 라인 스캔용 타이밍 제어 ====================
     def _process_interval(self):
         # 물체 간 최소 간격이 지난 데이터를 지워줌
         current_time = datetime.now()
@@ -183,8 +266,14 @@ class CommManager(threading.Thread):
             self.queue_n_lock.timestamp_queue.append((address, current_time))
             return True
 
-    # ==================== 라인 스캔용 타이밍 제어 ====================
-    def schedule_plc_signal_delay(self, obj_info: ObjectInfo, delay: float):
+    def _cleanup_object(self, obj_id):
+        """객체 정리"""
+        with self.trackings.tracking_lock:
+            if obj_id in self.trackings.tracked_objects:
+                del self.trackings.tracked_objects[obj_id]
+                log(f"객체 제거: ID={obj_id}")
+
+    def _schedule_plc_signal_delay(self, obj_info: ObjectInfo, delay: float):
         """
         10ms 펄스로 신호 전송 (PLC에서 상승엣지 감지)
         """
@@ -218,7 +307,7 @@ class CommManager(threading.Thread):
                                 log(f"[WARNING] ✗ [PLC펄스] ID={_info.obj_id} - 전송 실패")
 
                             obj_data['status'] = 'completed'
-                            threading.Timer(1.0, lambda: self.cleanup_object(_info.obj_id)).start()
+                            threading.Timer(1.0, lambda: self._cleanup_object(_info.obj_id)).start()
                         else:
                             log(f"[WARNING] ⚠ [PLC펄스] ID={_info.obj_id} - 분석 미완료")
                             obj_data['status'] = 'timeout'
@@ -240,33 +329,8 @@ class CommManager(threading.Thread):
         #     obj_info.classification,
         #     delay
         # )
-
-    def cleanup_object(self, obj_id):
-        """객체 정리"""
-        with self.trackings.tracking_lock:
-            if obj_id in self.trackings.tracked_objects:
-                del self.trackings.tracked_objects[obj_id]
-                log(f"객체 제거: ID={obj_id}")
-
-    def cleanup_old_objects(self):
-        """오래된 객체 자동 정리"""
-        while not self.threads.stop_event.is_set():
-            time.sleep(5)
-            current_time = time.time()
-
-            with self.trackings.tracking_lock:
-                to_remove = []
-                for obj_id, obj_data in self.trackings.tracked_objects.items():
-                    age = current_time - obj_data['detect_time']
-                    if age > 10:  # 10초 이상
-                        to_remove.append(obj_id)
-                        log(f"타임아웃: ID={obj_id} (상태={obj_data['status']})")
-
-                for obj_id in to_remove:
-                    del self.trackings.tracked_objects[obj_id]
     # ================================================================
 
-# region event listener
     def _listen_for_events(self):
         """제품 감지 이벤트"""
         log(f"Connecting to camera event port at {HOST}:{EVENT_PORT}")
@@ -288,11 +352,6 @@ class CommManager(threading.Thread):
             # 동작 유무 판단 시 320줄, 380줄 주석 처리 필요
             if USE_MIN_INTERVAL:
                 self._process_interval()
-
-            current_time = time.perf_counter()
-            if current_time - self.threads.check_time >= 1:
-                self.xgt_tester.status_check()
-                self.threads.check_time = current_time
 
             # 활성화 된 비트들 off 처리 - 각 프레임마다 프로세스 진행해야 함
             self.xgt_tester.process_bit_off()
@@ -417,7 +476,7 @@ class CommManager(threading.Thread):
                     # )
 
                     # 고정 지연 시간 후 PLC 신호 예약
-                    self.schedule_plc_signal_delay(obj_info, delay)
+                    self._schedule_plc_signal_delay(obj_info, delay)
                 else:
                     log(f"event:{event}")
             except json.JSONDecodeError:
@@ -426,7 +485,7 @@ class CommManager(threading.Thread):
                 log(f"[ERROR] Error processing event: {str(e)}")
                 traceback.print_exc()
         return message_buffer
-# endregion
+# endregion event listener
 
 # region data stream listener
     def _listen_for_data_stream(self):
@@ -518,171 +577,63 @@ class CommManager(threading.Thread):
             except Exception as e:
                 log(f"[ERROR] Error in data stream: {str(e)}")
                 continue
-# endregion
+# endregion data stream listener
 
-    def change_pixel_format(self, pixel_format):
-        """pixel 형식 변경"""
-        # log(f"Set Visualize Select to {pixel_format}")
-        # self.handle_response(self.send_command(self.comm_sockets.command_socket, {
-        #     "Command": "SetProperty",  # GetProperty가 아닌 SetProperty 사용
-        #     "Property": "VisualizationVariable",
-        #     "Value": pixel_format
-        #     # "Raw", "Reflectance", "Absorbance" 또는 "기타 Descriptor 이름" 중 선택
-        # }))
-        res = self.handle_response(self.send_command(
-            self.comm_sockets.command_socket, {
-                "Command": "GetProperty",
-                "Property": "Fields",
-                "NodeID": "7200e406"
-            }
-        ))
-        log(f"Fields: {str(res)}")
+# region run, start, stop, quit
+    def _cleanup_old_objects(self):
+        """오래된 객체 자동 정리"""
+        current_time = time.time()
 
-    def set_visualization_blend(self, onoff: bool):
-        """블렌드 사용할 것인가"""
-        log(f"Set Visualize Blend {onoff}")
-        self.handle_response(self.send_command(
-            self.comm_sockets.command_socket, {
-                "Command": "SetProperty",  # GetProperty가 아닌 SetProperty 사용
-                "Property": "VisualizationBlend", 
-                "Value": onoff
-                # "Raw", "Reflectance", "Absorbance" 또는 "기타 Descriptor 이름" 중 선택
-            }
-        ))
+        with self.trackings.tracking_lock:
+            to_remove = []
+            for obj_id, obj_data in self.trackings.tracked_objects.items():
+                age = current_time - obj_data['detect_time']
+                if age > 10:  # 10초 이상
+                    to_remove.append(obj_id)
+                    log(f"타임아웃: ID={obj_id} (상태={obj_data['status']})")
+
+            for obj_id in to_remove:
+                del self.trackings.tracked_objects[obj_id]
 
     def run(self):
-        """스레드의 메인 함수 - 여기서 카메라 초기화 및 실행"""
-        log("Starting main function")
-        # ==================== 설정 확인 ====================
-        log("="*70)
-        log("🎯 라인 스캔 카메라 타이밍 제어")
-        log(f"  - 컨베이어 속도: {CONVEYOR_SPEED:.2f} cm/s")
-        log(f"  - 스캔라인 → 에어솔 거리: {SCAN_LINE_TO_AIRSOL:.2f} cm")
-        log("")
-        log("  작동 방식:")
-        log("  1. 객체가 스캔 라인을 지나가면 즉시 분석")
-        log("  2. 딜레이(초) 후 PLC 신호 전송")
-        log("  3. 모든 객체가 동일한 타이밍에 신호 전송됨")
-        log("="*70)
-        # =================================================
-
-        self.threads.cleanup_thread = threading.Thread(
-            target=self.cleanup_old_objects, daemon=True
-        )
-        self.threads.cleanup_thread.start()
+        """스레드의 메인 함수 - start() 호출 시 실행됨"""
+        log("Starting comm manager")
 
         try:
-            # 소켓을 인스턴스 변수에 저장
-            self.comm_sockets.command_socket = self.start_command_client()
-            with self.comm_sockets.command_socket as command_socket:
-                log("Sending InitializeCamera command")
-                self.handle_response(
-                    self.send_command(
-                        command_socket,
-                        {"Command": "InitializeCamera"}
-                    )
-                )
+            while not self.threads.main_stop_event.is_set():
+                # PLC와 통신 유지
+                self.xgt_tester.status_check()
 
-                log("Sending GetProperty command")
-                self.handle_response(
-                    self.send_command(
-                        command_socket,
-                        {"Command": "GetProperty", "Property": "WorkspacePath"}
-                    )
-                )
+                # 오래된 객체 정리
+                self._cleanup_old_objects()
 
-                workflow_path = WORKFLOW_PATH
-                log(f"Loading workflow: {workflow_path}")
-                workflow_json = self.handle_response(
-                    self.send_command(
-                        command_socket,
-                        {"Command": "LoadWorkflow", "FilePath": workflow_path}
-                    )
-                )
-                log(f"workflow: {workflow_json}")
-                workflow_info = json.loads(workflow_json)
-                obj_format = workflow_info.get("ObjectFormat", {}) or {}
-                descriptors = obj_format.get("Descriptors", []) \
-                    if isinstance(obj_format, dict) else []
-                desc_info = descriptors[0] if descriptors else {}
-                legend_info_list = desc_info.get("Classes", []) \
-                    if isinstance(desc_info, dict) else []
-                if not legend_info_list:
-                    log("[WARNING] No legend class info in workflow")
-                self.app.on_legend_info(legend_info_list)
-
-                # log("Visualization Variable setting")
-                # self.handle_response(self.send_command(command_socket, {
-                #     "Command": "GetProperty",  # GetProperty가 아닌 SetProperty 사용
-                #     "Property": "VisualizationVariable",
-                #     "Value": "plastic classification"
-                #     # 또는 "Reflectance", "Absorbance", "Descriptor names" 중 선택
-                # }))
-
-                # log("blend pixel setting")
-                # self.handle_response(self.send_command(command_socket, {
-                #     "Command": "GetProperty",
-                #     "Property": "VisualizationBlend",
-                #     "Value": True  # 또는 "False"
-                # }))
-
-                log("Starting prediction")
-                self.handle_response(
-                    self.send_command(
-                        command_socket,
-                        {"Command": "StartPredict", "IncludeObjectShape": True}
-                    )
-                )
-
-                # 스레드 시작
-                self.threads.event_listener_thread = threading.Thread(
-                    target=self._listen_for_events,
-                    daemon=True
-                )
-                self.threads.data_stream_listener_thread = threading.Thread(
-                    target=self._listen_for_data_stream,
-                    daemon=True
-                )
-
-                log("Starting event and data stream threads")
-                self.threads.event_listener_thread.start()
-                self.threads.data_stream_listener_thread.start()
-
-                print("\n" + "="*70)
-                print("✓ 프로그램 실행 중")
-                print("✓ 실시간 로그: plc_actions.log 파일 확인")
-                print("="*70 + "\n")
-
-                # 스레드가 종료될 때까지 대기
-                while not self.threads.stop_event.is_set():
-                    time.sleep(0.1)
+                time.sleep(1)
 
         except Exception as e:
             log(f"[ERROR] Main function error: {str(e)}")
-            traceback.print_exc()
 
-    def quit(self):
-        """통신 관리자 종료"""
-        log("Stopping prediction")
+    def start_hypercam(self):
+        """초분광 카메라 연결 및 감지 시작"""
+        self.threads.stop_event.clear()
         try:
-            if self.comm_sockets.command_socket:
-                response = self.send_command(
-                    self.comm_sockets.command_socket, {"Command": "StopPredict"}
-                )
-                self.handle_response(response)
+            # 초분광 카메라 시작
+            self._command_client()
         except Exception as e:
-            log(f"[ERROR] Error during stop prediction: {str(e)}")
+            log(f"[ERROR] start command thread error: {str(e)}")
 
+    def stop_hypercam(self):
+        """초분광 카메라 정지"""
         # 1. stop 이벤트 설정
         self.threads.stop_event.set()
 
-        # 2. 스레드 종료 대기 (먼저!)
+        # 1. event_listener, data_stream 스레드 종료 대기
         if self.threads.event_listener_thread is not None and \
             self.threads.event_listener_thread.is_alive():
             log("Waiting for event listener thread to terminate...")
             self.threads.event_listener_thread.join(timeout=5)
             if self.threads.event_listener_thread.is_alive():
                 log("[WARNING] Event listener thread did not terminate properly")
+        self.threads.event_listener_thread = None
 
         if self.threads.data_stream_listener_thread is not None and \
             self.threads.data_stream_listener_thread.is_alive():
@@ -690,14 +641,9 @@ class CommManager(threading.Thread):
             self.threads.data_stream_listener_thread.join(timeout=5)
             if self.threads.data_stream_listener_thread.is_alive():
                 log("[WARNING] Data stream thread did not terminate properly")
+        self.threads.data_stream_listener_thread = None
 
-        # 3. 그 다음 소켓 닫기
-        try:
-            if self.comm_sockets.command_socket:
-                self.comm_sockets.command_socket.close()
-        except Exception as e:
-            log(f"Error closing command socket: {str(e)}")
-
+        # 2. event, stream 소켓 닫기
         try:
             if self.comm_sockets.event_socket:
                 self.comm_sockets.event_socket.shutdown(socket.SHUT_RDWR)
@@ -712,9 +658,46 @@ class CommManager(threading.Thread):
         except Exception as e:
             log(f"Error closing stream socket: {str(e)}")
 
+        # 3. 선별 종료 및 카메라 연결 끊기
+        try:
+            if self.comm_sockets.command_socket:
+                with self.comm_sockets.command_socket as command_socket:
+                    log("Stopping prediction")
+                    self._handle_response(
+                        self._send_command(
+                            command_socket,
+                            {"Command": "StopPredict"}
+                        )
+                    )
+
+                    log("Disconnect camera")
+                    self._handle_response(
+                        self._send_command(
+                            command_socket,
+                            {"Command": "DisconnectCamera"}
+                        )
+                    )
+        except Exception as e:
+            log(f"[ERROR] Error during stop prediction: {str(e)}")
+
+        # 4. command 소켓 닫기
+        try:
+            if self.comm_sockets.command_socket:
+                self.comm_sockets.command_socket.close()
+        except Exception as e:
+            log(f"Error closing command socket: {str(e)}")
+
+    def quit(self):
+        """통신 관리자 종료"""
+        self.stop_hypercam()
+        self.threads.main_stop_event.set()
+
         log("Program terminated")
+# endregion run, start, stop, quit
+# endregion Comm Manager
 
 
+# region LineScanSimulator
 class LineScanSimulator(threading.Thread):
     """
     라인 스캔 테스트용 시뮬레이터
@@ -726,7 +709,7 @@ class LineScanSimulator(threading.Thread):
         { "Name" : "PP", "Color": "#E43C3C" },
         { "Name" : "PS", "Color": "#F5A50F" },
         { "Name" : "PVC", "Color": "#BE5EC3" },
-        { "Name" : "Others", "Color": "#878787" } 
+        { "Name" : "Others", "Color": "#878787" }
     ]
 
     def __init__(self, app, width=640):
@@ -744,7 +727,9 @@ class LineScanSimulator(threading.Thread):
         self.current_y = 0 # 실제 초분광 카메라 이벤트 발생 시점을 모방하기 위하여 오브젝트 Y좌표 저장
         self._generate_new_objects()
 
+        self._thread = None
         self.stop_event = threading.Event()
+        self.main_stop_event = threading.Event()
 
     def _generate_new_objects(self):
         """가상의 오브젝트를 생성"""
@@ -774,7 +759,7 @@ class LineScanSimulator(threading.Thread):
                 for _ in range(5)
             ], np.int32)
 
-            cv2.fillPoly(self.canvas, [pts], color)
+            cv2.fillPoly(self.canvas, [pts], color) # pylint: disable=no-member
 
             # 오브젝트의 실제 경계값(Bounding Box) 저장
             self.objects_metadata.append({
@@ -788,7 +773,7 @@ class LineScanSimulator(threading.Thread):
                 "sent": False # 전송 여부 플래그
             })
 
-    def get_next_data(self):
+    def _get_next_data(self):
         """이미지 라인 데이터와 해당 라인에서 완성된 이벤트 데이터를 반환"""
         y_idx = self.current_y
         line_data = self.canvas[y_idx, :, :].tobytes()
@@ -834,15 +819,17 @@ class LineScanSimulator(threading.Thread):
 
         return info, event_data, classification
 
-    def run(self):
+    def _pseudo_linescan_loop(self):
         """소켓 없이 내부 시뮬레이터에서 데이터를 발생시키는 루프"""
-        log("Starting Virtual Data Stream Simulator")
+        log("Starting pseudo data stream simulator")
+
+        self.app.on_legend_info(self.legend_list)
 
         last_processed_time = 0
         throttle_interval = 1.0 / 30.0
 
         while not self.stop_event.is_set():
-            info, event_info, classification = self.get_next_data()
+            info, event_info, classification = self._get_next_data()
 
             # 1. 이미지 데이터 전송 (기존 로직)
             current_time = time.time()
@@ -857,6 +844,27 @@ class LineScanSimulator(threading.Thread):
 
             time.sleep(0.01)
 
+    def run(self):
+        while not self.main_stop_event.is_set():
+            time.sleep(0.1)
+
+    def start_hypercam(self):
+        """시뮬레이터 루프 시작"""
+        log("start pseudo hypercam")
+        self.stop_event.clear()
+        self._thread = threading.Thread(target=self._pseudo_linescan_loop, daemon=True)
+        self._thread.start()
+
+    def stop_hypercam(self):
+        """시뮬레이터 루프 정지"""
+        log("stop pseudo hypercam")
+        self.stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5)
+            self._thread = None
+
     def quit(self):
         """종료"""
-        self.stop_event.set()
+        self.stop_hypercam()
+        self.main_stop_event.set()
+# endregion LineScanSimulator
