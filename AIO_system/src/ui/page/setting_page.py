@@ -3,7 +3,7 @@
 # """
 
 # from PySide6.QtWidgets import (
-#     QWidget, QFrame, QVBoxLayout, QHBoxLayout, 
+#     QWidget, QFrame, QVBoxLayout, QHBoxLayout,
 #     QStackedWidget, QLabel, QPushButton, QButtonGroup
 # )
 # from PySide6.QtGui import QPixmap
@@ -147,12 +147,12 @@
 #                 font-size: 14px;
 #                 font-weight: normal;
 #             }
-            
+
 #             #nav_button:hover {
 #                 background-color: #FFFFFF;
 #                 font-weight: medium;
 #             }
-            
+
 #             #nav_button:checked {
 #                 background-color: #FFFFFF;
 #                 color: #2DB591;

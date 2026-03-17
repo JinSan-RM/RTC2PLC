@@ -55,7 +55,6 @@ class UpdateSignals(QObject):
     legend_updated = Signal(object)
 
 
-
 class MainWindow(QMainWindow):
     """UI 메인"""
     def __init__(self, app):
@@ -89,7 +88,7 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         self.setWindowTitle("위드위 플라스틱 선별 시스템")
         self.setGeometry(0, 0, 1920, 1080)
-        self.setFixedSize(1920,1080)
+        self.setFixedSize(1920, 1080)
 
         # 중앙 위젯
         central_widget = QWidget()
@@ -379,7 +378,7 @@ class MainWindow(QMainWindow):
             QMainWindow {
                 background-color: #FFFFFF;
             }
-            
+
             /* 헤더 */
             #header {
                 background-color: #2D3039;
@@ -414,7 +413,7 @@ class MainWindow(QMainWindow):
                 min-height: 15px;
                 margin-top: 10px;
             }
-            
+
             /* 헤더 탭 */
             #header_tab_box {
                 background: transparent;
@@ -494,7 +493,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #A4A4A4;
                 border-radius: 4px;
             }
-            
+
             #time_label {
                 color: #A4A4A4;
                 font-family: 'Pretendard';

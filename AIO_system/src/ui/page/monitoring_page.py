@@ -17,7 +17,9 @@ from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem
 )
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
-from PySide6.QtGui import QPixmap, QImage, QRegularExpressionValidator, QPen, QColor
+from PySide6.QtGui import (
+    QPixmap, QImage, QRegularExpressionValidator, QPen, QColor
+)
 
 # from PIL import Image, ImageTk
 
@@ -27,7 +29,7 @@ from src.AI.cam.camera_thread import CameraThread
 from src.AI.AI_manager import BatchAIManager
 from src.utils.logger import log
 from src.utils.config_util import (
-    CAMERA_CONFIGS, UI_PATH, MAX_IMG_LINES, GUIDELINE_MIN_X, GUIDELINE_MAX_X
+    UI_PATH, MAX_IMG_LINES
 )
 
 
@@ -53,7 +55,10 @@ class HyperSpectralData:
 
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
-    def __init__(self, camera_id, camera_name, camera_index, app, ai_manager=None, is_hyperspectral=False):
+    def __init__(
+        self, camera_id, camera_name, camera_index,
+        app, ai_manager=None, is_hyperspectral=False
+    ):
         super().__init__()
         self.app = app
         self.camera_id = camera_id
@@ -76,7 +81,8 @@ class CameraView(QFrame):
         self.timer.timeout.connect(self.update_frame)
 
         self.camera_thread = None
-        self.is_running = False # 카메라 동작 상태
+        # 카메라 동작 상태
+        self.is_running = False
 
         self._init_ui()
 
@@ -220,7 +226,7 @@ class CameraView(QFrame):
                 camera_index=self.camera_index,
                 airknife_callback=self.app.airknife_on,
                 app=self.app,
-                ai_manager = self.ai_manager,
+                ai_manager=self.ai_manager,
             )
 
             # 시그널 연결
@@ -256,7 +262,7 @@ class CameraView(QFrame):
                     log(f"{self.camera_name} 강제 종료")
                     self.camera_thread.terminate()
                     self.camera_thread.wait(1000)
-                    
+
             if self.is_hyperspectral:
                 if self.hyper_widget and self.hyper_widget.img_item:
                     self.hyper_widget.img_item.setPixmap(QPixmap())
@@ -281,7 +287,9 @@ class CameraView(QFrame):
     def update_frame(self, frame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # pylint: disable=no-member
+            # pylint: disable=no-member
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
             h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
             qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
@@ -357,7 +365,7 @@ class CameraView(QFrame):
                 # 이 줄만 쓰면 픽셀 변환 그대로
                 line_rgb = np.stack([line_array, line_array, line_array], axis=1)
             elif len(line_array) == 640*3:
-            # RGB 640*3픽셀
+                # RGB 640*3픽셀
                 line_rgb = line_array.reshape(640, 3)
             else:
                 log(f"⚠️ 잘못된 라인 크기: {len(line_array)} (예상: 640 또는 1920)")
@@ -674,10 +682,10 @@ class MonitoringPage(QWidget):
         rgb_layout = QGridLayout()
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
-        
+
         rgb_layout.setRowMinimumHeight(0, 800)
         rgb_layout.setRowMinimumHeight(0, 800)
-        
+
         rgb_layout.setRowStretch(0, 1)
         rgb_layout.setRowStretch(1, 1)
         rgb_layout.setColumnStretch(0, 1)
@@ -836,13 +844,13 @@ class MonitoringPage(QWidget):
 
         if self.ai_manager:
             self.ai_manager.start()
-            
+
         for camera in self.rgb_cameras:
             camera.start_camera()
 
         if self.hyper_camera:
             self.hyper_camera.start_camera()
-                
+
     def on_stop_all(self):
         """전체 정지"""
         log("모든 카메라 정지")
@@ -852,10 +860,10 @@ class MonitoringPage(QWidget):
 
         for camera in self.rgb_cameras:
             camera.stop_camera()
-            
+
         if self.hyper_camera:
             self.hyper_camera.stop_camera()
-            
+
     def on_hypercam_updated(self, info):
         if self.hyper_camera and self.hyper_camera.is_running:
             self.hyper_camera.process_hyperspectral_line(info)
@@ -917,7 +925,7 @@ class MonitoringPage(QWidget):
         self.toggle_btn.setText(state)
         self.app.use_air_sequence = onoff
         log(f"배출 제어 순서 {state}")
-        
+
     def on_legend_info(self, legend_info_list):
         self.legend_info_list = legend_info_list
 
@@ -971,9 +979,9 @@ class MonitoringPage(QWidget):
         self.main_widget.setStyleSheet(
             """
             /* 스크롤바 */
-            QScrollArea { 
-                border: none; 
-                background-color: transparent; 
+            QScrollArea {
+                border: none;
+                background-color: transparent;
             }
 
             QScrollBar:vertical {
@@ -1002,12 +1010,12 @@ class MonitoringPage(QWidget):
                 border: 1px solid #E2E2E2;
                 border-radius: 7px;
             }
-            
+
             #camera_view {
                 background-color: transparent;
                 border: none;
             }
-            
+
             #camera_title {
                 color: #000000;
                 font-size: 16px;
@@ -1019,14 +1027,14 @@ class MonitoringPage(QWidget):
                 font-size: 14px;
                 font-weight: normal;
             }
-            
+
             #stats_frame {
                 background-color: #FAFAFA;
                 border: 1px solid #E2E2E2;
                 border-radius: 7px;
                 padding: 15px;
             }
-            
+
             #combo_box {
                 background-color: #FFFFFF;
                 border: 1px solid #D4D4D4;
@@ -1034,22 +1042,22 @@ class MonitoringPage(QWidget):
                 padding: 5px 10px;
                 color: #4B4B4B;
             }
-            
+
             #combo_box:hover {
                 border-color: #58a6ff;
             }
-            
+
             #combo_box::drop-down {
                 border: none;
             }
-            
+
             #combo_box QAbstractItemView {
                 background-color: #FFFFFF;
                 border: 1px solid #D4D4D4;
                 color: #4B4B4B;
                 selection-background-color: #FFFFFF;
             }
-            
+
             #control_btn_start {
                 background-color: #353535;
                 color: #FFFFFF;
@@ -1058,11 +1066,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_start:hover {
                 background-color: #555555;
             }
-            
+
             #control_btn_stop {
                 background-color: #FF2427;
                 color: #FFFFFF;
@@ -1071,11 +1079,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_stop:hover {
                 background-color: #FF6467;
             }
-            
+
             #control_btn_record {
                 background-color: #2DB591;
                 color: #FFFFFF;
@@ -1084,7 +1092,7 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_record:hover {
                 background-color: #45CAA6;
             }
@@ -1101,11 +1109,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_snapshot:hover {
                 background-color: #64C9EE;
             }
-            
+
             #reset_btn {
                 background-color: #E6E6E6;
                 border: none;
@@ -1114,11 +1122,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #reset_btn:hover {
                 background-color: #8b949e;
             }
-            
+
             #input_field {
                 background-color: #FFFFFF;
                 border: 1px solid #D4D4D4;
@@ -1128,11 +1136,11 @@ class MonitoringPage(QWidget):
                 font-size: 14px;
                 font-weight: normal;
             }
-            
+
             #input_field:focus {
                 border-color: #AAAAAA;
             }
-            
+
             #setting_btn {
                 background-color: #161b22;
                 color: #FFFFFF;
@@ -1141,12 +1149,12 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #setting_btn:hover {
                 background-color: #21262d;
                 border-color: #58a6ff;
             }
-            
+
             #toggle_btn {
                 background-color: #238636;
                 border: none;
@@ -1155,17 +1163,17 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #toggle_btn:checked {
                 background-color: #238636;
                 border-color: #2ea043;
             }
-            
+
             #toggle_btn:!checked {
                 background-color: #6e7681;
                 border-color: #8b949e;
             }
-            
+
             #toggle_btn:hover {
                 opacity: 0.8;
             }
