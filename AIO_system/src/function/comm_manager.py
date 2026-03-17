@@ -719,28 +719,46 @@ class LineScanSimulator(threading.Thread):
     """
     라인 스캔 테스트용 시뮬레이터
     """
+
+    legend_list = [
+        { "Name": "PET" , "Color": "#258FD0" },
+        {"Name": "PE", "Color": "#1CB786" },
+        { "Name" : "PP", "Color": "#E43C3C" },
+        { "Name" : "PS", "Color": "#F5A50F" },
+        { "Name" : "PVC", "Color": "#BE5EC3" },
+        { "Name" : "Others", "Color": "#878787" } 
+    ]
+
     def __init__(self, app, width=640):
         super().__init__(daemon=True)
-        self.app = app
+        self.app = app # 메인 앱 클래스
 
-        self.width = width
-        self.frame_number = 0
-        self.canvas_height = 4000
-        self.canvas = np.zeros((self.canvas_height, self.width, 3), dtype=np.uint8)
+        self.width = width # 초분광 카메라용 UI 영상 캔버스의 폭
+        self.frame_number = 0 # 현재 생성한 프레임(라인)의 수
+        self.canvas_height = 2000 # 캔버스 높이
+        self.canvas = np.zeros(
+            (self.canvas_height, self.width, 3),
+            dtype=np.uint8
+        ) # 가상 오브젝트를 생성할 캔버스
         self.objects_metadata = [] # 오브젝트 좌표 정보를 담을 리스트
-        self.current_y = 0
+        self.current_y = 0 # 실제 초분광 카메라 이벤트 발생 시점을 모방하기 위하여 오브젝트 Y좌표 저장
         self._generate_new_objects()
 
         self.stop_event = threading.Event()
 
     def _generate_new_objects(self):
-        self.canvas.fill(15)
+        """가상의 오브젝트를 생성"""
+        self.canvas.fill(15) # 일단 어두운 색으로 채워서
         self.objects_metadata = []
 
         scan_ratio = 1
 
         for _ in range(random.randint(5, 10)):
-            color = (random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))
+            _ind = random.randint(0, len(self.legend_list) - 1)
+            _info = self.legend_list[_ind]
+            classification = _info["Name"]
+            color_txt = _info["Color"]
+            color = tuple(int(color_txt[i:i+2], 16) for i in (1, 3, 5))
 
             w = random.randint(40, 100)
             h = int(random.randint(60, 150) * scan_ratio)
@@ -760,6 +778,7 @@ class LineScanSimulator(threading.Thread):
 
             # 오브젝트의 실제 경계값(Bounding Box) 저장
             self.objects_metadata.append({
+                "classification": classification,
                 "x_min": int(np.min(pts[:, 0])),
                 "x_max": int(np.max(pts[:, 0])),
                 "y_min_rel": int(np.min(pts[:, 1])),
@@ -779,6 +798,7 @@ class LineScanSimulator(threading.Thread):
         # 현재 라인(y_idx)이 물체의 하단 끝(y_max)에 도달했을 때 이벤트 발생
         # 실제 카메라 시스템에서 '식별 완료' 시점을 흉내냄
         event_data = None
+        classification = None
         for obj in self.objects_metadata:
             # 1. 물체의 시작 지점을 지날 때 시작 프레임 기록
             if obj["start_frame"] is None and y_idx >= obj["y_min_rel"]:
@@ -797,6 +817,7 @@ class LineScanSimulator(threading.Thread):
                     "end_frame": obj["end_frame"]
                 }
                 obj["sent"] = True
+                classification = obj["classification"]
                 break
 
         info = {
@@ -811,7 +832,7 @@ class LineScanSimulator(threading.Thread):
             self.current_y = 0
             self._generate_new_objects()
 
-        return info, event_data
+        return info, event_data, classification
 
     def run(self):
         """소켓 없이 내부 시뮬레이터에서 데이터를 발생시키는 루프"""
@@ -821,7 +842,7 @@ class LineScanSimulator(threading.Thread):
         throttle_interval = 1.0 / 30.0
 
         while not self.stop_event.is_set():
-            info, event_info = self.get_next_data()
+            info, event_info, classification = self.get_next_data()
 
             # 1. 이미지 데이터 전송 (기존 로직)
             current_time = time.time()
@@ -832,7 +853,7 @@ class LineScanSimulator(threading.Thread):
             # 2. 이벤트 데이터 전송 (추가된 로직)
             if event_info:
                 # 실제 앱의 이벤트 소켓 처리 핸들러를 호출
-                self.app.on_obj_detected(event_info, "PS")
+                self.app.on_obj_detected(event_info, classification)
 
             time.sleep(0.01)
 
