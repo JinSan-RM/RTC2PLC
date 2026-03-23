@@ -7,6 +7,7 @@ from src.utils.logger import log
 from src.AI.cam.basler_manager import BaslerCameraManager
 from src.utils.config_util import CAMERA_CONFIGS
 from src.AI.tracking.detection_box import ConveyorBoxZone, ConveyorBoxManager, DetectedObject
+from src.AI.tracking.part_MC_entrance_traffic_detect import EntranceBoxZone, EntranceBoxManager
 
 
 class CameraThread(QThread):
@@ -56,11 +57,14 @@ class CameraThread(QThread):
         
         # 박스 매니저 생성
         self.box_manager = self._create_box_manager()
+
+        # 배출 감지 박스 매니저 생성
+        self.entrance_box_manager = self._create_entrance_box_manager()
         
         # 캐싱된 결과 (프레임 스킵용)
         self.last_detected_objects = []
         self.frame_count = 0
-        self.inference_interval = 2  # 2프레임마다 추론
+        self.inference_interval = 1  # 2프레임마다 추론
         
         # 통계
         self.fps_counter = 0
@@ -86,6 +90,23 @@ class CameraThread(QThread):
         log(f"카메라 {self.camera_index}: {len(boxes)}개 박스 생성")
         return ConveyorBoxManager(boxes)
     
+    def _create_entrance_box_manager(self):
+        """카메라별 배출 감지 박스 생성"""
+        boxes = []
+        for box_cfg in self.config.get('entrance_boxes', []):
+            box = EntranceBoxZone(
+                box_id=box_cfg['box_id'],
+                x=box_cfg['x'],
+                y=box_cfg['y'],
+                width=box_cfg['width'],
+                height=box_cfg['height'],
+                target_classes=box_cfg['target_classes'],
+                airknife_callback=self.airknife_callback
+            )
+            boxes.append(box)
+        log(f"카메라 {self.camera_index}: {len(boxes)}개 배출 감지 박스 생성")
+        return EntranceBoxManager(boxes)
+
     def run(self):
         """스레드 실행"""
         log(f"📷 카메라 {self.camera_index + 1} 스레드 시작")
@@ -157,8 +178,13 @@ class CameraThread(QThread):
                 
                 # 4. 박스 매니저 업데이트
                 self.box_manager.update_detections(detected_objects)
+
+                self.entrance_box_manager.update_detections(detected_objects)
+
+                self._handle_airknife()
                 
                 # 5. AirKnife 동작
+                #print("detected_objects 개수:", len(detected_objects))
                 if len(detected_objects) > 0:
                     self._handle_airknife()
                 
@@ -217,6 +243,7 @@ class CameraThread(QThread):
         """프레임에 그리기"""
         # 1. 박스 그리기
         frame = self.box_manager.draw_all(frame)
+        frame = self.entrance_box_manager.draw_all(frame)
         
         # 2. 감지된 객체 그리기
         for obj in detected_objects:

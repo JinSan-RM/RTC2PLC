@@ -217,7 +217,7 @@ CAMERA_CONFIGS = {
                 'width': 350,
                 'height': 400,
                 # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
-                'target_classes': ['PE'],
+                'target_classes': ['PLASTIC'],
                 'airknife_id': 1
             },
             # {
@@ -229,6 +229,18 @@ CAMERA_CONFIGS = {
             #     'target_classes': ['PP', 'PS'],
             #     'airknife_id': 2
             # }
+        ],
+        'entrance_boxes': [
+            {
+                'box_id': 1,
+                'x': 50,
+                'y': 200,
+                'width': 350,
+                'height': 400,
+                # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
+                'target_classes': ['PLASTIC'],
+                'airknife_id': 1
+            },
         ]
     },
     1: {  # 카메라 2

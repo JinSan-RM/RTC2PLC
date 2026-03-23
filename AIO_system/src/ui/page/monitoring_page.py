@@ -508,12 +508,12 @@ class MonitoringPage(QWidget):
         self.hyper_camera = None
         self.ai_manager = BatchAIManager(
             num_cameras=2,
-            confidence_threshold=0.6,
+            confidence_threshold=0.65,
             img_size=640,
             max_det=50
         )
-        # model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
-        model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
+        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        # model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
         if not self.ai_manager.initialize(model_path):
             log("AI 매니저 초기화 실패")
             # 초기화 실패해도 UI는 표시

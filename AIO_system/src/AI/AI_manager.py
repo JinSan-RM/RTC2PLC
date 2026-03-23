@@ -38,7 +38,7 @@ class BatchAIManager:
     def __init__(
         self,
         num_cameras: int = 2,
-        confidence_threshold: float = 0.5,
+        confidence_threshold: float = 0.65,
         img_size: int = 640,
         max_det: int = 50
     ):
@@ -61,7 +61,7 @@ class BatchAIManager:
         self.model = None
         self.device = None
         # self.CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
-        self.CLASS_NAMES = ['Plastic']
+        self.CLASS_NAMES = ['PLASTIC']
         
         self.running = False
         self.inference_thread = None

@@ -112,7 +112,7 @@ class AIPlasticDetectionSystem:
     def __init__(
         self,
         model_path: str = None,
-        confidence_threshold: float = 0.5,
+        confidence_threshold: float = 0.65,
         img_size: int = 640,
         airknife_callback=None,
         app=None,
@@ -142,7 +142,7 @@ class AIPlasticDetectionSystem:
         
         self.box_manager = self._create_box_manager()
         
-        self.inference_interval = 2
+        self.inference_interval = 1
         self.fps_counter = 0
         self.fps_start_time = time.time()
         self.current_fps = 0
@@ -440,8 +440,8 @@ if __name__ == "__main__":
     try:
         detector = AIPlasticDetectionSystem(
             model_path=model_path,
-            confidence_threshold=0.5,
-            img_size=640  # 더 빠르게: 480 또는 320
+            confidence_threshold=0.65,
+            img_size=640  # 더 빠르게: 640
         )
         detector.run()
     except Exception as e:
