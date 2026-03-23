@@ -7,7 +7,8 @@ from src.utils.logger import log
 from src.AI.cam.basler_manager import BaslerCameraManager
 from src.utils.config_util import CAMERA_CONFIGS
 from src.AI.tracking.detection_box import ConveyorBoxZone, ConveyorBoxManager, DetectedObject
-
+#추가
+from src.AI.block_detect import BlockDetector
 
 class CameraThread(QThread):
     """
@@ -19,16 +20,16 @@ class CameraThread(QThread):
     error_occurred = Signal(str)
     
     # 클래스 상수
-    # CLASS_COLORS = {
-    #     'PET': (0, 165, 255),
-    #     'PE': (255, 0, 0),
-    #     'PP': (0, 255, 0),
-    #     'PS': (255, 0, 255)
-    # }
-    
     CLASS_COLORS = {
-        'PLASTIC': (255, 255, 255)
+        'PET': (0, 165, 255),
+        'PE': (255, 0, 0),
+        'PP': (0, 255, 0),
+        'PS': (255, 0, 255)
     }
+    
+    # CLASS_COLORS = {
+    #     'PLASTIC': (255, 255, 255)
+    # }
     
     def __init__(
         self,
@@ -56,11 +57,13 @@ class CameraThread(QThread):
         
         # 박스 매니저 생성
         self.box_manager = self._create_box_manager()
+        #추가
+        self.block_detector = BlockDetector(box_manager=self.box_manager, camera_index=camera_index, block_threshold=1.0)
         
         # 캐싱된 결과 (프레임 스킵용)
         self.last_detected_objects = []
         self.frame_count = 0
-        self.inference_interval = 2  # 2프레임마다 추론
+        self.inference_interval = 1  # 2프레임마다 추론
         
         # 통계
         self.fps_counter = 0
@@ -153,10 +156,15 @@ class CameraThread(QThread):
                         detected_objects = self.last_detected_objects
                 else:
                     detected_objects = []
+                    
+                # log(f"[DEBUG-AI-1] camera_index={self.camera_index}, detected_objects 개수={len(detected_objects) if detected_objects else 0}")
+                # if detected_objects:
+                #     for obj in detected_objects:
+                #         log(f"[DEBUG-AI-2]   obj.id={obj.id}, class={obj.class_name}")
                 
                 # 4. 박스 매니저 업데이트
                 self.box_manager.update_detections(detected_objects)
-                
+
                 # 5. AirKnife 동작
                 if len(detected_objects) > 0:
                     self._handle_airknife()
@@ -165,7 +173,7 @@ class CameraThread(QThread):
                 frame = self._draw_frame(frame, detected_objects)
                 
                 # 7. 프레임 전송
-                self.frame_ready.emit(frame)
+                self.frame_ready.emit(frame) # == CameraView.update_frame
                 
                 # FPS 계산
                 self._update_fps()

@@ -4,7 +4,7 @@ from typing import Tuple, List, Optional, Dict
 from collections import defaultdict
 from dataclasses import dataclass
 from src.AI.AI_manager import DetectedObject
-
+from datetime import datetime
 
 class ConveyorBoxZone:
     """
@@ -36,6 +36,8 @@ class ConveyorBoxZone:
         self.class_counts = {cls: 0 for cls in target_classes}
         self.detected_objects = set()  # 이미 카운트된 객체들
         self.tracked_objects_info: Dict[int, DetectedObject] = {}
+        #추가
+        self.object_entry_times: Dict[int, datetime] = {}  # 객체 ID별로 박스에 들어온 시간 기록
 
         self.is_active = False  # 현재 물체가 있는지
         
@@ -48,23 +50,30 @@ class ConveyorBoxZone:
     def update(self, obj: DetectedObject) -> bool:
         inside = self.is_inside(obj.center)
         is_target = obj.class_name in self.target_classes
+        current_time = datetime.now()
+        
+        #id 확인
+        
+        #print(f"[DEBUG] value={obj.id}")
+        
+        #수정
         
         if inside and is_target:
             if obj.id not in self.tracked_objects:
                 self.tracked_objects.add(obj.id)
                 self.class_counts[obj.class_name] += 1  # 클래스별 카운트
-                
+                #추가
+                self.object_entry_times[obj.id] = datetime.now()  # 진입 시간 기록
                 self.tracked_objects_info[obj.id] = obj
                 
+                print(f"[DEBUG-UPDATE-4] ✅ 박스 안으로 진입! obj.id={obj.id}")
                 return True  # 액션 트리거
             else:
                 self.tracked_objects.add(obj.id)
                 self.tracked_objects_info[obj.id] = obj
                 self.is_active = True
-        else:
-            self.tracked_objects.discard(obj.id)
-            self.tracked_objects_info.pop(obj.id, None)
-            
+                
+
         self.is_active = len(self.tracked_objects) > 0
         return False
     
@@ -107,13 +116,31 @@ class ConveyorBoxManager:
         """
         모든 박스에 대해 감지 업데이트
         """
+        
+        
         # 조기 리턴으로 불필요한 연산 제거
         if not detected_objects:
             for box in self.boxes:
                 box.tracked_objects.clear()
                 box.tracked_objects_info.clear()
+                #추가
+                box.object_entry_times.clear()
                 box.is_active = False
             return
+        
+        #중복 제거
+        # seen_ids = set()
+        # unique_objects = []
+    
+        # for obj in detected_objects:
+        #     if obj.id not in seen_ids:  # ← 이미 본 ID가 아니면
+        #         unique_objects.append(obj)
+        #         seen_ids.add(obj.id)
+    
+        # detected_objects = unique_objects
+    
+        # id_list = [obj.id for obj in detected_objects]
+        # print(f"[DEBUG-MANAGER] ID들: {id_list}")
         
         current_ids = {obj.id for obj in detected_objects}
     
@@ -131,8 +158,21 @@ class ConveyorBoxManager:
                 k: v for k, v in box.tracked_objects_info.items() 
                 if k in current_ids
             }
+            
             # 박스 상태 업데이트
             box.is_active = bool(box.tracked_objects)
+        
+        for box in self.boxes:
+            tracked_info = []
+            for obj_id in box.tracked_objects:
+                if obj_id in box.tracked_objects_info:
+                    obj = box.tracked_objects_info[obj_id]
+                    if obj:
+                        tracked_info.append((f"{obj_id}", f"{obj.class_name}"))
+                        
+            if tracked_info:
+                print(f"{tracked_info}")
+                    
     
     def draw_all(self, frame: np.ndarray) -> np.ndarray:
         """모든 박스 그리기"""

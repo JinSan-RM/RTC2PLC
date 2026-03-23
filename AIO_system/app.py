@@ -32,7 +32,6 @@ from src.utils.config_util import (
 )
 from src.utils.logger import log
 
-
 _LOG_FILE = None
 _LOG_PATH = ""
 
@@ -172,6 +171,7 @@ class App():
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.on_periodic_update)
         self.update_timer.start(100)
+        
 
     @property
     def camera_manager(self):
@@ -243,13 +243,38 @@ class App():
 
                 self._feeder_output_time = current_time
 
-            if (current_time - self._feeder_air_time).total_seconds() > self.FEEDER_AIR_TERM:
-                # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
-                self.airknife_on(4, self.FEEDER_AIR_DURATION * 1000)
-                self._feeder_air_time = current_time
-
+            #수정 & 추가
+            
+            # if (current_time - self._feeder_air_time).total_seconds() > self.FEEDER_AIR_TERM:
+            # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
+            #    self.airknife_on(4, self.FEEDER_AIR_DURATION * 1000)
+            #    self._feeder_air_time = current_time
+            
+            try:
+                # camera_manager는 MonitoringPage 인스턴스
+                if self.camera_manager:
+                    # MonitoringPage.rgb_cameras는 CameraView 객체들의 리스트
+                    if len(self.camera_manager.rgb_cameras) > 0:
+                    
+                        # 첫 번째 RGB 카메라 (피더 카메라)
+                        feeder_camera_view = self.camera_manager.rgb_cameras[0]
+                    
+                        # CameraView 안의 camera_thread에 접근
+                        if feeder_camera_view.camera_thread:
+                            # feeder 막힘 감지
+                            if feeder_camera_view.camera_thread.block_detector.is_blocked():
+                                self.airknife_on(4, self.FEEDER_AIR_DURATION * 1000)
+                                #log("에어나이프 발동발동")
+        
+            except Exception as e:
+                log(f"[ERROR] Feeder blockage detection failed: {e}")
+                
+                import traceback
+                traceback.print_exc()
+        
             time.sleep(0.033)
 
+                
 # region inverter control
     def on_update_inverter_status(self, _data):
         """피더, 컨베이어 상태 UI 업데이트"""
