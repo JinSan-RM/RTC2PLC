@@ -1,17 +1,23 @@
+"""
+src/AI/predict_AI.py
+"""
+import os
+import sys
+import time
+import traceback
+from dataclasses import dataclass
+from typing import Dict, List, Tuple, Optional
+
 import cv2
 import numpy as np
 import torch
-import time
-from dataclasses import dataclass
-from typing import Dict, List, Tuple, Optional
-import os
-import sys
+
+from src.utils.logger import log
+from src.utils.config_util import CAMERA_CONFIGS
 
 from .tracking.detection_box import ConveyorBoxZone, ConveyorBoxManager
 from .model_load import load_yolov11
 from .cam.basler_manager import BaslerCameraManager
-from src.utils.logger import log
-from src.utils.config_util import CAMERA_CONFIGS
 
 
 @dataclass
@@ -27,18 +33,18 @@ class DetectedObject:
 
 class PlasticClassifier:
     """AI Hub 폐플라스틱 4종 분류기"""
-    
+
     PLASTIC_CLASSES = {
         'PET': '폴리에틸렌 테레프탈레이트',
         'PE': '폴리에틸렌',
         'PP': '폴리프로필렌',
         'PS': '폴리스티렌'
     }
-    
+
     @classmethod
     def get_plastic_info(cls, class_name: str) -> str:
         return cls.PLASTIC_CLASSES.get(class_name, '알 수 없는 플라스틱')
-    
+
     @classmethod
     def parse_metainfo(cls, metainfo_name: str) -> Dict:
         try:
@@ -56,7 +62,7 @@ class PlasticClassifier:
 
 class PlasticSortingSystem:
     """AI Hub 폐플라스틱 자동 선별 시스템"""
-    
+
     def __init__(self):
         self.sorting_actions = {
             'PET': self.handle_pet,
@@ -71,25 +77,25 @@ class PlasticSortingSystem:
             'PP': {'count': 0, 'bin_id': 'C', 'color': (0, 255, 0)},
             'PS': {'count': 0, 'bin_id': 'D', 'color': (255, 0, 255)}
         }
-    
+
     def execute_sorting(self, class_name: str, metainfo: Dict = None):
         if class_name in self.sorting_actions:
             self.sorting_actions[class_name](metainfo)
         else:
             self.handle_unknown(class_name, metainfo)
-    
+
     def handle_pet(self, metainfo: Dict = None):
         self.bins['PET']['count'] += 1
-    
+
     def handle_pe(self, metainfo: Dict = None):
         self.bins['PE']['count'] += 1
-    
+
     def handle_pp(self, metainfo: Dict = None):
         self.bins['PP']['count'] += 1
-    
+
     def handle_ps(self, metainfo: Dict = None):
         self.bins['PS']['count'] += 1
-    
+
     def handle_unknown(self, class_name: str, metainfo: Dict = None):
         pass
 
@@ -108,7 +114,7 @@ class AIPlasticDetectionSystem:
     CLASS_COLORS = {
         'PLASTIC': (255, 255, 255)
     }
-    
+
     def __init__(
         self,
         model_path: str = None,
@@ -127,27 +133,27 @@ class AIPlasticDetectionSystem:
         if self.model is None:
             raise RuntimeError("YOLOv11 모델 로드 실패")
         self.airknife_callback = airknife_callback
-        
+
         self.confidence_threshold = confidence_threshold
         self.img_size = img_size
         self.config = CAMERA_CONFIGS.get(camera_index, {})
         roi = self.config.get('roi', None)
-        
+
         self.camera_manager = BaslerCameraManager(camera_index=camera_index, roi=roi)
         self.line_counter = None
         self.sorting_system = PlasticSortingSystem()
-        
+
         # 카메라 별 설정 로드
         self.config = CAMERA_CONFIGS.get(camera_index, {})
-        
+
         self.box_manager = self._create_box_manager()
-        
+
         self.inference_interval = 1
         self.fps_counter = 0
         self.fps_start_time = time.time()
         self.current_fps = 0
         self.total_processed = 0
-        
+
         # 모델 워밍업
         log("모델 워밍업 중...")
         dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
@@ -156,12 +162,12 @@ class AIPlasticDetectionSystem:
         # for _ in range(3):
         #     _ = self.model.predict(dummy_img, verbose=False, imgsz=self.img_size)
         # log("워밍업 완료!")
-        
+
         # 모델 클래스명 가져오기
         if hasattr(self.model, 'names'):
             self.CLASS_NAMES = [self.model.names[i].upper() for i in range(len(self.model.names))]
             log(f"모델 클래스: {self.CLASS_NAMES}")
-    
+
     def _create_box_manager(self):
         """카메라별 박스 생성 - 각 박스에 AirKnife 콜백 연결"""
         boxes = []
@@ -178,7 +184,7 @@ class AIPlasticDetectionSystem:
             boxes.append(box)
         log(f"카메라 {self.camera_index}: {len(boxes)}개 박스 생성")
         return ConveyorBoxManager(boxes)
-    
+
     def detect(self, frame: np.ndarray) -> List[DetectedObject]:
         """YOLOv11을 사용한 객체 감지 + 추적 (GPU 가속)"""
         try:
@@ -196,7 +202,7 @@ class AIPlasticDetectionSystem:
                 agnostic_nms=True,
                 classes=[0, 1, 2, 3]
             )
-            # # TensorRT 변경 부분           
+            # # TensorRT 변경 부분
             # results = self.model.track(
             #     source=frame,
             #     conf=self.confidence_threshold,
@@ -207,17 +213,16 @@ class AIPlasticDetectionSystem:
             #     tracker="bytetrack.yaml",
             #     agnostic_nms=True
             # )
-            
-            
+
             detected_objects = []
-            
+
             # 결과 파싱
             for result in results:
                 boxes = result.boxes
-                
+
                 if boxes is None or len(boxes) == 0:
                     continue
-                
+
                 # ID 확인 (tracking 실패 시 None일 수 있음)
                 if boxes.id is None:
                     # log("⚠️ Tracking ID가 없습니다. predict 모드로 fallback")
@@ -225,16 +230,16 @@ class AIPlasticDetectionSystem:
                     xyxy = boxes.xyxy.cpu().numpy()
                     conf = boxes.conf.cpu().numpy()
                     cls = boxes.cls.cpu().numpy().astype(int)
-                    
+
                     for idx, (box, confidence, class_id) in enumerate(zip(xyxy, conf, cls)):
                         if class_id >= len(self.CLASS_NAMES):
                             continue
-                        
+
                         class_name = self.CLASS_NAMES[class_id]
                         x1, y1, x2, y2 = map(int, box)
                         center_x = (x1 + x2) // 2
                         center_y = (y1 + y2) // 2
-                        
+
                         detected_obj = DetectedObject(
                             id=idx,
                             class_name=class_name,
@@ -244,22 +249,22 @@ class AIPlasticDetectionSystem:
                         )
                         detected_objects.append(detected_obj)
                     continue
-                
+
                 # 배치 처리 (tracking ID 포함)
                 xyxy = boxes.xyxy.cpu().numpy()
                 conf = boxes.conf.cpu().numpy()
                 cls = boxes.cls.cpu().numpy().astype(int)
                 track_ids = boxes.id.cpu().numpy().astype(int)  # ← 고유 추적 ID!
-                
+
                 for box, confidence, class_id, track_id in zip(xyxy, conf, cls, track_ids):
                     if class_id >= len(self.CLASS_NAMES):
                         continue
-                    
+
                     class_name = self.CLASS_NAMES[class_id]
                     x1, y1, x2, y2 = map(int, box)
                     center_x = (x1 + x2) // 2
                     center_y = (y1 + y2) // 2
-                    
+
                     detected_obj = DetectedObject(
                         id=int(track_id),  # ← 이제 고유한 추적 ID!
                         class_name=class_name,
@@ -268,14 +273,13 @@ class AIPlasticDetectionSystem:
                         confidence=float(confidence)
                     )
                     detected_objects.append(detected_obj)
-            
+
             return detected_objects
-            
+
         except Exception as e:
             log(f"감지 오류: {e}")
             return []
-    
-    
+
     def draw_detections(self, frame: np.ndarray, detected_objects: List[DetectedObject]) -> np.ndarray:
         """감지 결과 그리기"""
         #tensorRT
@@ -285,26 +289,26 @@ class AIPlasticDetectionSystem:
         #     'PP': (0, 255, 0),
         #     'PS': (255, 0, 255)
         # }
-        
+
         for obj in detected_objects:
             x1, y1, x2, y2 = obj.bbox
             color = self.CLASS_COLORS.get(obj.class_name, (128, 128, 128))
-            
+
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             # cv2.circle(frame, obj.center, 5, (0, 0, 255), -1)
-            
+
             label = f"{obj.class_name}: {obj.confidence:.2f}"
             cv2.putText(
-                frame, label, (x1, y1 - 10), 
-                cv2.FONT_HERSHEY_SIMPLEX, 
+                frame, label, (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,  # ✨ 0.6 → 0.5 (폰트 크기 감소)
-                color, 
+                color,
                 1,    # ✨ 2 → 1 (두께 감소, 렌더링 2배 빠름)
                 cv2.LINE_AA
             )
-        
+
         return frame
-    
+
     def send_airknife_signal(self, air_num, on_term):
         """AirKnife 신호 전송"""
         if self.airknife_callback:
@@ -315,43 +319,43 @@ class AIPlasticDetectionSystem:
                 pass
         else:
             log(f"AirKnife 콜백 없음: Zone {air_num}")
-    
+
     def run(self):
         """메인 실행 루프"""
         log("AI Hub 폐플라스틱 감지 시스템 시작 (YOLOv11 + GPU)")
-        
+
         camera_ip = None
         if not self.camera_manager.initialize(camera_ip=camera_ip):
             log("Basler 카메라 실패. 웹캠 사용")
-            
+
             cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-            
+
             if not cap.isOpened():
                 log("카메라 인덱스 0 실패, 인덱스 1 시도...")
                 cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-            
+
             if not cap.isOpened():
                 log("❌ 사용 가능한 카메라를 찾을 수 없습니다.")
                 return
-            
+
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             cap.set(cv2.CAP_PROP_FPS, 60)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            
+
             actual_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
             actual_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
             actual_fps = cap.get(cv2.CAP_PROP_FPS)
             log(f"카메라 설정: {actual_width}x{actual_height} @ {actual_fps}fps")
-            
+
             use_basler = False
         else:
             self.camera_manager.start_grabbing()
             use_basler = True
-        
+
         try:
             frame_count = 0
-            
+
             while True:
 
                 if use_basler:
@@ -362,53 +366,47 @@ class AIPlasticDetectionSystem:
                     ret, frame = cap.read()
                     if not ret:
                         break
-                    
+
                 # infercence_interval 에 따라서 N 번마다 프레임 추론
                 if frame_count % self.inference_interval == 0:
                     # 추론 실행
                     detected_objects = self.detect(frame)
                     last_detected_objects = detected_objects
                     self.box_manager.update_detections(detected_objects)
-                
+
                 else:
                     detected_objects = last_detected_objects
-                
+
                 # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작 시키는것
                 if len(detected_objects) > 0:
-                    
+
                     if self.app.use_air_sequence and self.app.air_index_iter != None:
                         box_id = int(next(self.app.air_index_iter))
                         box = self.box_manager.boxes[box_id]
-                        
+
                         if box.is_active:
                             self.send_airknife_signal(air_num=box.box_id, on_term=1000)
-                            
+
                     else:
-                        
                         for box in self.box_manager.boxes:
-                            
+
                             if box.is_active:
                                 self.send_airknife_signal(air_num=box.box_id, on_term=1000)
-                    
-
 
                 # 30프레임마다 정리
                 frame_count += 1
-                
+
                 # 3. 그리기 시간
                 frame = self.box_manager.draw_all(frame)
                 frame = self.draw_detections(frame, detected_objects)
-                
 
-                
                 yield frame
-        
+
         except KeyboardInterrupt:
             log("\n시스템 중단")
         except Exception as e:
             log(f"\n시스템 오류: {e}")
-            import traceback
-            traceback.log_exc()
+            traceback.print_exc()
         finally:
             if use_basler:
                 self.camera_manager.stop_grabbing()
@@ -428,15 +426,16 @@ class AIPlasticDetectionSystem:
         if torch.cuda.is_available():
             log(f"GPU 메모리 사용량: {torch.cuda.memory_allocated(0) / 1024**2:.2f} MB")
 
+
 if __name__ == "__main__":
     log("AI Hub 폐플라스틱 감지 시스템 v4.0 (YOLOv11 + GPU)")
-    
+
     model_path = sys.path[0] + "\\model\\weights\\best.pt"
-    
+
     if not os.path.exists(model_path):
         log(f"\n❌ 모델 파일을 찾을 수 없습니다: {model_path}")
-        exit(1)
-    
+        sys.exit(1)
+
     try:
         detector = AIPlasticDetectionSystem(
             model_path=model_path,
@@ -446,5 +445,4 @@ if __name__ == "__main__":
         detector.run()
     except Exception as e:
         log(f"\n오류: {e}")
-        import traceback
-        traceback.log_exc()
+        traceback.print_exc()

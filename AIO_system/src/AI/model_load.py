@@ -1,3 +1,6 @@
+"""
+모델 로더
+"""
 import os
 import torch
 from ultralytics import YOLO
@@ -10,26 +13,26 @@ def load_yolov11(model_path, half_precision=True):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         log(f"PyTorch 버전: {torch.__version__}")
         log(f"CUDA 사용 가능: {torch.cuda.is_available()}")
-        
+
         if torch.cuda.is_available():
             log(f"GPU 장치: {torch.cuda.get_device_name(0)}")
             log(f"GPU 메모리: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
-        
+
         # YOLOv11 모델 로드
         log(f"\nYOLOv11 모델 로드 중: {model_path}")
         model = YOLO(model_path, task="detect")
-        
+
         ext = os.path.splitext(model_path)[1].lower()
-        
+
         # TensorRT Engine이면 model.to() 강제하지 않음
         # if ext != ".engine":
         #     model.to(device)
-        
-        log(f"YOLOv11 모델 로드 성공!")
+
+        log("YOLOv11 모델 로드 성공!")
         log(f"사용 장치: {device.upper()}")
-        
+
         return model, device
-        
+
     except Exception as e:
         log(f"모델 로드 실패: {e}")
         return None, None

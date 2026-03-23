@@ -1,9 +1,16 @@
+"""
+감지 박스 및 박스 매니저
+"""
+from typing import Tuple, List, Dict
+from collections import defaultdict
+# from dataclasses import dataclass
+
 import cv2
 import numpy as np
-from typing import Tuple, List, Optional, Dict
-from collections import defaultdict
-from dataclasses import dataclass
+
 from src.AI.AI_manager import DetectedObject
+from src.utils.config_util import DetectBoxInfo
+from src.utils.logger import log
 
 
 class ConveyorBoxZone:
@@ -12,55 +19,53 @@ class ConveyorBoxZone:
     
     객체의 중앙점이 박스안에 들어오면 AirKnife에 부는 형태로 카운팅
     """
-    
     def __init__(self, box_id: int, x: int, y: int,
                 width: int, height: int,
                 # target_classes: List[str] = ['PET', 'PE', 'PP', 'PS'],
                 # TensorRT 변경 부분 =========
-                target_classes: List[str] = ['PLASTIC'],
+                target_classes: List[str],
                 plc_callback=None,
                 ):
-        
+
+        if target_classes is None:
+            target_classes = ['PLASTIC']
+
         self.box_id = box_id
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.x1 = x
-        self.y1 = y
-        self.x2 = x + width
-        self.y2 = y + height
+        self.locate_info = DetectBoxInfo(
+            width=width, height=height,
+            x1=x, y1=y, x2=x+width, y2=y+height
+        )
         self.target_classes = set(target_classes)
         self.plc_callback=plc_callback
-        
-        
+
         self.tracked_objects = set()  # 현재 박스 안에 있는 객체들
         self.class_counts = {cls: 0 for cls in target_classes}
         self.detected_objects = set()  # 이미 카운트된 객체들
         self.tracked_objects_info: Dict[int, DetectedObject] = {}
 
         self.is_active = False  # 현재 물체가 있는지
-        
-        
+
     def is_inside(self, center: Tuple[int, int]) -> bool:
         """중심점이 박스 안에 있는지 확인"""
         x, y = center
-        return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
-    
+        return self.locate_info.x1 <= x <= self.locate_info.x2 and\
+            self.locate_info.y1 <= y <= self.locate_info.y2
+
     def update(self, obj: DetectedObject) -> bool:
+        """감지 박스 업데이트"""
         inside = self.is_inside(obj.center)
         is_target = obj.class_name in self.target_classes
-        
+
         if inside and is_target:
             if obj.id not in self.tracked_objects:   # tracked_objects는 박스 안에 있는 객체 집합
                 self.tracked_objects.add(obj.id)   # 새로 들어온 객체 추가 -> 여기서 PLC 신호 트리거 필요
                 self.class_counts[obj.class_name] += 1  # 클래스별 카운트
-                
+
                 self.tracked_objects_info[obj.id] = obj
 
                 if self.plc_callback:    # 객체가 처음 들어왔을 때만 PLC 신호 전송
-                    self.plc_callback(self.box_id, 1)  # air_num, on_term
-                    log(f"plc callback called... : zone={self.box_id}, on_term=1")
+                    self.plc_callback(self.box_id)  # air_num
+                    log(f"plc callback called... : zone={self.box_id}")
                 else:
                     log(f"plc callback not set... : zone={self.box_id}")
 
@@ -72,29 +77,49 @@ class ConveyorBoxZone:
         else:
             self.tracked_objects.discard(obj.id)
             self.tracked_objects_info.pop(obj.id, None)
-            
+
         self.is_active = len(self.tracked_objects) > 0
         return False
-    
+
     def draw(self, frame: np.ndarray) -> np.ndarray:
         """박스 그리기 (물체 있으면 빨강, 없으면 초록)"""
         color = (0, 0, 255) if self.is_active else (0, 255, 0)
-        cv2.rectangle(frame, (self.x1, self.y1), (self.x2, self.y2), color, 2)
-        
+        cv2.rectangle(
+            frame,
+            (self.locate_info.x1, self.locate_info.y1),
+            (self.locate_info.x2, self.locate_info.y2),
+            color,
+            2
+        )
+
         # Zone 별로 ID
-        cv2.putText(frame, f"Zone {self.box_id}", (self.x1 + 5, self.y1 + 20),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-        
+        cv2.putText(
+            frame,
+            f"Zone {self.box_id}",
+            (self.locate_info.x1 + 5, self.locate_info.y1 + 20),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            color,
+            2
+        )
+
         # class별로 카운트 표시
         y_offset = 40
         for cls, count in self.class_counts.items():
-            count_label = f"{cls}: {count}"
-            cv2.putText(frame, f"{cls}:{count}", (self.x1 + 5, self.y1 + y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            # count_label = f"{cls}: {count}"
+            cv2.putText(
+                frame,
+                f"{cls}:{count}",
+                (self.locate_info.x1 + 5, self.locate_info.y1 + y_offset),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (255, 255, 255),
+                1
+            )
             y_offset += 15
-        
+
         return frame
-    
+
     def reset(self):
         """카운트 리셋"""
         self.tracked_objects.clear()
@@ -102,12 +127,10 @@ class ConveyorBoxZone:
         self.tracked_objects_info.clear()
         self.class_counts = {cls: 0 for cls in self.target_classes}
         self.is_active = False
-        
-        
-        
+
+
 class ConveyorBoxManager:
     """여러 개의 감지 박스 관리"""
-    
     def __init__(self, boxes: List[ConveyorBoxZone]):
         self.boxes = boxes
 
@@ -122,26 +145,26 @@ class ConveyorBoxManager:
                 box.tracked_objects_info.clear()
                 box.is_active = False
             return
-        
+
         current_ids = {obj.id for obj in detected_objects}
-    
+
         # 새로운 객체들 업데이트
         for obj in detected_objects:
             for box in self.boxes:
                 box.update(obj)
-                
+
         # 각 박스에서 사라진 객체 제거
         for box in self.boxes:
             # 현재 프레임에 없는 ID는 tracked_objects에서 제거
             # box.tracked_objects = box.tracked_objects & current_ids
             box.tracked_objects &= current_ids
             box.tracked_objects_info = {
-                k: v for k, v in box.tracked_objects_info.items() 
+                k: v for k, v in box.tracked_objects_info.items()
                 if k in current_ids
             }
             # 박스 상태 업데이트
             box.is_active = bool(box.tracked_objects)
-    
+
     def draw_all(self, frame: np.ndarray) -> np.ndarray:
         """모든 박스 그리기"""
         # for box in self.boxes:
@@ -150,14 +173,15 @@ class ConveyorBoxManager:
         for box in self.boxes:
             box.draw(frame)
         return frame
-    
+
     def get_total_counts(self) -> Dict[str, int]:
+        """재질별 전체 카운트 집계"""
         total = defaultdict(int)
         for box in self.boxes:
             for cls, cnt in box.class_counts.items():
                 total[cls] += cnt
         return dict(total)
-    
+
     def reset_all(self):
         """모든 박스 리셋"""
         for box in self.boxes:

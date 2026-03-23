@@ -58,7 +58,8 @@ class CameraView(QFrame):
     """카메라 뷰 위젯"""
     def __init__(
         self, camera_id, camera_name, camera_index,
-        app, ai_manager=None, is_hyperspectral=False
+        app, ai_manager=None,
+        is_hyperspectral=False, is_block_detect=False
     ):
         super().__init__()
         self.app = app
@@ -67,6 +68,7 @@ class CameraView(QFrame):
         self.camera_index = camera_index
         self.ai_manager = ai_manager
         self.is_hyperspectral = is_hyperspectral
+        self.is_block_detect = is_block_detect
         if self.is_hyperspectral:
             self.img_data = HyperSpectralData(max_lines=MAX_IMG_LINES)
             self.img_data.line_buffer = deque(maxlen=self.img_data.max_lines)
@@ -75,6 +77,7 @@ class CameraView(QFrame):
             self.img_data.update_interval = 0.033
         else:
             self.img_data = None
+
         self.image_label = None
         self.detector = None
         self.detector_frame_generator = None
@@ -222,10 +225,14 @@ class CameraView(QFrame):
                 log(f"{self.camera_name} 시작 완료 (CommManager 수신 대기)")
                 return
 
+            airknife_callback = self.app.airknife_on
+            if self.is_block_detect:
+                airknife_callback = self.app.blow_block
+
             # CameraThread 생성
             self.camera_thread = CameraThread(
                 camera_index=self.camera_index,
-                airknife_callback=self.app.airknife_on,
+                airknife_callback=airknife_callback,
                 app=self.app,
                 ai_manager=self.ai_manager,
             )
@@ -708,19 +715,20 @@ class MonitoringPage(QWidget):
 
         # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
-            ("RGB 카메라 1", 0, 0, 0),
-            ("RGB 카메라 2", 0, 1, 1),
-            # ("RGB 카메라 3", 1, 0),
-            # ("RGB 카메라 4", 1, 1),
+            ("RGB 카메라 1", 0, 0, 0, True),
+            ("RGB 카메라 2", 0, 1, 1, False),
+            # ("RGB 카메라 3", 1, 0, False),
+            # ("RGB 카메라 4", 1, 1, False),
         ]
 
-        for name, row, col, camera_index in cameras:
+        for name, row, col, camera_index, is_block_detect in cameras:
             cam = CameraView(
                 camera_id=f"rgb_{row}{col}",
                 camera_name=name,
                 camera_index=camera_index,
                 app=self.app,
-                ai_manager=self.ai_manager
+                ai_manager=self.ai_manager,
+                is_block_detect=is_block_detect
             )
             cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             rgb_layout.addWidget(cam, row, col)

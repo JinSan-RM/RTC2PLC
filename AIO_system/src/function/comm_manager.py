@@ -580,6 +580,30 @@ class CommManager(threading.Thread):
 # endregion data stream listener
 
 # region run, start, stop, quit
+    def blow_block(self):
+        """피더 배출구 막힘 해소"""
+        success1 = self.xgt_tester.write_bit_packet(
+            address=0x8B,
+            onoff=1
+        )
+        success2 = self.xgt_tester.write_bit_packet(
+            address=0x80,
+            onoff=1
+        )
+        if success1 and success2:
+            # 재질 on-off 사이에 사이즈 on-off 가 들어갈 수 있도록 처리
+            self.xgt_tester.schedule_bit_off(
+                address=0x80,
+                delay=MIN_PULSE_WIDTH
+            )
+            self.xgt_tester.schedule_bit_off(
+                address=0x8B,
+                delay=MIN_PULSE_WIDTH
+            )
+            log("피더 배출구 air 동작 성공")
+        else:
+            log("피더 배출구 air 동작 실패")
+
     def _cleanup_old_objects(self):
         """오래된 객체 자동 정리"""
         current_time = time.time()
@@ -843,6 +867,10 @@ class LineScanSimulator(threading.Thread):
                 self.app.on_obj_detected(event_info, classification)
 
             time.sleep(0.01)
+
+    def blow_block(self):
+        """피더 배출구 막힘 해소"""
+        log("피더 배출구 air 동작")
 
     def run(self):
         while not self.main_stop_event.is_set():

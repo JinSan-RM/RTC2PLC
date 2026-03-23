@@ -3,8 +3,9 @@
 """
 from pathlib import Path
 from datetime import datetime, timedelta
-from dateutil import tz
+from dataclasses import dataclass
 
+from dateutil import tz
 from PySide6.QtWidgets import QAbstractButton
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QRectF
 from PySide6.QtGui import QPainter, QColor, QFont
@@ -35,6 +36,9 @@ MIN_PULSE_WIDTH = 0.01          # 10ms - PLC 스캔 사이클 고려
 GUIDELINE_MIN_X = 420
 GUIDELINE_MAX_X = 428
 GUIDELINE_X = 405
+
+# 피더 배출구 막힘 감지 시간(초)
+BLOCK_DETECTION_TIME = 5
 
 # 플라스틱 분류와 PLC 주소 맵핑
 """
@@ -200,6 +204,16 @@ def get_border_coords(border):
 # ============================================================
 # region Cam options
 # ============================================================
+@dataclass
+class DetectBoxInfo:
+    """감지 박스 위치 정보"""
+    width: int
+    height: int
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+
 CAMERA_CONFIGS = {
     0: {  # 카메라 1
         'camera_ip': '192.168.1.100',
@@ -275,8 +289,6 @@ CAMERA_CONFIGS = {
         ]
     }
 }
-
-
 
 # ============================================================
 # endregion

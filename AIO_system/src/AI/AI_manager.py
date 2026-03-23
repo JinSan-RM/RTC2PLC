@@ -62,7 +62,7 @@ class BatchAIManager:
         self.device = None
         # self.CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
         self.CLASS_NAMES = ['PLASTIC']
-        
+
         self.running = False
         self.inference_thread = None
 
@@ -154,7 +154,7 @@ class BatchAIManager:
     #             frame_list = [frames[cam_id] for cam_id in cam_ids]
 
     #             t_start = time.time()
-                
+
     #             results = self.model.track(
     #                 source=frame_list,  # ← 리스트로 전달!
     #                 conf=self.confidence_threshold,
@@ -197,7 +197,7 @@ class BatchAIManager:
 
     #         except Exception as e:
     #             log(f"배치 추론 오류: {e}")
-    
+
     def _batch_inference_loop(self):
         """배치 추론 메인 루프 (TensorRT batch=1 엔진 대응)"""
         log("배치 추론 루프 실행 중.")

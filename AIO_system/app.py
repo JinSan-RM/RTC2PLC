@@ -240,8 +240,12 @@ class App():
     def motor_stop(self, inverter_name: str):
         log(f"{inverter_name} stop 요청")
 
-    def airknife_on(self, air_num: int, on_term: int):
-        log(f"airknife on 요청: no={air_num}, duration={on_term}ms")
+    def airknife_on(self, air_num: int):
+        log(f"airknife on 요청: no={air_num}")
+
+    def blow_block(self):
+        """피더 배출구 air 동작"""
+        self.comm_manager.blow_block()
 
     def on_airknife_off(self, air_num: int):
         log(f"airknife off: no={air_num}")
