@@ -18,6 +18,7 @@ class ConveyorBoxZone:
                 # target_classes: List[str] = ['PET', 'PE', 'PP', 'PS'],
                 # TensorRT 변경 부분 =========
                 target_classes: List[str] = ['PLASTIC'],
+                plc_callback=None,
                 ):
         
         self.box_id = box_id
@@ -30,6 +31,7 @@ class ConveyorBoxZone:
         self.x2 = x + width
         self.y2 = y + height
         self.target_classes = set(target_classes)
+        self.plc_callback=plc_callback
         
         
         self.tracked_objects = set()  # 현재 박스 안에 있는 객체들
@@ -50,12 +52,18 @@ class ConveyorBoxZone:
         is_target = obj.class_name in self.target_classes
         
         if inside and is_target:
-            if obj.id not in self.tracked_objects:
-                self.tracked_objects.add(obj.id)
+            if obj.id not in self.tracked_objects:   # tracked_objects는 박스 안에 있는 객체 집합
+                self.tracked_objects.add(obj.id)   # 새로 들어온 객체 추가 -> 여기서 PLC 신호 트리거 필요
                 self.class_counts[obj.class_name] += 1  # 클래스별 카운트
                 
                 self.tracked_objects_info[obj.id] = obj
-                
+
+                if self.plc_callback:    # 객체가 처음 들어왔을 때만 PLC 신호 전송
+                    self.plc_callback(self.box_id, 1)  # air_num, on_term
+                    log(f"plc callback called... : zone={self.box_id}, on_term=1")
+                else:
+                    log(f"plc callback not set... : zone={self.box_id}")
+
                 return True  # 액션 트리거
             else:
                 self.tracked_objects.add(obj.id)

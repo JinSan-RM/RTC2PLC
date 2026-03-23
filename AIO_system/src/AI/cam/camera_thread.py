@@ -17,7 +17,7 @@ class CameraThread(QThread):
     """
     frame_ready = Signal(np.ndarray)
     error_occurred = Signal(str)
-    
+    #tensorRT
     # 클래스 상수
     # CLASS_COLORS = {
     #     'PET': (0, 165, 255),
@@ -79,7 +79,8 @@ class CameraThread(QThread):
                 y=box_cfg['y'],
                 width=box_cfg['width'],
                 height=box_cfg['height'],
-                target_classes=box_cfg['target_classes']
+                target_classes=box_cfg['target_classes'],
+                plc_callback=self.airknife_callback
             )
             boxes.append(box)
         log(f"카메라 {self.camera_index}: {len(boxes)}개 박스 생성")

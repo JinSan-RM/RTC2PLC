@@ -96,7 +96,7 @@ class PlasticSortingSystem:
 
 class AIPlasticDetectionSystem:
     """YOLOv11 기반 AI Hub 폐플라스틱 감지 시스템 (GPU 가속)"""
-    
+    #tensorRT
     # CLASS_NAMES = ['PET', 'PS', 'PP', 'PE']
     # CLASS_COLORS = {
     #     'PET': (0, 165, 255),
@@ -104,7 +104,7 @@ class AIPlasticDetectionSystem:
     #     'PP': (0, 255, 0),
     #     'PS': (255, 0, 255)
     # }
-    CLASS_NAMES = ['PLASTIC']
+    CLASS_NAMES = ['PET']
     CLASS_COLORS = {
         'PLASTIC': (255, 255, 255)
     }
@@ -120,8 +120,8 @@ class AIPlasticDetectionSystem:
     ):
         self.app = app
         self.camera_index = camera_index
-        # self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
-        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.engine"
+        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        # self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.engine"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
         if self.model is None:
@@ -153,9 +153,9 @@ class AIPlasticDetectionSystem:
         dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
 
         # TensorRT 변경 부분 ========
-        for _ in range(3):
-            _ = self.model.predict(dummy_img, verbose=False, imgsz=self.img_size)
-        log("워밍업 완료!")
+        # for _ in range(3):
+        #     _ = self.model.predict(dummy_img, verbose=False, imgsz=self.img_size)
+        # log("워밍업 완료!")
         
         # 모델 클래스명 가져오기
         if hasattr(self.model, 'names'):
@@ -172,7 +172,8 @@ class AIPlasticDetectionSystem:
                 y=box_cfg['y'],
                 width=box_cfg['width'],
                 height=box_cfg['height'],
-                target_classes=box_cfg['target_classes']
+                target_classes=box_cfg['target_classes'],
+                plc_callback=self.airknife_callback
             )
             boxes.append(box)
         log(f"카메라 {self.camera_index}: {len(boxes)}개 박스 생성")
@@ -182,30 +183,30 @@ class AIPlasticDetectionSystem:
         """YOLOv11을 사용한 객체 감지 + 추적 (GPU 가속)"""
         try:
             # YOLOv11 추론 + 추적
-            # results = self.model.track(  # ← predict → track 변경!
-            #     source=frame,
-            #     conf=self.confidence_threshold,
-            #     imgsz=self.img_size,
-            #     device=self.device,
-            #     verbose=False,
-            #     half=True,  # FP16
-            #     max_det=50,
-            #     persist=True,  # ← 추적 ID 유지 (중요!)
-            #     tracker="bytetrack.yaml",  # 또는 "botsort.yaml"
-            #     agnostic_nms=True,
-            #     classes=[0, 1, 2, 3]
-            # )
-            # TensorRT 변경 부분           
-            results = self.model.track(
+            results = self.model.track(  # ← predict → track 변경!
                 source=frame,
                 conf=self.confidence_threshold,
                 imgsz=self.img_size,
+                device=self.device,
                 verbose=False,
-                max_det=50,
-                persist=True,
-                tracker="bytetrack.yaml",
-                agnostic_nms=True
+                half=True,  # FP16
+                max_det=1,
+                persist=True,  # ← 추적 ID 유지 (중요!)
+                tracker="bytetrack.yaml",  # 또는 "botsort.yaml"
+                agnostic_nms=True,
+                classes=[0, 1, 2, 3]
             )
+            # # TensorRT 변경 부분           
+            # results = self.model.track(
+            #     source=frame,
+            #     conf=self.confidence_threshold,
+            #     imgsz=self.img_size,
+            #     verbose=False,
+            #     max_det=50,
+            #     persist=True,
+            #     tracker="bytetrack.yaml",
+            #     agnostic_nms=True
+            # )
             
             
             detected_objects = []
@@ -277,6 +278,7 @@ class AIPlasticDetectionSystem:
     
     def draw_detections(self, frame: np.ndarray, detected_objects: List[DetectedObject]) -> np.ndarray:
         """감지 결과 그리기"""
+        #tensorRT
         # class_colors = {
         #     'PET': (0, 165, 255),
         #     'PE': (255, 0, 0),
@@ -429,7 +431,7 @@ class AIPlasticDetectionSystem:
 if __name__ == "__main__":
     log("AI Hub 폐플라스틱 감지 시스템 v4.0 (YOLOv11 + GPU)")
     
-    model_path = sys.path[0] + "\\model\\weights\\251012_yolov10_plastic_OD_model.pt"
+    model_path = sys.path[0] + "\\model\\weights\\best.pt"
     
     if not os.path.exists(model_path):
         log(f"\n❌ 모델 파일을 찾을 수 없습니다: {model_path}")
