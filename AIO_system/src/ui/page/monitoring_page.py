@@ -567,13 +567,17 @@ class MonitoringPage(QWidget):
 
         scroll_layout.addSpacing(30)
 
-        # 중단: RGB 카메라 (2x2)
-        self._create_rgb_cameras(scroll_layout)
+        camera_layout = QHBoxLayout()
 
-        scroll_layout.addSpacing(30)
+        # 중단: RGB 카메라 (2x2)
+        self._create_rgb_cameras(camera_layout)
+
+        camera_layout.addSpacing(30)
 
         # 하단: 초분광 카메라
-        self._create_hyperspectral_camera(scroll_layout)
+        self._create_hyperspectral_camera(camera_layout)
+
+        scroll_layout.addLayout(camera_layout)
 
         scroll_layout.addSpacing(30)
 
@@ -698,32 +702,27 @@ class MonitoringPage(QWidget):
 
     def _create_rgb_cameras(self, parent_layout):
         """RGB 카메라 그리드"""
-        rgb_layout = QGridLayout()
+        rgb_layout = QVBoxLayout()
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
 
-        rgb_layout.setRowMinimumHeight(0, 800)
-        rgb_layout.setRowMinimumHeight(0, 800)
-
-        rgb_layout.setRowStretch(0, 1)
-        rgb_layout.setRowStretch(1, 1)
-        rgb_layout.setColumnStretch(0, 1)
-        rgb_layout.setColumnStretch(1, 1)
+        # rgb_layout.setMinimumHeight(0, 800)
+        # rgb_layout.setStretch(0, 1)
 
         # 4개의 RGB 카메라
         self.rgb_cameras = []
 
         # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
-            ("RGB 카메라 1", 0, 0, 0, False),
-            ("RGB 카메라 2", 0, 1, 1, False),
+            ("RGB 카메라 1", 0, False),
+            # ("RGB 카메라 2", 1, False),
             # ("RGB 카메라 3", 1, 0, False),
             # ("RGB 카메라 4", 1, 1, False),
         ]
 
-        for name, row, col, camera_index, is_block_detect in cameras:
+        for name, camera_index, is_block_detect in cameras:
             cam = CameraView(
-                camera_id=f"rgb_{row}{col}",
+                camera_id=f"rgb_{camera_index}",
                 camera_name=name,
                 camera_index=camera_index,
                 app=self.app,
@@ -731,7 +730,7 @@ class MonitoringPage(QWidget):
                 is_block_detect=is_block_detect
             )
             cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            rgb_layout.addWidget(cam, row, col)
+            rgb_layout.addWidget(cam)
             self.rgb_cameras.append(cam)
 
         parent_layout.addLayout(rgb_layout)
@@ -821,9 +820,6 @@ class MonitoringPage(QWidget):
         """초분광 카메라"""
         hyper_layout = QVBoxLayout()
 
-        # 카메라 뷰
-        camera_layout = QHBoxLayout()
-
         self.hyper_camera = CameraView(
             "hyperspectral",
             "Specim FX17",
@@ -833,9 +829,9 @@ class MonitoringPage(QWidget):
             is_hyperspectral=True
         )
         self.hyper_camera.setMinimumSize(600, 400)
-        camera_layout.addWidget(self.hyper_camera)
+        hyper_layout.addWidget(self.hyper_camera)
 
-        camera_layout.addSpacing(20)
+        hyper_layout.addSpacing(20)
 
         # 우측: 분류 통계
         stats_layout = QVBoxLayout()
@@ -861,8 +857,7 @@ class MonitoringPage(QWidget):
 
         stats_layout.addStretch()
 
-        camera_layout.addLayout(stats_layout)
-        hyper_layout.addLayout(camera_layout)
+        hyper_layout.addLayout(stats_layout)
 
         parent_layout.addLayout(hyper_layout)
 
