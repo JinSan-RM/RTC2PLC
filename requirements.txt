@@ -1,6 +1,0 @@
-pyautogui
-psutil
-tkinter
-pylon
-pypylon
-ttkbootstrap
