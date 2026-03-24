@@ -101,14 +101,14 @@ class UpdateHandler(FileSystemEventHandler):
 class App():
     """메인 앱 클래스"""
     is_reload = False
-    _use_linescan_simulator = True # 라인스캔 이미지/오버레이 확인용 시뮬레이터 사용 여부
+    _use_linescan_simulator = False # 라인스캔 이미지/오버레이 확인용 시뮬레이터 사용 여부
 
     def __init__(self):
         self.qt_app = QApplication(sys.argv)
         self.config = self._build_default_config()
         self.auto_mode = False
         self.auto_run = False
-        self.monitoring_enabled = True
+        self.monitoring_enabled = False
         self._feeder_air_time = datetime.now()
 
         font_files = [
@@ -159,7 +159,7 @@ class App():
         """주기적 업데이트"""
         self.ui.update_time()
 
-        if not USE_FEEDER_CAM:
+        if not USE_FEEDER_CAM and self.monitoring_enabled:
             # 피더 카메라 사용 안하는 경우 일정 시간마다 에어 분사
             current_time = datetime.now()
             if (current_time - self._feeder_air_time).total_seconds() > FEEDER_AIR_TERM:
