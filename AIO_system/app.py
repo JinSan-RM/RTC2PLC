@@ -7,7 +7,6 @@ import time
 # import importlib
 from pathlib import Path
 from datetime import datetime
-from itertools import cycle
 
 import faulthandler
 import atexit
@@ -21,7 +20,7 @@ from PySide6.QtGui import QFont, QFontDatabase
 
 from src.ui.main_window import MainWindow
 from src.function.comm_manager import CommManager, LineScanSimulator
-from src.utils.config_util import UI_PATH, LOG_PATH
+from src.utils.config_util import UI_PATH, LOG_PATH, USE_FEEDER_CAM, FEEDER_AIR_TERM
 from src.utils.logger import log
 
 
@@ -107,12 +106,10 @@ class App():
     def __init__(self):
         self.qt_app = QApplication(sys.argv)
         self.config = self._build_default_config()
-        self.use_air_sequence = False
-        self.air_index_iter = None
         self.auto_mode = False
         self.auto_run = False
         self.monitoring_enabled = True
-        self.set_air_sequence_index()
+        self._feeder_air_time = datetime.now()
 
         font_files = [
             "fonts/Poppins-Bold.ttf",
@@ -162,6 +159,14 @@ class App():
         """주기적 업데이트"""
         self.ui.update_time()
 
+        if not USE_FEEDER_CAM:
+            # 피더 카메라 사용 안하는 경우 일정 시간마다 에어 분사
+            current_time = datetime.now()
+            if (current_time - self._feeder_air_time).total_seconds() > FEEDER_AIR_TERM:
+                # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
+                self.blow_block()
+                self._feeder_air_time = current_time
+
     def _build_default_config(self):
         inverter_config = {f"inverter_00{i}": [0.0, 1.0, 1.0] for i in range(1, 7)}
         base_positions = [[0.0, 0.0] for _ in range(6)]
@@ -187,11 +192,6 @@ class App():
             },
             "airknife_config": airknife_config,
         }
-
-    def set_air_sequence_index(self):
-        """배출 순서 iterator 갱신"""
-        seq = self.config.get("air_sequence", [])
-        self.air_index_iter = cycle(seq) if seq else None
 
     def on_monitoring_start(self):
         """모니터링 시작"""

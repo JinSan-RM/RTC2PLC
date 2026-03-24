@@ -582,22 +582,26 @@ class CommManager(threading.Thread):
 # region run, start, stop, quit
     def blow_block(self):
         """피더 배출구 막힘 해소"""
+        # 대형 4번: 0x80, 0x8B
+        # 소형 4번: 0x81, 0x8F
+        size_addr = 0x80
+        sol_addr = 0x8B
         success1 = self.xgt_tester.write_bit_packet(
-            address=0x8B,
+            address=sol_addr,
             onoff=1
         )
         success2 = self.xgt_tester.write_bit_packet(
-            address=0x80,
+            address=size_addr,
             onoff=1
         )
         if success1 and success2:
             # 재질 on-off 사이에 사이즈 on-off 가 들어갈 수 있도록 처리
             self.xgt_tester.schedule_bit_off(
-                address=0x80,
+                address=size_addr,
                 delay=MIN_PULSE_WIDTH
             )
             self.xgt_tester.schedule_bit_off(
-                address=0x8B,
+                address=sol_addr,
                 delay=MIN_PULSE_WIDTH
             )
             log("피더 배출구 air 동작 성공")

@@ -37,8 +37,10 @@ GUIDELINE_MIN_X = 420
 GUIDELINE_MAX_X = 428
 GUIDELINE_X = 405
 
-# 피더 배출구 막힘 감지 시간(초)
-BLOCK_DETECTION_TIME = 5
+# 피더 배출구 막힘 해소
+USE_FEEDER_CAM = False
+BLOCK_DETECTION_TIME = 5 # 피더 배출구 막힘 감지 시간(초)
+FEEDER_AIR_TERM = 10 # 10초마다 피더 배출부에 에어를 쏴서 막힘을 제거
 
 # 플라스틱 분류와 PLC 주소 맵핑
 """
