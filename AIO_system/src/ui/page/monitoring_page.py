@@ -715,7 +715,7 @@ class MonitoringPage(QWidget):
 
         # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
-            ("RGB 카메라 1", 0, 0, 0, True),
+            ("RGB 카메라 1", 0, 0, 0, False),
             ("RGB 카메라 2", 0, 1, 1, False),
             # ("RGB 카메라 3", 1, 0, False),
             # ("RGB 카메라 4", 1, 1, False),

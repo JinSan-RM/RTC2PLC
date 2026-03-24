@@ -243,7 +243,7 @@ class App():
     def airknife_on(self, air_num: int):
         log(f"airknife on 요청: no={air_num}")
 
-    def blow_block(self):
+    def blow_block(self, air_num: int = 0):
         """피더 배출구 air 동작"""
         self.comm_manager.blow_block()
 
