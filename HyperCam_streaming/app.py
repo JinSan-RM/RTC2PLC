@@ -39,7 +39,7 @@ class App():
     def quit(self):
         """앱 종료"""
         self.manager.quit()
-        self.manager.join(timeout=5) #메인 스레드에 합류시킴
+        self.manager.join(timeout=5)
         if self.manager.is_alive():
             print("comm manager thread did not terminate properly")
         self.root.destroy()

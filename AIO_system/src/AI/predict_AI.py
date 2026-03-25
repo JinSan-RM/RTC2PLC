@@ -13,6 +13,7 @@ from .cam.basler_manager import BaslerCameraManager
 from src.utils.logger import log
 from src.utils.config_util import CAMERA_CONFIGS
 
+
 @dataclass
 class DetectedObject:
     """감지된 폐플라스틱 객체 정보"""
@@ -111,7 +112,7 @@ class AIPlasticDetectionSystem:
     def __init__(
         self,
         model_path: str = None,
-        confidence_threshold: float = 0.75,
+        confidence_threshold: float = 0.5,
         img_size: int = 640,
         airknife_callback=None,
         app=None,
@@ -119,9 +120,8 @@ class AIPlasticDetectionSystem:
     ):
         self.app = app
         self.camera_index = camera_index
-        # tensorRT
-        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
-        # self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.engine"
+        # self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.engine"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
         if self.model is None:
@@ -373,6 +373,7 @@ class AIPlasticDetectionSystem:
                 
                 # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작 시키는것
                 if len(detected_objects) > 0:
+                    
                     if self.app.use_air_sequence and self.app.air_index_iter != None:
                         box_id = int(next(self.app.air_index_iter))
                         box = self.box_manager.boxes[box_id]
@@ -381,6 +382,7 @@ class AIPlasticDetectionSystem:
                             self.send_airknife_signal(air_num=box.box_id, on_term=1000)
                             
                     else:
+                        
                         for box in self.box_manager.boxes:
                             
                             if box.is_active:
@@ -426,8 +428,8 @@ class AIPlasticDetectionSystem:
 
 if __name__ == "__main__":
     log("AI Hub 폐플라스틱 감지 시스템 v4.0 (YOLOv11 + GPU)")
-    # tensorRT
-    model_path = sys.path[0] + "\\model\\weights\\best.pt"
+    
+    model_path = sys.path[0] + "\\model\\weights\\251012_yolov10_plastic_OD_model.pt"
     
     if not os.path.exists(model_path):
         log(f"\n❌ 모델 파일을 찾을 수 없습니다: {model_path}")
@@ -436,7 +438,7 @@ if __name__ == "__main__":
     try:
         detector = AIPlasticDetectionSystem(
             model_path=model_path,
-            confidence_threshold=0.75,
+            confidence_threshold=0.5,
             img_size=640  # 더 빠르게: 480 또는 320
         )
         detector.run()

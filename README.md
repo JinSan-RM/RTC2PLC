@@ -42,7 +42,7 @@
 
 1. GUI 테스트 도구 (선택):
    ```
-   python app.py 
+   python app.py
    ```
 
 

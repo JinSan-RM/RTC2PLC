@@ -7,8 +7,7 @@ from datetime import datetime
 class BlockDetector:
     """feeder 막힘 감지"""
     
-    def __init__(self, box_manager: ConveyorBoxManager, camera_index: int = 0, block_threshold: float = 3.0,
-                 position_threshold: int = 100):
+    def __init__(self, box_manager: ConveyorBoxManager, camera_index: int = 0, block_threshold: float = 1.0):
         """
         feeder 막힘 감지 초기화
         """
@@ -28,12 +27,8 @@ class BlockDetector:
         #수정
         self.feeder_box = self._find_feeder_box()
         
-        self.block_threshold = block_threshold # 막힘 감지 초 임계값, 수정해서 사용
-        self.position_threshold = position_threshold # 막힘 감지 위치 변화 임계값, 수정해서 사용
+        self.block_threshold = block_threshold # 막힘 감지 임계값, 수정해서 사용
         self.block_triggered = False # 막힘 감지 시 한 번만 로그 출력하기 위한 플래그
-        
-        #Ver 2
-        self.triggered_object_ids = set()  # block_threshold 초 이상 체류한 객체 ID 저장 (알람 중복 방지)
 
     def _find_feeder_box(self):
         for box in self.box_manager.boxes:
@@ -66,50 +61,37 @@ class BlockDetector:
             True: block_threshold 초 이상 체류 (막혔음)
             False: block_threshold 초 미만
         """
+        log(f"[DEBUG-1] _check_stay_duration 시작")
         
         # 박스에 객체가 없으면 OK
         if not box.tracked_objects_info:
+            #log(f"[DEBUG-2] tracked_objects_info 비어있음")  
             self.block_triggered = False  # 알람 초기화
-            self.triggered_object_ids.clear()  # 알람 중복 방지용 ID 초기화
             return False
         
+        log(f"[DEBUG-3] tracked_objects_info 개수: {len(box.tracked_objects_info)}")  
         
         current_time = datetime.now()
         
         #스냅샷 만들기(반복 중 수정 방지)
         tracked_objects_snapshot = dict(box.tracked_objects_info)
-        object_data_snapshot = dict(box.object_data)
-
+        entry_times_snapshot = dict(box.object_entry_times)
         
-        # Ver 2
-        
-        should_trigger = False
-        
+        # ← 스냅샷으로 반복 (원본 딕셔너리 수정 안 됨)
         for obj_id, obj in tracked_objects_snapshot.items():
-            if obj_id in object_data_snapshot:
-                accumulated_time = object_data_snapshot[obj_id]['accumulated_time']
-                entry_pos = object_data_snapshot[obj_id]['entry_pos']
-                last_pos = object_data_snapshot[obj_id]['last_pos']
-                
-                distance_from_entry = box.calculate_distance(entry_pos, last_pos) if entry_pos and last_pos else 0
+            if obj_id in entry_times_snapshot:
+                entry_time = entry_times_snapshot[obj_id]
+                stay_duration = (current_time - entry_time).total_seconds()
             
-                # log(f"[DEBUG-4] 체류 시간={accumulated_time:.2f}s, "
-                #     f"진입 위치로부터 거리={distance_from_entry:.1f}px")
+                #log(f"[DEBUG-4] 체류 시간={stay_duration:.2f}s")
             
-                if accumulated_time >= self.block_threshold and distance_from_entry <= self.position_threshold:
-                    if obj_id not in self.triggered_object_ids:
+                if stay_duration >= self.block_threshold:
+                    if not self.block_triggered:
                         # log(f"🚨 [Feeder Block Detected] Box {self.feeder_box_id}: "
-                        #     f"Object {obj_id} stayed for {accumulated_time:.1f}s")
-                        self.triggered_object_ids.add(obj_id)
-                        should_trigger = True
-                        
-        for obj_id in list(self.triggered_object_ids):
-            if obj_id not in box.tracked_objects_info:
-                self.triggered_object_ids.discard(obj_id)
-
-        if should_trigger:
-            self.block_triggered = True
-            return True
+                        #     f"Object {obj_id} stayed for {stay_duration:.1f}s")
+                        self.block_triggered = True
                 
+                    return True
+        
         self.block_triggered = False
         return False
