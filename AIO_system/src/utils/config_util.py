@@ -396,12 +396,12 @@ CAMERA_CONFIGS = {
         'boxes': [
             {
                 'box_id': 1,
-                'x': 50,
-                'y': 300,
-                'width': 350,
-                'height': 400,
-                # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
-                'target_classes': ['PE'],
+                'x': 465, #기존 50
+                'y': 50, #기존 300
+                'width': 550, #기존 350
+                'height': 500, #기존 400
+                'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET', 'PLASTIC'],
+                #'target_classes': ['PE'],
                 'airknife_id': 1
             },
             # {

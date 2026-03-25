@@ -19,11 +19,11 @@ def load_yolov11(model_path, half_precision=True):
         log(f"\nYOLOv11 모델 로드 중: {model_path}")
         model = YOLO(model_path, task="detect")
         
-        ext = os.path.splitext(model_path)[1].lower()
+        # ext = os.path.splitext(model_path)[1].lower()
         
         # TensorRT Engine이면 model.to() 강제하지 않음
-        if ext != ".engine":
-            model.to(device)
+        # if ext != ".engine":
+        #     model.to(device)
         
         log(f"YOLOv11 모델 로드 성공!")
         log(f"사용 장치: {device.upper()}")
