@@ -94,6 +94,8 @@ class EtherCATProcess(Process):
                 if self.vars.master.state == pysoem.OP_STATE:
                     break
 
+            self.vars.master.in_op = True
+
             self.vars.check_thread = threading.Thread(target=self._health_check_loop, daemon=True)
             self.vars.check_thread.start()
 
