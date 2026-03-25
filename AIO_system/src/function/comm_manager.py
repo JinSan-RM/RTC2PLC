@@ -94,7 +94,7 @@ class CommManager(threading.Thread):
 
         self.trackings = Trackings()
 
-        self.xgt_tester = XGTTester()
+        self.xgt_tester = XGTTester(ip="192.168.1.3", port=2004)
 
 # region command client
     def _send_command(self, command_socket: socket.socket, command: dict):
