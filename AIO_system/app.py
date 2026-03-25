@@ -264,7 +264,7 @@ class App():
                             # feeder 막힘 감지
                             if feeder_camera_view.camera_thread.block_detector.is_blocked():
                                 self.airknife_on(4, self.FEEDER_AIR_DURATION * 1000)
-                                #log("에어나이프 발동발동")
+                                #log("💨 에어나이프 발동발동 💨")
         
             except Exception as e:
                 log(f"[ERROR] Feeder blockage detection failed: {e}")
@@ -272,7 +272,8 @@ class App():
                 import traceback
                 traceback.print_exc()
         
-            time.sleep(0.033)
+            #time.sleep(0.033)
+            time.sleep(0.1)
 
                 
 # region inverter control

@@ -21,7 +21,6 @@ from src.AI.AI_manager import BatchAIManager
 from src.utils.logger import log
 from src.utils.config_util import CAMERA_CONFIGS, UI_PATH
 
-
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     def __init__(self, camera_id, camera_name, camera_index, app, ai_manager=None, is_hyperspectral=False):
@@ -36,7 +35,7 @@ class CameraView(QFrame):
         self.detector_frame_generator = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
-
+        
         self.camera_thread = None
         self.is_running = False # 카메라 동작 상태
 
@@ -296,12 +295,13 @@ class MonitoringPage(QWidget):
         self.hyper_camera = None
         self.ai_manager = BatchAIManager(
             num_cameras=2,
-            confidence_threshold=0.6,
+            confidence_threshold=0.75,
             img_size=640,
             max_det=50
         )
-        # model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
-        model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
+        # tensorRT
+        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        # model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
         if not self.ai_manager.initialize(model_path):
             log("AI 매니저 초기화 실패")
             # 초기화 실패해도 UI는 표시
