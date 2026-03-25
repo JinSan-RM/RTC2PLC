@@ -58,7 +58,7 @@ class CameraThread(QThread):
         # 박스 매니저 생성
         self.box_manager = self._create_box_manager()
         #추가
-        self.block_detector = BlockDetector(box_manager=self.box_manager, camera_index=camera_index, block_threshold=1.0)
+        self.block_detector = BlockDetector(box_manager=self.box_manager, camera_index=camera_index, block_threshold=3.0, position_threshold=100)
         
         # 캐싱된 결과 (프레임 스킵용)
         self.last_detected_objects = []
@@ -166,8 +166,8 @@ class CameraThread(QThread):
                 self.box_manager.update_detections(detected_objects)
 
                 # 5. AirKnife 동작
-                if len(detected_objects) > 0:
-                    self._handle_airknife()
+                # if len(detected_objects) > 0:
+                #     self._handle_airknife()
                 
                 # 6. 프레임에 그리기
                 frame = self._draw_frame(frame, detected_objects)
