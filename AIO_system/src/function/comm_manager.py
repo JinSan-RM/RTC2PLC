@@ -164,7 +164,7 @@ class CommManager(threading.Thread):
     def _command_client(self):
         # ==================== 설정 확인 ====================
         log("="*70)
-        log("🎯 라인 스캔 카메라 타이밍 제어")
+        log("라인 스캔 카메라 타이밍 제어")
         log(f"  - 컨베이어 속도: {CONVEYOR_SPEED:.2f} cm/s")
         log(f"  - 스캔라인 → 에어솔 거리: {SCAN_LINE_TO_AIRSOL:.2f} cm")
         log("")
