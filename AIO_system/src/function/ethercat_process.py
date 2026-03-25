@@ -268,7 +268,11 @@ class EtherCATProcess(Process):
     def _check_slave(slave, pos):
         if slave.state == (pysoem.SAFEOP_STATE + pysoem.STATE_ERROR):
             # 에러 발생 시 에러 비트를 끄고 SAFEOP_STATE로 전환되도록 처리하는 부분
-            log(f"[ERROR] slave {pos} is in SAFE_OP + ERROR, attempting ack.")
+            err_code = slave.al_status
+            err_txt = slave.al_status_code_to_string(err_code)
+            log(f"""[ERROR] slave {pos} is in SAFE_OP + ERROR, attempting ack.
+                code: {hex(err_code)}
+                desc: {err_txt}""")
             slave.state = pysoem.SAFEOP_STATE + pysoem.STATE_ACK
             slave.write_state()
         elif slave.state == pysoem.SAFEOP_STATE:
