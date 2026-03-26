@@ -1,4 +1,4 @@
-"""
+﻿"""
 모니터링 페이지 - 카메라 스트림
 """
 import traceback
@@ -232,30 +232,32 @@ class CameraView(QFrame):
     def update_frame(self, frame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # pylint: disable=no-member
-            h, w, ch = rgb_frame.shape
-            bytes_per_line = ch * w
-            qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(qt_image)
-
             if not self.is_hyperspectral:
-                # RGB 카메라: 부모 영역에 맞춰 fit
+                # QImage 변환 전에 리사이징
+                ori_h, ori_w, _ = frame.shape
                 parent_size = self.image_label.parent().size()
-                available_width = parent_size.width() - 20   # 여백
-                available_height = parent_size.height() - 20
-                
-                scaled_pixmap = pixmap.scaled(
-                    available_width, available_height,
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
-                
-                self.image_label.setFixedSize(
-                    scaled_pixmap.width(),
-                    scaled_pixmap.height()
-                )
-                self.image_label.setPixmap(scaled_pixmap)
+                widget_w = parent_size.width() - 20 # 여백
+                widget_h = parent_size.height() - 20
+                resize_ratio = min(widget_w/ori_w, widget_h/ori_h)
+                resize_w, resize_h = int(ori_w*resize_ratio), int(ori_h*resize_ratio)
+                resize_frame = cv2.resize(frame, (resize_w, resize_h), interpolation=cv2.INTER_AREA)
+
+                # QImage 변환
+                h, w, ch = resize_frame.shape
+                bytes_per_line = ch * w
+                qt_image = QImage(resize_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                qt_image.original_data = resize_frame
+                pixmap = QPixmap.fromImage(qt_image)
+
+                self.image_label.setFixedSize(pixmap.size())
+                self.image_label.setPixmap(pixmap)
             else:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # pylint: disable=no-member
+                h, w, ch = rgb_frame.shape
+                bytes_per_line = ch * w
+                qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                pixmap = QPixmap.fromImage(qt_image)
+
                 scaled_pixmap = pixmap.scaled(
                     self.image_label.size(),
                     Qt.KeepAspectRatio,
@@ -485,10 +487,10 @@ class MonitoringPage(QWidget):
         rgb_layout = QGridLayout()
         rgb_layout.setContentsMargins(0, 0, 0, 0)
         rgb_layout.setSpacing(20)
-        
+
         rgb_layout.setRowMinimumHeight(0, 800)
         rgb_layout.setRowMinimumHeight(0, 800)
-        
+
         rgb_layout.setRowStretch(0, 1)
         rgb_layout.setRowStretch(1, 1)
         rgb_layout.setColumnStretch(0, 1)
@@ -687,7 +689,6 @@ class MonitoringPage(QWidget):
         for count_label in self.plastic_counts.values():
             count_label.setText("0")
         self.total_count.setText("0")
-        # TODO: 실제 카운터 리셋
 
     def _on_set_sequence(self):
         if self.app.use_air_sequence:
