@@ -14,6 +14,7 @@ from src.ui.page.home_page import HomePage
 from src.ui.page.monitoring_page import MonitoringPage
 from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
+from src.ui.pip_window import PiPManager
 from src.utils.config_util import UI_PATH
 from src.utils.logger import Logger, log
 
@@ -78,6 +79,13 @@ class MainWindow(QMainWindow):
         self.time_timer = QTimer()
         self.time_timer.timeout.connect(self.update_time)
         self.time_timer.start(1000)  # 1초마다
+
+        # PiP 매니저는 반드시 MonitoringPage 생성 이후 초기화해야 함
+        # : 초기 카메라 선택 시 monitoring_page.rgb_cameras 참조가 필요하니까
+        self.pip_manager = PiPManager(self)
+        if self.pages.monitoring_page.rgb_cameras:
+            # 기본값: 첫 번째 RGB 카메라를 PiP 소스로 연결
+            self.pip_manager.select_camera(self.pages.monitoring_page.rgb_cameras[0])
 
     def _init_ui(self):
         self.setWindowTitle("위드위 플라스틱 선별 시스템")
@@ -309,6 +317,12 @@ class MainWindow(QMainWindow):
         self.children_widget.main_stack.setCurrentIndex(index)
         self.children_widget.contents_explain.setText("")
 
+        # 페이지 전환이 PiP 표시 정책의 단일 진입점.
+        # monitoring(index=1)에서는 항상 숨김, 그 외 페이지에서는 enabled 상태에 따라 표시.
+        # pip_manager는 _init_ui 이후 생성되므로 초기 호출 타이밍 보호
+        if hasattr(self, 'pip_manager'):
+            self.pip_manager.on_page_changed(index)
+
         match index:
             case 0:
                 self.children_widget.contents_title.setText("홈 대시보드")
@@ -347,7 +361,9 @@ class MainWindow(QMainWindow):
         if self.app.is_reload:
             # 리로드 시 앱 종료 방지
             return
-
+        if hasattr(self, 'pip_manager'):
+            # PiP signal 연결 해제 + 창 종료를 먼저 수행해 정리 순서 보장
+            self.pip_manager.cleanup()
         self.signals.log_updated.disconnect()
         self.signals.servo_updated.disconnect()
         self.signals.inverter_updated.disconnect()

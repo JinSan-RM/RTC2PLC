@@ -4,15 +4,15 @@
 import traceback
 import sys
 
-# import numpy as np
+import numpy as np
 import cv2
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QScrollArea, QFrame, QComboBox,
     QLineEdit, QSizePolicy
 )
-from PySide6.QtCore import Qt, QTimer, QRegularExpression
-from PySide6.QtGui import QPixmap, QImage, QRegularExpressionValidator
+from PySide6.QtCore import Qt, QTimer, QRegularExpression, Signal
+from PySide6.QtGui import QPixmap, QImage, QRegularExpressionValidator, QFont
 
 # from src.AI.predict_AI import AIPlasticDetectionSystem
 # from src.AI.cam.camera_thread_old import CameraThread
@@ -24,6 +24,10 @@ from src.utils.config_util import CAMERA_CONFIGS, UI_PATH
 
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
+    # 카메라 원본 프레임(BGR)을 PiP로 전달하는 별도 signal.
+    # 기존 메인 화면 렌더링과 분리해서 PiP를 독립적으로 제어하기 위해 사용
+    pip_frame_ready = Signal(object)
+
     def __init__(self, camera_id, camera_name, camera_index, app, ai_manager=None, is_hyperspectral=False):
         super().__init__()
         self.app = app
@@ -267,6 +271,10 @@ class CameraView(QFrame):
                 fps = self.camera_thread.current_fps
                 self.fps_label.setText(f"FPS: {fps}")
 
+            # PiP는 별도 창에서 저주기 렌더링(타이머) 하므로,
+            # 여기서는 프레임을 전달만 하고 표시 책임은 PiPWindow에 위임
+            self.pip_frame_ready.emit(frame)
+
         except Exception as e:
             log(f"프레임 업데이트 오류: {e}")
 
@@ -294,14 +302,17 @@ class MonitoringPage(QWidget):
         self.app = app
         self.rgb_cameras = []
         self.hyper_camera = None
+        self.pip_camera_combo = None
+        self.pip_toggle_btn = None
+        self._pip_combo_connected = False
         self.ai_manager = BatchAIManager(
             num_cameras=2,
             confidence_threshold=0.6,
             img_size=640,
             max_det=50
         )
-        # model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
-        model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
+        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        # model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
         if not self.ai_manager.initialize(model_path):
             log("AI 매니저 초기화 실패")
             # 초기화 실패해도 UI는 표시
@@ -358,6 +369,7 @@ class MonitoringPage(QWidget):
 
         # 하단: 초분광 카메라
         self._create_hyperspectral_camera(scroll_layout)
+        self._setup_pip_camera_combo()   # 모든 카메라 생성 후 콤보 채우기
 
         scroll_layout.addSpacing(30)
 
@@ -428,22 +440,54 @@ class MonitoringPage(QWidget):
 
         layout.addSpacing(15)
 
-        # 해상도 선택
+        # 해상도 + PiP (PiP는 해상도 바로 아래)
+        res_pip_layout = QVBoxLayout()
+        res_pip_layout.setSpacing(6)
+        res_pip_layout.setContentsMargins(0, 0, 0, 0)
+
+        res_row = QHBoxLayout()
+        res_row.setSpacing(8)
+        res_row.setContentsMargins(0, 0, 0, 0)
+
         res_title = QLabel("해상도:")
-        res_title.setStyleSheet(
-            """
-            color: #000000;
-            font-size: 16px;
-            font-weight: normal;
-            """
-        )
-        layout.addWidget(res_title)
+        res_title.setObjectName("res_pip_label")
+        res_row.addWidget(res_title)
 
         self.resolution_combo = QComboBox()
-        self.resolution_combo.setObjectName("combo_box")
-        self.resolution_combo.setFixedSize(220, 40)
+        self.resolution_combo.setObjectName("res_pip_combo")
+        self.resolution_combo.setFixedSize(190, 34)
         self.resolution_combo.addItems(["1920x1080", "1280x720", "640x480"])
-        layout.addWidget(self.resolution_combo)
+        res_row.addWidget(self.resolution_combo)
+        res_row.addStretch()
+        res_pip_layout.addLayout(res_row)
+
+        pip_row = QHBoxLayout()
+        pip_row.setSpacing(8)
+        pip_row.setContentsMargins(0, 0, 0, 0)
+
+        pip_label = QLabel("PiP:")
+        pip_label.setObjectName("pip_label")
+        pip_row.addWidget(pip_label)
+
+        self.pip_camera_combo = QComboBox()
+        self.pip_camera_combo.setObjectName("pip_camera_combo")
+        self.pip_camera_combo.setFixedSize(190, 34)
+        combo_font = QFont(self.pip_camera_combo.font())
+        combo_font.setPointSize(10)
+        self.pip_camera_combo.setFont(combo_font)
+        pip_row.addWidget(self.pip_camera_combo)
+
+        self.pip_toggle_btn = QPushButton("off")
+        self.pip_toggle_btn.setObjectName("pip_toggle_btn")
+        self.pip_toggle_btn.setCheckable(True)
+        self.pip_toggle_btn.setChecked(False)
+        self.pip_toggle_btn.setFixedSize(46, 30)
+        self.pip_toggle_btn.clicked.connect(self._on_pip_toggle)
+        pip_row.addWidget(self.pip_toggle_btn)
+
+        pip_row.addStretch()
+        res_pip_layout.addLayout(pip_row)
+        layout.addLayout(res_pip_layout)
 
         # 배출 순서 제어
         layout.addWidget(QLabel("배출 순서 제어:"))
@@ -475,6 +519,8 @@ class MonitoringPage(QWidget):
         self.toggle_btn.setMinimumWidth(60)
         self.toggle_btn.clicked.connect(lambda checked: self._on_use_sequence(checked))
         layout.addWidget(self.toggle_btn)
+
+        layout.addSpacing(20)
 
         layout.addStretch()
 
@@ -711,6 +757,49 @@ class MonitoringPage(QWidget):
         self.app.use_air_sequence = onoff
         log(f"배출 제어 순서 {state}")
 
+    # ── PiP 제어 ────────────────────────────────────────────
+
+    def _setup_pip_camera_combo(self):
+        """PiP 선택 콤보 초기화 (RGB + Specim FX17)"""
+        if self.pip_camera_combo is None:
+            return
+
+        self.pip_camera_combo.blockSignals(True)
+        self.pip_camera_combo.clear()
+        metrics = self.pip_camera_combo.fontMetrics()
+        display_width = max(40, self.pip_camera_combo.width() - 22)
+        for cam in self.rgb_cameras:
+            # itemData에 CameraView 객체를 직접 저장해 선택 즉시 매니저에 전달
+            display_name = metrics.elidedText(cam.camera_name, Qt.ElideRight, display_width)
+            self.pip_camera_combo.addItem(display_name, cam)
+        if self.hyper_camera:
+            display_name = metrics.elidedText(self.hyper_camera.camera_name, Qt.ElideRight, display_width)
+            self.pip_camera_combo.addItem(display_name, self.hyper_camera)
+        self.pip_camera_combo.blockSignals(False)
+
+        if not self._pip_combo_connected:
+            self.pip_camera_combo.currentIndexChanged.connect(self._on_pip_camera_changed)
+            self._pip_combo_connected = True
+
+    def _on_pip_camera_changed(self, index):
+        """PiP 대상 카메라 선택 변경"""
+        cam = self.pip_camera_combo.itemData(index)
+        if hasattr(self.app, 'ui') and hasattr(self.app.ui, 'pip_manager'):
+            # 현재 선택 카메라의 signal 연결을 PiPManager가 교체
+            self.app.ui.pip_manager.select_camera(cam)
+
+    def _on_pip_toggle(self, checked):
+        """PiP 사용 여부 토글"""
+        if self.pip_toggle_btn is None:
+            return
+        state = "on" if checked else "off"
+        self.pip_toggle_btn.setText(state)
+        if hasattr(self.app, 'ui') and hasattr(self.app.ui, 'pip_manager'):
+            self.app.ui.pip_manager.set_enabled(checked)
+            # 페이지 이동을 기다리지 않고 현재 탭 기준으로 즉시 PiP 표시 상태를 맞춤
+            current_page = self.app.ui.children_widget.main_stack.currentIndex()
+            self.app.ui.pip_manager.on_page_changed(current_page)
+
     def update_values(self, values):
         """모니터링 값 업데이트"""
         # if len(values) >= 8:
@@ -792,12 +881,12 @@ class MonitoringPage(QWidget):
                 border: 1px solid #E2E2E2;
                 border-radius: 7px;
             }
-            
+
             #camera_view {
                 background-color: transparent;
                 border: none;
             }
-            
+
             #camera_title {
                 color: #000000;
                 font-size: 16px;
@@ -816,7 +905,7 @@ class MonitoringPage(QWidget):
                 border-radius: 7px;
                 padding: 15px;
             }
-            
+
             #combo_box {
                 background-color: #FFFFFF;
                 border: 1px solid #D4D4D4;
@@ -828,18 +917,42 @@ class MonitoringPage(QWidget):
             #combo_box:hover {
                 border-color: #58a6ff;
             }
-            
+
             #combo_box::drop-down {
                 border: none;
             }
-            
+
             #combo_box QAbstractItemView {
                 background-color: #FFFFFF;
                 border: 1px solid #D4D4D4;
                 color: #4B4B4B;
                 selection-background-color: #FFFFFF;
             }
-            
+
+            #res_pip_label, #pip_label {
+                color: #000000;
+                font-size: 16px;
+                font-weight: normal;
+            }
+
+            #res_pip_combo, #pip_camera_combo {
+                background-color: #FFFFFF;
+                border: 1px solid #D4D4D4;
+                border-radius: 4px;
+                padding: 0 18px 0 8px;
+                color: #4B4B4B;
+                font-size: 10pt;
+            }
+
+            #res_pip_combo::drop-down, #pip_camera_combo::drop-down {
+                border: none;
+                width: 18px;
+            }
+
+            #res_pip_combo:hover, #pip_camera_combo:hover {
+                border-color: #58a6ff;
+            }
+
             #control_btn_start {
                 background-color: #353535;
                 color: #FFFFFF;
@@ -848,11 +961,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_start:hover {
                 background-color: #555555;
             }
-            
+
             #control_btn_stop {
                 background-color: #FF2427;
                 color: #FFFFFF;
@@ -861,11 +974,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_stop:hover {
                 background-color: #FF6467;
             }
-            
+
             #control_btn_record {
                 background-color: #2DB591;
                 color: #FFFFFF;
@@ -874,7 +987,7 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_record:hover {
                 background-color: #45CAA6;
             }
@@ -891,11 +1004,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #control_btn_snapshot:hover {
                 background-color: #64C9EE;
             }
-            
+
             #reset_btn {
                 background-color: #E6E6E6;
                 border: none;
@@ -904,11 +1017,11 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #reset_btn:hover {
                 background-color: #8b949e;
             }
-            
+
             #input_field {
                 background-color: #FFFFFF;
                 border: 1px solid #D4D4D4;
@@ -918,11 +1031,11 @@ class MonitoringPage(QWidget):
                 font-size: 14px;
                 font-weight: normal;
             }
-            
+
             #input_field:focus {
                 border-color: #AAAAAA;
             }
-            
+
             #setting_btn {
                 background-color: #161b22;
                 color: #FFFFFF;
@@ -931,12 +1044,12 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #setting_btn:hover {
                 background-color: #21262d;
                 border-color: #58a6ff;
             }
-            
+
             #toggle_btn {
                 background-color: #238636;
                 border: none;
@@ -945,19 +1058,40 @@ class MonitoringPage(QWidget):
                 font-size: 16px;
                 font-weight: medium;
             }
-            
+
             #toggle_btn:checked {
                 background-color: #238636;
                 border-color: #2ea043;
             }
-            
+
             #toggle_btn:!checked {
                 background-color: #6e7681;
                 border-color: #8b949e;
             }
-            
+
             #toggle_btn:hover {
                 opacity: 0.8;
+            }
+
+            #pip_toggle_btn {
+                background-color: #6e7681;
+                border: none;
+                border-radius: 4px;
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: medium;
+            }
+
+            #pip_toggle_btn:checked {
+                background-color: #238636;
+            }
+
+            #pip_toggle_btn:!checked {
+                background-color: #6e7681;
+            }
+
+            #pip_toggle_btn:hover {
+                opacity: 0.85;
             }
             """
         )
