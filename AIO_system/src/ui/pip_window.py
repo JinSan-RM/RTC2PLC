@@ -24,6 +24,7 @@ _PIP_H = max(1, int(_SRC_REF_H * _PIP_SCALE))
 _TITLE_H = 25
 
 
+# region pip window
 class PiPWindow(QWidget):
     """
     PiP 플로팅 창
@@ -62,7 +63,11 @@ class PiPWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 제목바 (드래그 영역)
+        self._create_title_bar(layout)
+        self._create_video_area(layout)
+
+    def _create_title_bar(self, layout):
+        """제목바 위젯 생성 및 레이아웃에 추가"""
         self._title_bar = QWidget()
         self._title_bar.setObjectName("pip_title_bar")
         self._title_bar.setFixedHeight(_TITLE_H)
@@ -82,7 +87,8 @@ class PiPWindow(QWidget):
 
         layout.addWidget(self._title_bar)
 
-        # 영상 영역
+    def _create_video_area(self, layout):
+        """영상 표시 레이블 생성 및 레이아웃에 추가"""
         self._video_label = QLabel()
         self._video_label.setObjectName("pip_video")
         self._video_label.setAlignment(Qt.AlignCenter)
@@ -161,14 +167,22 @@ class PiPWindow(QWidget):
             if src_w <= 0 or src_h <= 0:
                 return
 
-            # 실제 소스 해상도에 비례한 크기로 1회 확정
-            target_w = max(1, int(src_w * _PIP_SCALE))
-            target_h = max(1, int(src_h * _PIP_SCALE))
-            self._set_video_size(target_w, target_h)
-            self._size_locked = True
-            log(f"PiP 크기 1회 확정: {target_w}x{target_h} (source: {src_w}x{src_h})")
+            target_w, target_h = self._calculate_scaled_size(src_w, src_h)
+            self._apply_and_lock_size(target_w, target_h, src_w, src_h)
         except Exception as e:
             log(f"PiP 첫 프레임 크기 확정 실패: {e}")
+
+    def _calculate_scaled_size(self, src_w: int, src_h: int):
+        """소스 해상도에 비례한 PiP 목표 크기 계산만 수행."""
+        target_w = max(1, int(src_w * _PIP_SCALE))
+        target_h = max(1, int(src_h * _PIP_SCALE))
+        return target_w, target_h
+
+    def _apply_and_lock_size(self, target_w: int, target_h: int, src_w: int, src_h: int):
+        """계산된 크기를 적용하고 잠금/로그 처리만 수행."""
+        self._set_video_size(target_w, target_h)
+        self._size_locked = True
+        log(f"PiP 크기 1회 확정: {target_w}x{target_h} (source: {src_w}x{src_h})")
 
     def _set_video_size(self, w: int, h: int):
         """PiP 영상/창 고정 크기 적용"""
@@ -185,46 +199,64 @@ class PiPWindow(QWidget):
 
     def _render_frame(self):
         """타이머 tick마다 최신 프레임을 PiP 라벨에 렌더링."""
-        # 크기 재계산 없이 현재 고정 크기에 맞춰 스케일링만 수행
         if self._latest_frame is None:
             return
         try:
-            rgb = cv2.cvtColor(self._latest_frame, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
-            h, w, ch = rgb.shape
-            qt_img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(qt_img)
-            scaled = pixmap.scaled(
-                self._video_w, self._video_h,
-                Qt.KeepAspectRatio,
-                Qt.FastTransformation    # SmoothTransformation 보다 연산 비용 낮음
-            )
-            self._video_label.setPixmap(scaled)
+            rgb = self._convert_frame_to_rgb(self._latest_frame)
+            pixmap = self._create_qimage_from_rgb(rgb)
+            self._scale_and_display_pixmap(pixmap)
         except Exception as e:
             log(f"PiP 렌더링 오류: {e}")
+
+    def _convert_frame_to_rgb(self, frame):
+        """BGR 프레임을 RGB로 변환만 수행."""
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
+
+    def _create_qimage_from_rgb(self, rgb):
+        """RGB 배열로부터 QPixmap 생성만 수행."""
+        h, w, ch = rgb.shape
+        qt_img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
+        return QPixmap.fromImage(qt_img)
+
+    def _scale_and_display_pixmap(self, pixmap):
+        """고정 PiP 크기에 맞춰 스케일링 후 라벨에 표시만 수행."""
+        scaled = pixmap.scaled(
+            self._video_w, self._video_h,
+            Qt.KeepAspectRatio,
+            Qt.FastTransformation    # SmoothTransformation 보다 연산 비용 낮음
+        )
+        self._video_label.setPixmap(scaled)
 
     # ── 표시 / 숨김 ──────────────────────────────────────────
 
     def show_pip(self):
-        """PiP 창을 표시하고 필요 시 렌더 타이머를 시작."""
-        already_visible = self.isVisible()
-        if already_visible and self._render_timer.isActive():
+        """PiP 창을 표시하고 렌더 타이머를 시작."""
+        if self.isVisible() and self._render_timer.isActive():
             return
 
-        if not already_visible:
+        if not self.isVisible():
             self._latest_frame = None
-            if not self._positioned:  # 최초 표시 시 우측 하단에 위치
-                screen = QApplication.primaryScreen().availableGeometry()
-                self.move(screen.right() - self.width() - 20,
-                          screen.bottom() - self.height() - 60)
-                self._positioned = True
+            self._setup_initial_position()
             self.show()
             self.raise_()
 
+        self._start_rendering()
+
+    def _setup_initial_position(self):
+        """첫 표시 시 기본 위치를 우측 하단으로 설정"""
+        if not self._positioned:
+            screen = QApplication.primaryScreen().availableGeometry()
+            self.move(screen.right() - self.width() - 20,
+                      screen.bottom() - self.height() - 60)
+            self._positioned = True
+
+    def _start_rendering(self):
+        """타이머가 활성화되지 않았으면 렌더링 시작"""
         if not self._render_timer.isActive():
             self._render_timer.start()
 
     def hide_pip(self):
-        # todo monitoring page에서 hide가 아닌 stop and start action trigger로 change
+        """PiP 창을 숨기고 렌더 타이머를 중지한 후 버퍼를 정리"""
         self._render_timer.stop()
         # 숨김 상태에서는 마지막 프레임 버퍼도 비워 메모리 사용을 줄임
         self._latest_frame = None
@@ -233,6 +265,7 @@ class PiPWindow(QWidget):
     # ── 종료 ─────────────────────────────────────────────────
 
     def closeEvent(self, event):
+        # override: QWidget.closeEvent — X 버튼 클릭 시 타이머 정지 후 closed 신호 발생
         self._render_timer.stop()
         self.closed.emit()
         event.accept()
@@ -240,24 +273,29 @@ class PiPWindow(QWidget):
     # ── 드래그 이동 ──────────────────────────────────────────
 
     def mousePressEvent(self, event):
+        # override: QWidget.mousePressEvent — 드래그 시작점(오프셋) 기록
         if event.button() == Qt.LeftButton:
             self._drag_active = True
             self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        # override: QWidget.mouseMoveEvent — 드래그 중 창 위치 갱신
         if self._drag_active and event.buttons() == Qt.LeftButton:
             self.move(event.globalPosition().toPoint() - self._drag_offset)
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        # override: QWidget.mouseReleaseEvent — 드래그 종료
         self._drag_active = False
         super().mouseReleaseEvent(event)
+
+# endregion
 
 
 # ─────────────────────────────────────────────────────────────
 
-
+# region pip manager
 class PiPManager:
     """
     PiP 전체 흐름 관리
@@ -325,11 +363,19 @@ class PiPManager:
         self._signal_connected = False
 
     def _sync_pip_state(self):
+        """현재 상태(활성화, 페이지, 카메라 선택)에 따라 PiP 표시/숨김 결정"""
         if self._should_show_pip():
-            self._connect_signal()
-            self._window.show_pip()
-            return
+            self._show_pip_with_connection()
+        else:
+            self._hide_pip_with_disconnection()
 
+    def _show_pip_with_connection(self):
+        """신호 연결 후 PiP 창을 표시"""
+        self._connect_signal()
+        self._window.show_pip()
+
+    def _hide_pip_with_disconnection(self):
+        """신호 연결 해제 후 PiP 창을 숨김"""
         self._disconnect_signal()
         self._window.hide_pip()
 
@@ -338,7 +384,7 @@ class PiPManager:
     def set_enabled(self, enabled: bool):
         # "사용" 플래그는 페이지 전환 훅(on_page_changed)에서 최종 판단에 사용
         # 즉 여기서는 상태만 바꾸고, 실제 show/hide는 호출 지점에서 결정
-        #todo 개념 이해 status control 이 개념을 보는 곳은. typescript, react
+        # todo 개념 이해 status control 이 개념을 보는 곳은. typescript, react
         self._enabled = enabled
         self._sync_toggle_ui()
         self._sync_pip_state()
@@ -348,20 +394,35 @@ class PiPManager:
         if self._active_camera_view is camera_view:
             return
 
-        # 기존 연결 해제
+        # 기존 신호 연결 해제
         self._disconnect_signal()
 
+        # 새 카메라 할당
         self._active_camera_view = camera_view
-        # 카메라가 바뀌는 이벤트에서만 크기 확정을 초기화
+
+        # 카메라 변경에 따른 창 초기화
+        self._prepare_new_camera(camera_view)
+
+        # 새 상태에 맞춰 PiP 표시/숨김 동기화
+        self._sync_pip_state()
+
+    def _prepare_new_camera(self, camera_view):
+        """카메라 변경 시 PiP 창에서 이전 상태 리셋 및 새 카메라 정보 설정"""
+        self._reset_camera_window_state()
+        self._update_camera_title_and_log(camera_view)
+
+    def _reset_camera_window_state(self):
+        """카메라 전환 시 PiP 창의 크기 잠금/프레임 상태 리셋만 수행."""
+        # 크기 잠금 해제 (첫 프레임의 해상도로 다시 계산하도록)
         self._window.reset_size_lock()
-        # 새 카메라 프레임이 들어오기 전까지 이전 소스 잔상이 남지 않게 초기화
+        # 이전 카메라의 프레임 버퍼 클리어
         self._window.clear_frame()
 
+    def _update_camera_title_and_log(self, camera_view):
+        """새 카메라 기준으로 PiP 제목 갱신 및 로그 기록만 수행."""
         if camera_view:
             self._window.set_title(camera_view.camera_name)
             log(f"PiP 카메라 선택: {camera_view.camera_name}")
-
-        self._sync_pip_state()
 
     # ── 페이지 전환 훅 ───────────────────────────────────────
 
@@ -371,14 +432,13 @@ class PiPManager:
         - 모니터링 페이지(1): PiP 숨김
         - 다른 페이지 + enabled + 카메라 선택됨: PiP 표시
         """
-        #:todo 훅 개념에 대한 이해하면 좋을 것 같습니다.
-        #:todo hide가 아니라 같은 페이지에서는 훅 안걸고 있도록 리소스 낭비 최적화 작업.
         self._current_page_index = page_index
         self._sync_pip_state()
 
     # ── 정리 ────────────────────────────────────────────────
 
     def cleanup(self):
-        # 종료 시 signal 연결을 먼저 끊어야 
+        # 종료 시 signal 연결을 먼저 끊어야
         self._disconnect_signal()
         self._window.close()
+# endregion
