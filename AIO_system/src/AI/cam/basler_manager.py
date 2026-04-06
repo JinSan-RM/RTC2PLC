@@ -311,6 +311,99 @@ class BaslerCameraManager:
     def stop_grabbing(self):
         if self.camera and self.is_connected:
             self.camera.StopGrabbing()
+
+    # 추가
+    def update_roi(self, x: int, y: int, width: int, height: int) -> bool:
+        """
+        스트리밍 중단 없이 ROI 변경
+        StopGrabbing → ROI 변경 → StartGrabbing
+        """
+        if not self.is_connected or not self.camera:
+            log("카메라 연결 안 됨, ROI 변경 불가")
+            return False
+
+        try:
+            from pypylon import genicam
+
+            log(f"\n[카메라 {self.camera_index}] ROI 변경 시작: x={x}, y={y}, w={width}, h={height}")
+
+            # 카메라 제약값 확인
+            max_width   = self.camera.Width.Max
+            max_height  = self.camera.Height.Max
+            min_width   = self.camera.Width.Min
+            min_height  = self.camera.Height.Min
+            width_inc   = self.camera.Width.GetInc()
+            height_inc  = self.camera.Height.GetInc()
+
+            # ① 그랩 중지
+            was_grabbing = self.camera.IsGrabbing()
+            if was_grabbing:
+                self.camera.StopGrabbing()
+                log("StopGrabbing 완료")
+
+            # ② Offset 초기화 (Width/Height 변경 전 반드시 0으로)
+            if hasattr(self.camera, 'OffsetX') and self.camera.OffsetX.GetAccessMode() == genicam.RW:
+                self.camera.OffsetX.SetValue(0)
+
+            if hasattr(self.camera, 'OffsetY') and self.camera.OffsetY.GetAccessMode() == genicam.RW:
+                self.camera.OffsetY.SetValue(0)
+
+            # ③ Width 설정
+            adjusted_width = (width // width_inc) * width_inc
+            adjusted_width = max(min_width, min(adjusted_width, max_width))
+            if x + adjusted_width > max_width:
+                adjusted_width = ((max_width - x) // width_inc) * width_inc
+            self.camera.Width.SetValue(adjusted_width)
+            log(f"✓ Width = {adjusted_width}")
+
+            # ④ Height 설정
+            adjusted_height = (height // height_inc) * height_inc
+            adjusted_height = max(min_height, min(adjusted_height, max_height))
+            if y + adjusted_height > max_height:
+                adjusted_height = ((max_height - y) // height_inc) * height_inc
+            self.camera.Height.SetValue(adjusted_height)
+            log(f"✓ Height = {adjusted_height}")
+
+            # ⑤ OffsetX 설정
+            if hasattr(self.camera, 'OffsetX') and self.camera.OffsetX.GetAccessMode() == genicam.RW:
+                offset_x_inc = self.camera.OffsetX.GetInc()
+                adjusted_x = (x // offset_x_inc) * offset_x_inc
+                if adjusted_x + self.camera.Width.Value > max_width:
+                    adjusted_x = ((max_width - self.camera.Width.Value) // offset_x_inc) * offset_x_inc
+                self.camera.OffsetX.SetValue(adjusted_x)
+                log(f"✓ OffsetX = {adjusted_x}")
+
+            # ⑥ OffsetY 설정
+            if hasattr(self.camera, 'OffsetY') and self.camera.OffsetY.GetAccessMode() == genicam.RW:
+                offset_y_inc = self.camera.OffsetY.GetInc()
+                adjusted_y = (y // offset_y_inc) * offset_y_inc
+                if adjusted_y + self.camera.Height.Value > max_height:
+                    adjusted_y = ((max_height - self.camera.Height.Value) // offset_y_inc) * offset_y_inc
+                self.camera.OffsetY.SetValue(adjusted_y)
+                log(f"✓ OffsetY = {adjusted_y}")
+
+            # ⑦ 그랩 재시작
+            if was_grabbing:
+                self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                log("StartGrabbing 재시작 완료")
+
+            # roi 속성 업데이트
+            self.roi = {'x': x, 'y': y, 'width': width, 'height': height}
+
+            log(f"[카메라 {self.camera_index}] ROI 변경 완료")
+            return True
+
+        except Exception as e:
+            log(f"ROI 변경 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            # 실패해도 그랩은 재시작
+            try:
+                if not self.camera.IsGrabbing():
+                    self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+            except Exception:
+                pass
+            return False
     
     def close(self):
         try:

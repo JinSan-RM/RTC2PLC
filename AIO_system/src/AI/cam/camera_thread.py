@@ -20,11 +20,17 @@ class CameraThread(QThread):
     error_occurred = Signal(str)
     
     # 클래스 상수
+    # monitoring_page.py의 색상과 일치하도록 수정함
     CLASS_COLORS = {
-        'PET': (0, 165, 255),
-        'PE': (255, 0, 0),
-        'PP': (0, 255, 0),
-        'PS': (255, 0, 255)
+        # 'PET': (0, 165, 255),
+        # 'PE': (255, 0, 0),
+        # 'PP': (0, 255, 0),
+        # 'PS': (255, 0, 255)
+        'PET' : (208, 143, 37),
+        'PE' : (134, 183, 28),
+        'PP' : (60, 60, 228),
+        'PS' : (15, 165, 245),
+        'PVC' : (195, 94, 190),
     }
     
     # CLASS_COLORS = {
@@ -108,6 +114,7 @@ class CameraThread(QThread):
             
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            
             cap.set(cv2.CAP_PROP_FPS, 60)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
@@ -157,17 +164,13 @@ class CameraThread(QThread):
                 else:
                     detected_objects = []
                     
-                # log(f"[DEBUG-AI-1] camera_index={self.camera_index}, detected_objects 개수={len(detected_objects) if detected_objects else 0}")
-                # if detected_objects:
-                #     for obj in detected_objects:
-                #         log(f"[DEBUG-AI-2]   obj.id={obj.id}, class={obj.class_name}")
                 
                 # 4. 박스 매니저 업데이트
                 self.box_manager.update_detections(detected_objects)
 
                 # 5. AirKnife 동작
-                # if len(detected_objects) > 0:
-                #     self._handle_airknife()
+                if len(detected_objects) > 0:
+                    self._handle_airknife()
                 
                 # 6. 프레임에 그리기
                 frame = self._draw_frame(frame, detected_objects)
@@ -223,11 +226,13 @@ class CameraThread(QThread):
     def _draw_frame(self, frame: np.ndarray, detected_objects: List[DetectedObject]) -> np.ndarray:
         """프레임에 그리기"""
         # 1. 박스 그리기
+        
         frame = self.box_manager.draw_all(frame)
         
         # 2. 감지된 객체 그리기
         for obj in detected_objects:
             x1, y1, x2, y2 = obj.bbox
+            
             color = self.CLASS_COLORS.get(obj.class_name, (128, 128, 128))
             
             # 바운딩 박스
@@ -264,6 +269,16 @@ class CameraThread(QThread):
             self.fps_counter = 0
             self.fps_start_time = time.time()
     
+    # 추가
+    def update_roi(self, x: int, y: int, width: int, height: int):
+        """UI에서 ROI 변경 요청 시 호출"""
+        success = self.camera_manager.update_roi(x, y, width, height)
+        if success:
+            log(f"카메라 {self.camera_index + 1} ROI 업데이트 완료")
+        else:
+            log(f"카메라 {self.camera_index + 1} ROI 업데이트 실패")
+        return success
+        
     def stop(self):
         """스레드 정지"""
         log(f"카메라 {self.camera_index + 1} 정지 요청")

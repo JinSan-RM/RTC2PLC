@@ -274,6 +274,11 @@ class App():
         
             time.sleep(0.033)
             
+            
+# 추가 : 재질별 카운트 올라가는 로직 관련 함수
+    def on_obj_detected(self, info, classification):
+        """제품 감지"""
+        self.ui.signals.obj_detected.emit(info, classification)
                            
 # region inverter control
     def on_update_inverter_status(self, _data):

@@ -50,6 +50,8 @@ class UpdateSignals(QObject):
     airknife_updated: Signal = Signal(int)
     input_updated: Signal = Signal(int)
     output_updated: Signal = Signal(int)
+    # 추가
+    obj_detected: Signal = Signal(object, str)
 
 
 class MainWindow(QMainWindow):
@@ -72,7 +74,7 @@ class MainWindow(QMainWindow):
         self.signals.airknife_updated.connect(self.pages.settings_page.airknife_tab.on_airknife_off)
         self.signals.input_updated.connect(self.pages.logs_page.io_tab.update_input_status)
         self.signals.output_updated.connect(self.pages.logs_page.io_tab.update_output_status)
-
+        self.signals.obj_detected.connect(self.pages.monitoring_page.on_object_detected) # 추가
         Logger.set_callback(self.add_log_to_ui)
         # 시간 업데이트 타이머
         self.time_timer = QTimer()

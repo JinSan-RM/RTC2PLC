@@ -10,6 +10,29 @@ from PySide6.QtWidgets import QAbstractButton
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QRectF
 from PySide6.QtGui import QPainter, QColor, QFont
 
+
+# 추가
+#  초분광 카메라 설정
+HOST = '169.254.188.53'
+COMMAND_PORT = 2000
+EVENT_PORT = 2500
+DATA_STREAM_PORT = 3000
+WORKFLOW_PATH = "C:/Users/USER/Breeze/Data/Runtime/251111.xml"
+CLASS_MAPPING = {
+    # 0: "_",
+    # 1: "PP",
+    # 2: "HDPE",
+    # 3: "PS",
+    # 4: "PET",
+    # 5: "background",
+    0 : "PET",
+    1 : "PE",
+    2 : "PP",
+    3 : "PS",
+    4 : "PVC",
+    5 : "기타"
+}
+
 # ============================================================
 # region Modbus
 # ============================================================
@@ -448,6 +471,11 @@ CAMERA_CONFIGS = {
     }
 }
 
+# 추가
+CAMERA_DISPLAY_CONFIG = {
+    "max_width_ratio" : 0.5,
+    "max_height_ratio" : 0.7
+}
 
 
 # ============================================================
