@@ -38,8 +38,6 @@ class CspData:
     tgt_vel: float
 
 
-# pylint: disable=broad-exception-caught
-# pylint: disable=broad-exception-raised
 # region ServoManager
 class ServoManager:
     """서보 매니저"""

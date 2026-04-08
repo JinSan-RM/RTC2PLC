@@ -1,10 +1,12 @@
 """
 각종 설정 및 유틸들
 """
+from enum import IntEnum
 from pathlib import Path
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
+import numpy as np
 from dateutil import tz
 from PySide6.QtWidgets import QAbstractButton
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QRectF
@@ -40,7 +42,7 @@ GUIDELINE_X = 405
 # 피더 배출구 막힘 해소
 USE_FEEDER_CAM = False
 BLOCK_DETECTION_TIME = 5 # 피더 배출구 막힘 감지 시간(초)
-FEEDER_AIR_TERM = 10 # 10초마다 피더 배출부에 에어를 쏴서 막힘을 제거
+FEEDER_AIR_TERM = 15 # 15초마다 피더 배출부에 에어를 쏴서 막힘을 제거
 
 # 플라스틱 분류와 PLC 주소 맵핑
 """
@@ -104,11 +106,318 @@ PLASTIC_SIZE_MAPPING = {
 # endregion
 # ============================================================
 
+# ============================================================
+# region Modbus
+# ============================================================
+MODBUS_RTU_CONFIG = {
+    "slave_ids": {
+        "inverter_001": 1,
+        "inverter_002": 2,
+        "inverter_003": 3,
+        "inverter_004": 4,
+        "inverter_005": 5,
+        "inverter_006": 6
+    },
+    "port": "COM7",
+    "baudrate": 9600,
+    "bytesize": 8,
+    "parity": "N",
+    "stopbits": 1,
+    "timeout": 1
+}
+# ============================================================
+# endregion
+# ============================================================
+
+# ============================================================
+# region EtherCAT
+# ============================================================
+
+# 네트워크 인터페이스 이름 -> search_ifname.py 를 실행해서 얻은 네트워크 어댑터 이름을 사용함
+IF_NAME = '\\Device\\NPF_{C7EBE891-A804-4047-85E5-4D0148B1D3EA}'
+
+# 통신 사이클 간격
+ETHERCAT_DELAY = 0.01
+HEALTH_CHECK_TERM = ETHERCAT_DELAY * 10  # 10 주기마다 한 번 체크
+WKC_MISS_COUNT_MAX = 5
+
+# LS산전 제조사 ID
+LS_VENDOR_ID = 30101
+
+class LSProductCode(IntEnum):
+    """이더캣 슬레이브 장비 제품 코드"""
+    L7NH_PRODUCT_CODE = 0x00010001
+    D232A_PRODUCT_CODE = 0x10010008
+    TR32KA_PRODUCT_CODE = 0x10010009
+
+# Sync Manager 는 0 ~ 3이 있고, 그 중 0과 1은 Mailbox(SDO)에 사용됨.
+EC_RX_INDEX = 0x1C12 # Sync Manager 2 -> RxPDO를 매칭
+EC_TX_INDEX = 0x1C13 # Sync Manager 3 -> TxPDO를 매칭
+
+# RxPDO 매핑은 0x1600 ~ 0x1603의 4개가 존재하고, 일단 기본값인 0x1601을 사용하도록 한다.
+SERVO_RX_MAP = 0x1601 # master -> slave
+# TxPDO 매핑은 0x1A00 ~ 0x1A03의 4개가 존재하고, 일단 기본값인 0x1A01을 사용하도록 한다.
+SERVO_TX_MAP = 0x1A01 # slave -> master
+
+# 위에서 지정한 PDO 맵 주소에 아래의 매핑 데이터를 넣어준다.
+# PDO 맵 주소의 subindex 0 에는 전체 매핑 개수, subindex 1 부터 매핑 데이터를 1개씩 할당
+# PDO 매핑 구조: 0x 0000 / 00 / 00 -> 앞 2byte는 index, 중간 1byte는 subindex, 뒤 1byte는 해당 오브젝트 bit사이즈
+SERVO_RX = [
+    0x60400010, # 컨트롤 워드(unsigned short)
+    0x60600008, # 운전 모드(signed char)
+    0x607A0020, # 목표 위치(int)
+    0x60FF0020, # 목표 속도(int)
+]
+
+SERVO_TX = [
+    0x60410010, # 스테이터스 워드(unsigned short)
+    0x60610008, # 운전 모드 표시(signed char)
+    0x60640020, # 현재 위치(int)
+    0x606C0020, # 현재 속도(int)
+    0x603F0010, # 에러 코드(unsigned short)
+    0x26140010, # 경고 코드(unsigned short)
+]
+
+OUTPUT_RX_MAP = 0x1700
+INPUT_TX_MAP = 0x1B00
+
+OUTPUT_RX = [
+    0x32200101, # 운전 스위치 LAMP
+    0x32200201, # 정지 스위치 LAMP
+    0x32200301, # TOWER 정상운전 LAMP
+    0x32200401, # TOWER 운전정지 LAMP
+    0x32200501, # TOWER 알람 LAMP
+    0x32200601, # TOWER BUZZER
+    0x32200701, # 비전 1 조광기 POWER
+    0x32200801, # 비전 2 조광기 POWER
+    0x32200901, # 내륜모터 인버터 RUN
+    0x32200A01, # 내륜모터 인버터 RESET
+    0x32200B01, # 외륜모터 인버터 RUN
+    0x32200C01, # 외륜모터 인버터 RESET
+    0x32200D01, # 컨베이어#1 인버터 RUN
+    0x32200E01, # 컨베이어#1 인버터 RESET
+    0x32200F01, # 컨베이어#2 인버터 RUN
+    0x32201001, # 컨베이어#2 인버터 RESET
+    0x32201101, # 컨베이어#3 인버터 RUN
+    0x32201201, # 컨베이어#3 인버터 RESET
+    0x32201301, # 컨베이어#4 인버터 RUN
+    0x32201401, # 컨베이어#4 인버터 RESET
+    0x32201501, # 소재 1분리 SOL V/V
+    0x32201601, # 소재 2분리 SOL V/V
+    0x32201701, # 소재 3분리 SOL V/V
+    0x32201801, # SPARE
+    0x32201901, # 원점 복귀 LAMP
+    0x32201A01, # 알람 리셋 LAMP
+    0x32201B01,
+    0x32201C01,
+    0x32201D01,
+    0x32201E01,
+    0x32201F01,
+    0x32202001,
+]
+
+INPUT_TX = [
+    0x30200101, # 수동/자동
+    0x30200201, # 운전
+    0x30200301, # 정지
+    0x30200401, # 알람리셋
+    0x30200501, # 비상정지
+    0x30200601, # 내륜모터 인버터 알람
+    0x30200701, # 외륜모터 인버터 알람
+    0x30200801, # 컨베이어#1 인버터 알람
+    0x30200901, # 컨베이어#2 인버터 알람
+    0x30200A01, # 컨베이어#3 인버터 알람
+    0x30200B01, # 컨베이어#4 인버터 알람
+    0x30200C01, # 원점 복귀
+    0x30200D01,
+    0x30200E01,
+    0x30200F01,
+    0x30201001,
+    0x30201101, # 피더 배출 제품감지센서
+    0x30201201,
+    0x30201301,
+    0x30201401,
+    0x30201501,
+    0x30201601,
+    0x30201701,
+    0x30201801,
+    0x30201901,
+    0x30201A01,
+    0x30201B01,
+    0x30201C01,
+    0x30201D01,
+    0x30201E01,
+    0x30201F01,
+    0x30202001,
+]
+
+# 앱 자체적으로 전자 기어비 적용을 위한 부분
+# 기어비(인코더 펄스 / 모터 1회전당 이동거리) 현재 1회전당 10,000 μm
+# UI에서 입력 시 값 1당 1 μm 를 의미하게 됨
+ENCODER_RESOLUTION = 524288 # 인코더 해상도(1회전당 펄스)
+BALL_SCREW_LEAD = 20 # 볼 스크류 1회전당 이동거리(mm)
+UNIT_RATIO = 0.01
+SCALE_FACTOR = (ENCODER_RESOLUTION / BALL_SCREW_LEAD) * UNIT_RATIO
+
+def get_servo_unmodified_value(value: float) -> int:
+    """
+    서보로 전달할 값
+    
+    :param value: 앱 내에서 사용하는 값(μm 단위)
+    :type value: float
+    :return: 서보가 사용하는 값(펄스 단위)
+    :rtype: int
+    """
+    return int(round(value*SCALE_FACTOR))
+
+def get_servo_modified_value(value: int | float) -> float:
+    """
+    UI에 출력할 값
+    
+    :param value: 서보가 사용하는 값(펄스 단위)
+    :type value: int | float
+    :return: 앱 내에서 사용하는 값(μm 단위)
+    :rtype: float
+    """
+    return value/SCALE_FACTOR
+
+class StatusMask(IntEnum):
+    """서보 드라이브 상태 체크를 위한 비트 마스크"""
+    STATUS_NOT_READY_TO_SWITCH_ON = 0x0000 # 초기화 중
+    STATUS_SWITCH_ON_DISABLED = 0x0040 # 초기화 완료, 주전원 투입 불가
+    STATUS_READY_TO_SWITCH_ON = 0x0021 # 주전원 투입 가능
+    STATUS_SWITCHED_ON = 0x0023 # 주전원 투입 완료, 서보 OFF
+    STATUS_OPERATION_ENABLED = 0x0027 # 서보 ON
+    STATUS_QUICK_STOP_ACTIVE = 0x0007 # Quick stop 기능 수행 중
+    STATUS_FAULT_REACTION_ACTIVE = 0x000F # 서보 알람 관련 시퀀스 처리 중
+    STATUS_FAULT = 0x0008 # 서보 알람(AL 코드) 발생
+    STATUS_WARNING = 0x0080 # 경보(W 코드) 발생
+
+def check_mask(s, m) -> bool:
+    """
+    STATUS_MASK와 비교하여 현재 서보 드라이브 상태 체크
+    
+    :param s: 대상 비트
+    :param m: 비교할 비트 마스크
+    """
+    low_bit = s & 0x00FF
+    return (low_bit & m) == m
+
+class OperationMode(IntEnum):
+    """서보 운전 상태"""
+    SERVO_READY = 0
+    SERVO_HOMING = 6
+    SERVO_CSP = 8
+    SERVO_CSV = 9
+
+# 서보 위치 이동 가속도
+SERVO_ACCEL = 2000
+
+# 위치 값이 10 펄스 이내로 들어오면 위치 도달로 추정
+SERVO_IN_POS_WIDTH = 10
+
+class InputBitMask(IntEnum):
+    """입력 모듈 체크를 위한 비트 마스크"""
+    MODE_SELECT = 1 << 0
+    AUTO_RUN = 1 << 1
+    AUTO_STOP = 1 << 2
+    RESET_ALARM = 1 << 3
+    EMERGENCY_STOP = 1 << 4
+    SERVO_HOMING = 1 << 11
+    FEEDER_OUTPUT = 1 << 16
+
+# ============================================================
+# endregion
+# ============================================================
 
 # ============================================================
 # region common
 # ============================================================
+CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+
+FEEDER_TIME_1 = 90 # 피더 제품 미배출 기본 대기 시간(sec)
+FEEDER_TIME_2 = 5 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간(sec)
+
+PRCS_HTH_CHECK_TERM = 1
+MAX_PRCS_DEAD_COUNT = 3
+
 LOG_PATH = Path(__file__).resolve().parent.parent.parent / "log"
+
+input_pdo_struct = [
+    ('status_word', '<u2'),
+    ('drive_mode', '<i1'),
+    ('actual_position', '<i4'),
+    ('actual_velocity', '<i4'),
+    ('error_code', '<u2'),
+    ('warning_code', '<u2')
+]
+output_pdo_struct = [
+    ('control_word', '<u2'),
+    ('drive_mode', '<i1'),
+    ('target_position', '<i4'),
+    ('target_velocity', '<i4')
+]
+variable_pdo_struct = [
+    ('init_step', '<u1'),
+    ('state', '<u1'),
+    ('current_position', '<i4'),
+    ('current_velocity', '<i4'),
+    ('target_position', '<i4'),
+    ('target_velocity', '<i4'),
+    ('last_time', '<u8')
+]
+total_input_type = ('total_input', '<u4')
+total_output_type = ('total_output', '<u4')
+prev_input_type = ('prev_input', '<u4')
+hth_check_type = [
+    ('main_counter', '<u2'),
+    ('sub_counter', '<u2')
+]
+
+SHM_NAME = "COMM_SHM"
+SHM_DTYPE = np.dtype([
+    # 서보 드라이브 관리용 np array 설정
+    ('servo_0', [
+        ('input_pdo', input_pdo_struct),
+        ('reserved_1', 'u1'),
+        ('output_pdo', output_pdo_struct),
+        ('reserved_2', 'u1'),
+        ('variables', variable_pdo_struct),
+        ('reserved_3', 'u2')
+    ]),
+    ('servo_1', [
+        ('input_pdo', input_pdo_struct),
+        ('reserved_1', 'u1'),
+        ('output_pdo', output_pdo_struct),
+        ('reserved_2', 'u1'),
+        ('variables', variable_pdo_struct),
+        ('reserved_3', 'u2')
+    ]),
+    # 입출력 모듈 관리용 np array 설정
+    total_input_type,
+    total_output_type,
+    prev_input_type,
+    ('hth_counter', hth_check_type)
+])
+
+def sync_shared_memory(dst, raw_src):
+    """
+    PDO 데이터를 공유 메모리에 쓰기
+    
+    :param dst: 복사할 메모리
+    :param raw_src: 원본 데이터
+    """
+    src = np.frombuffer(raw_src, dtype='u1').view(dst.dtype)[0]
+    for name in dst.dtype.names:
+        dst[name] = src[name]
+
+@dataclass
+class ProcessCheckVars:
+    """process health check 속성 모음"""
+    last_check_time: float
+    last_counter: int = 0
+    dead_count: int = 0
+    start_delay_count: int = 5
 
 def calculate_shape_metrics(border, size_event=False):
     """
@@ -361,7 +670,7 @@ class ToggleButton(QAbstractButton):
         self._handle_position = self._get_end_pos()
         super().resizeEvent(event)
 
-    def paintEvent(self, event): # pylint: disable=unused-argument
+    def paintEvent(self, event):
         # 직접 위젯 그리기
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing) # 부드럽게 처리

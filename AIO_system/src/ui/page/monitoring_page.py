@@ -53,7 +53,6 @@ class HyperSpectralData:
     overlay_info: deque = None
 
 
-# pylint: disable=broad-exception-caught
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     def __init__(
@@ -295,7 +294,6 @@ class CameraView(QFrame):
     def update_frame(self, frame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
-            # pylint: disable=no-member
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             h, w, ch = rgb_frame.shape

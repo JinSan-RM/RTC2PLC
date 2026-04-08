@@ -74,7 +74,6 @@ class ObjectInfo:
 
 
 # region Comm Manager
-# pylint: disable=broad-exception-caught
 class CommManager(threading.Thread):
     """통신 관리자"""
     def __init__(self, app):
@@ -787,7 +786,7 @@ class LineScanSimulator(threading.Thread):
                 for _ in range(5)
             ], np.int32)
 
-            cv2.fillPoly(self.canvas, [pts], color) # pylint: disable=no-member
+            cv2.fillPoly(self.canvas, [pts], color)
 
             # 오브젝트의 실제 경계값(Bounding Box) 저장
             self.objects_metadata.append({
