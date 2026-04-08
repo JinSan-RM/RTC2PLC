@@ -296,7 +296,8 @@ class App():
     def on_monitoring_start(self):
         """모니터링 시작"""
         self.monitoring_enabled = True
-        self.managers.comm_manager.start_hypercam()
+        if self.managers.comm_manager is not None:
+            self.managers.comm_manager.start_hypercam()
 
     def on_monitoring_stop(self):
         """모니터링 종료"""
@@ -319,7 +320,8 @@ class App():
 
     def blow_block(self, air_num: int = 0):
         """피더 배출구 air 동작"""
-        self.managers.comm_manager.blow_block()
+        if self.managers.comm_manager is not None:
+            self.managers.comm_manager.blow_block()
 # endregion
 
 # region inverter control
@@ -350,7 +352,7 @@ class App():
         :type value: float
         """
         log(f"Setting frequency for {inverter_name} to {value} Hz")
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.set_freq(inverter_name, value)
 
     def on_set_acc(self, inverter_name: str, value: float):
@@ -364,7 +366,7 @@ class App():
         :type value: float
         """
         log(f"Setting acceleration time for {inverter_name} to {value} sec")
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.set_acc(inverter_name, value)
 
     def on_set_dec(self, inverter_name: str, value: float):
@@ -378,7 +380,7 @@ class App():
         :type value: float
         """
         log(f"Setting deceleration time for {inverter_name} to {value} sec")
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.set_dec(inverter_name, value)
 
     def motor_start(self, inverter_name: str):
@@ -390,7 +392,7 @@ class App():
         :type inverter_name: str
         """
         log(f"Starting motor: {inverter_name}")
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.motor_start(inverter_name)
 
     def motor_stop(self, inverter_name: str):
@@ -402,7 +404,7 @@ class App():
         :type inverter_name: str
         """
         log(f"Stopping motor: {inverter_name}")
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.motor_stop(inverter_name)
 
     def inverter_custom_read(self, slave_id: int, addr: int):
@@ -415,7 +417,7 @@ class App():
         :param addr: 조회할 주소 값
         :type addr: int
         """
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.custom_read(slave_id, addr)
 
     def inverter_custom_write(self, slave_id: int, addr: int, value: int):
@@ -430,7 +432,7 @@ class App():
         :param value: 쓸 값
         :type value: int
         """
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.custom_write(slave_id, addr, value)
 # endregion
 
@@ -451,7 +453,8 @@ class App():
         :param servo_id: 서보 ID
         :type servo_id: int
         """
-        self.managers.ethercat_manager.servo_onoff(servo_id, True)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_onoff(servo_id, True)
 
     def servo_off(self, servo_id: int):
         """
@@ -461,7 +464,8 @@ class App():
         :param servo_id: 서보 ID
         :type servo_id: int
         """
-        self.managers.ethercat_manager.servo_onoff(servo_id, False)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_onoff(servo_id, False)
 
     def servo_reset(self, servo_id: int):
         """
@@ -471,7 +475,8 @@ class App():
         :param servo_id: 서보 ID
         :type servo_id: int
         """
-        self.managers.ethercat_manager.servo_reset(servo_id)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_reset(servo_id)
 
     def servo_stop(self, servo_id: int):
         """
@@ -481,7 +486,8 @@ class App():
         :param servo_id: 서보 ID
         :type servo_id: int
         """
-        self.managers.ethercat_manager.servo_halt(servo_id)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_halt(servo_id)
 
     def servo_homing(self, servo_id: int):
         """
@@ -491,7 +497,8 @@ class App():
         :param servo_id: 서보 ID
         :type servo_id: int
         """
-        self.managers.ethercat_manager.servo_homing(servo_id)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_homing(servo_id)
 
     def servo_move_to_position(self, servo_id: int, pos: float, v: float):
         """
@@ -505,7 +512,8 @@ class App():
         :param v: 이동 속도
         :type v: float
         """
-        self.managers.ethercat_manager.servo_move_absolute(servo_id, pos, v)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_move_absolute(servo_id, pos, v)
 
     def servo_jog_move(self, servo_id: int, v: float):
         """
@@ -517,7 +525,8 @@ class App():
         :param v: 이동 속도
         :type v: float
         """
-        self.managers.ethercat_manager.servo_move_velocity(servo_id, v)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_move_velocity(servo_id, v)
 
     def servo_inch_move(self, servo_id: int, dist: float, v: float = 10000.0):
         """
@@ -531,7 +540,8 @@ class App():
         :param v: 이동 속도
         :type v: float
         """
-        self.managers.ethercat_manager.servo_move_relative(servo_id, dist, v)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.servo_move_relative(servo_id, dist, v)
 # endregion
 
 # region I/O
@@ -573,7 +583,8 @@ class App():
         :param on_term: Description
         :type on_term: int
         """
-        self.managers.ethercat_manager.airknife_on(air_num, on_term)
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.airknife_on(air_num, on_term)
 
     def on_airknife_off(self, air_num: int):
         """에어나이프 정지 시 UI 업데이트"""
@@ -591,7 +602,7 @@ class App():
         self.auto_run = True
 
         # 피더, 컨베이어 동작 함수
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.on_automode_start()
 
         # 카메라 동작 함수
@@ -611,7 +622,7 @@ class App():
             if self._auto_thread.is_alive():
                 log("[WARNING] auto thread did not terminate properly")
         # 피더, 컨베이어 멈춤 함수
-        if hasattr(self, 'modbus_manager'):
+        if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.on_automode_stop()
 
         # 카메라 멈춤 함수
