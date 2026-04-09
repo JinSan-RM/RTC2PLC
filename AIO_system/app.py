@@ -26,9 +26,10 @@ from src.function.sharedmemory_manager import SharedMemoryManager
 from src.function.modbus_manager import ModbusManager
 from src.function.ethercat_manager import EtherCATManager
 from src.utils.config_util import (
-    CONFIG_PATH, APP_CONFIG, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH, SHM_NAME,
+    CONFIG_PATH, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH, SHM_NAME,
     PRCS_HTH_CHECK_TERM, MAX_PRCS_DEAD_COUNT,
-    ProcessCheckVars
+    ProcessCheckVars,
+    FEEDER_AIR_TERM, FEEDER_AIR_DURATION
 )
 from src.utils.logger import log
 
@@ -109,8 +110,7 @@ class UpdateHandler(FileSystemEventHandler):
 class App():
     """메인 앱 클래스"""
     is_reload = False
-    FEEDER_AIR_TERM = 10 # 10초마다 피더 배출부에 에어를 쏴서 막힘을 제거
-    FEEDER_AIR_DURATION = 1
+    
 
     def __init__(self):
         # 우선적으로 설정값부터 읽어옴
@@ -599,6 +599,32 @@ class App():
         self.auto_mode_stop()
         self.set_auto_mode(False)
 
+    def _build_default_config(self):
+        inverter_config = {f"inverter_00{i}": [0.0, 1.0, 1.0] for i in range(1, 7)}
+        base_positions = [[0.0, 0.0] for _ in range(6)]
+        airknife_config = {
+            f"airknife_{i}": {"timing": 0, "duration": 100}
+            for i in range(1, 4)
+        }
+
+        return {
+            "air_sequence": [],
+            "inverter_config": inverter_config,
+            "servo_config": {
+                "servo_0": {
+                    "position": [pos[:] for pos in base_positions],
+                    "jog_speed": 0.0,
+                    "inch_distance": 0.0,
+                },
+                "servo_1": {
+                    "position": [pos[:] for pos in base_positions],
+                    "jog_speed": 0.0,
+                    "inch_distance": 0.0,
+                },
+            },
+            "airknife_config": airknife_config,
+        }
+
     def _load_config(self):
         try:
             if os.path.exists(CONFIG_PATH):
@@ -614,7 +640,7 @@ class App():
         except Exception as e:
             log(f"[ERROR] config file load failed: {e}")
 
-        self.config = APP_CONFIG.copy()
+        self.config = self._build_default_config()
         self._save_config()
 
     def _save_config(self):

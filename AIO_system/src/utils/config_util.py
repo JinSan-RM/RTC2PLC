@@ -239,61 +239,11 @@ class InputBitMask(IntEnum):
 # ============================================================
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 
-APP_CONFIG = {
-    "inverter_config": {
-        # 주파수, 가속 시간, 감속 시간 순
-        "inverter_001": [ 20.0, 5.0, 10.0 ],
-        "inverter_002": [ 40.0, 5.0, 10.0 ],
-        "inverter_003": [ 20.0, 5.0, 10.0 ],
-        "inverter_004": [ 30.0, 5.0, 10.0 ],
-        "inverter_005": [ 40.0, 5.0, 10.0 ],
-        "inverter_006": [ 30.0, 5.0, 10.0 ],
-    },
-    "servo_config": {
-        # position: 위치, 속도 쌍으로 각 위치별 정보 저장
-        "servo_0": {
-            "position": [
-                [ 65.0, 5.0 ],
-                [ 85.0, 5.0 ],
-                [ 110.0, 5.0 ],
-                [ 140.0, 5.0 ],
-                [ 180.0, 5.0 ],
-                [ 250.0, 5.0 ],
-            ],
-            "jog_speed": 10.0,
-            "inch_distance": 1.0,
-        },
-        "servo_1": {
-            "position": [
-                [ 150.0, 5.0 ],
-                [ 250.0, 5.0 ],
-                [ 300.0, 5.0 ],
-                [ 350.0, 5.0 ],
-                [ 400.0, 5.0 ],
-                [ 450.0, 5.0 ],
-            ],
-            "jog_speed": 10.0,
-            "inch_distance": 1.0,
-        }
-    },
-    "airknife_config": {
-        "airknife_1": {
-            "timing": 100,
-            "duration": 500,
-        },
-        "airknife_2": {
-            "timing": 100,
-            "duration": 500,
-        },
-        "airknife_3": {
-            "timing": 100,
-            "duration": 500,
-        },
-    },
-}
-
 FEEDER_TIME_1 = 90 # 피더 제품 미배출 기본 대기 시간(sec)
 FEEDER_TIME_2 = 5 # 6 단계에서 1 단계로 리셋 시 추가 대기 시간(sec)
+
+FEEDER_AIR_TERM = 15 # 15초마다 피더 배출부에 에어를 쏴서 막힘을 제거
+FEEDER_AIR_DURATION = 1
 
 PRCS_HTH_CHECK_TERM = 1
 MAX_PRCS_DEAD_COUNT = 3
