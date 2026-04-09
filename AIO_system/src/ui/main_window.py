@@ -347,6 +347,8 @@ class MainWindow(QMainWindow):
         """긴급 정지"""
         log("긴급정지")
         self.update_status("긴급정지", "red")
+        self.app.emergency_stop()
+        self.app.popup.warning("⚠️긴급 정지가 되었습니다.⚠️")
 
     def closeEvent(self, a0):
         """UI 닫는 이벤트 발생 시 호출됨"""

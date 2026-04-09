@@ -371,9 +371,11 @@ class ServoController(QWidget):
         if checked:
             log("서보 ON")
             self.app.servo_on(self.servo_id)
+            self.app.popup.info("서보가 켜졌습니다.")
         else:
             log("서보 OFF")
             self.app.servo_off(self.servo_id)
+            self.app.popup.info("서보가 꺼졌습니다.")
 
     def on_reset(self):
         """개별 서보 알람/경고 리셋"""
@@ -381,16 +383,19 @@ class ServoController(QWidget):
         # self.alarm_indicator.setText("⚫ 정상")
         # self.error_code.setText("0x0000")
         self.app.servo_reset(self.servo_id)
+        self.app.popup.info("서보가 리셋되었습니다.")
 
     def on_stop(self):
         """개별 서보 정지"""
         log("서보 정지")
         self.app.servo_stop(self.servo_id)
+        self.app.popup.info("서보가 정지되었습니다.")
 
     def on_homing(self):
         """개별 서보 원점 복귀"""
         log("서보 원점 복귀")
         self.app.servo_homing(self.servo_id)
+        self.app.popup.info("서보가 원점 복귀되었습니다.")
 
     def on_save_position(self, idx):
         """이동 위치 및 속도 저장"""

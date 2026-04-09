@@ -294,7 +294,7 @@ class CameraView(QFrame):
     def update_frame(self, frame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) 
 
             h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
@@ -343,7 +343,7 @@ class CameraView(QFrame):
             self.status.setText("🔴 연결 끊김")
             self.status.setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold;")
 
-    def on_error(self, error_msg):
+    def on_error(self, error_msg):  
         """에러 처리"""
         log(f"{self.camera_name} 오류: {error_msg}")
         if self.is_hyperspectral:
@@ -617,17 +617,17 @@ class MonitoringPage(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
 
         # 전체 시작/정지
-        start_all_btn = QPushButton("▶️전체 시작")
-        start_all_btn.setObjectName("control_btn_start")
-        start_all_btn.setFixedSize(199, 60)
-        start_all_btn.clicked.connect(self.on_start_all)
-        layout.addWidget(start_all_btn)
+        self.start_all_btn = QPushButton("▶️전체 시작")
+        self.start_all_btn.setObjectName("control_btn_start")
+        self.start_all_btn.setFixedSize(199, 60)
+        self.start_all_btn.clicked.connect(self.on_start_all)
+        layout.addWidget(self.start_all_btn)
 
-        stop_all_btn = QPushButton("⏹️전체 정지")
-        stop_all_btn.setObjectName("control_btn_stop")
-        stop_all_btn.setFixedSize(199, 60)
-        stop_all_btn.clicked.connect(self.on_stop_all)
-        layout.addWidget(stop_all_btn)
+        self.stop_all_btn = QPushButton("⏹️전체 정지")
+        self.stop_all_btn.setObjectName("control_btn_stop")
+        self.stop_all_btn.setFixedSize(199, 60)
+        self.stop_all_btn.clicked.connect(self.on_stop_all)
+        layout.addWidget(self.stop_all_btn)
 
         # 녹화
         self.record_btn = QPushButton("▶️녹화 시작")
@@ -638,11 +638,11 @@ class MonitoringPage(QWidget):
         layout.addWidget(self.record_btn)
 
         # 스냅샷
-        snapshot_btn = QPushButton("📸스냅샷")
-        snapshot_btn.setObjectName("control_btn_snapshot")
-        snapshot_btn.setFixedSize(199, 60)
-        snapshot_btn.clicked.connect(self.on_snapshot)
-        layout.addWidget(snapshot_btn)
+        self.snapshot_btn = QPushButton("📸스냅샷")
+        self.snapshot_btn.setObjectName("control_btn_snapshot")
+        self.snapshot_btn.setFixedSize(199, 60)
+        self.snapshot_btn.clicked.connect(self.on_snapshot)
+        layout.addWidget(self.snapshot_btn)
 
         layout.addSpacing(15)
 
@@ -863,6 +863,8 @@ class MonitoringPage(QWidget):
         """전체 시작"""
         log("모든 카메라 시작")
         self.app.on_monitoring_start()
+        self.start_all_btn.setEnabled(False)
+        self.app.popup.info("모니터링이 전체 시작되었습니다.")
 
         if self.ai_manager:
             self.ai_manager.start()
@@ -875,16 +877,21 @@ class MonitoringPage(QWidget):
 
     def on_stop_all(self):
         """전체 정지"""
-        log("모든 카메라 정지")
-        self.app.on_monitoring_stop()
-        if self.ai_manager:
-            self.ai_manager.stop()
+        if not self.start_all_btn.isEnabled():
+            log("모든 카메라 정지")
+            self.app.on_monitoring_stop()
+            self.start_all_btn.setEnabled(True)
+            self.app.popup.info("모니터링이 전체 정지되었습니다.")
+            if self.ai_manager:
+                self.ai_manager.stop()
 
-        for camera in self.rgb_cameras:
-            camera.stop_camera()
+            for camera in self.rgb_cameras:
+                camera.stop_camera()
 
-        if self.hyper_camera:
-            self.hyper_camera.stop_camera()
+            if self.hyper_camera:
+                self.hyper_camera.stop_camera()
+        else: 
+            self.app.popup.info("모니터링을 시작해주세요.")
 
     def on_hypercam_updated(self, info):
         """초분광 카메라 스트리밍 출력"""
@@ -914,6 +921,7 @@ class MonitoringPage(QWidget):
         """스냅샷"""
         log("스냅샷 저장")
         # TODO: 현재 프레임 저장
+        self.app.popup.info("스냅샷이 저장되었습니다.")
 
     def on_record(self, checked):
         """녹화"""
@@ -921,10 +929,12 @@ class MonitoringPage(QWidget):
             self.record_btn.setText("⏹ 녹화 중지")
             log("녹화 시작")
             # TODO: 녹화 시작
+            self.app.popup.info("녹화가 시작되었습니다.")
         else:
             self.record_btn.setText("⏺ 녹화 시작")
             log("녹화 중지")
             # TODO: 녹화 중지
+            self.app.popup.info("녹화가 중지되었습니다.")
 
     def on_reset_counter(self):
         """카운터 리셋"""

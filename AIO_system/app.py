@@ -34,7 +34,7 @@ from src.utils.config_util import (
     USE_FEEDER_CAM, FEEDER_AIR_TERM
 )
 from src.utils.logger import log
-
+from src.ui.popup.alert import PopUp
 
 _LOG_FILE = None
 _LOG_PATH = ""
@@ -65,7 +65,6 @@ def enable_crash_handler():
         atexit.register(cleanup_empty_log)
     except Exception as e:
         log(f"[ERROR] crash handler setup failed: {e}")
-
 
 class ReloadSignal(QObject):
     """파일 변화 감지 시그널"""
@@ -119,7 +118,7 @@ class CommManangers:
 class App():
     """메인 앱 클래스"""
     is_reload = False
-    _use_linescan_simulator = False # 라인스캔 이미지/오버레이 확인용 시뮬레이터 사용 여부
+    _use_linescan_simulator = True # 라인스캔 이미지/오버레이 확인용 시뮬레이터 사용 여부
     _use_direct_control = False
 
     def __init__(self):
@@ -169,6 +168,8 @@ class App():
         self.qt_app.setFont(font)
 
         self.ui = MainWindow(self)
+        self.popup =  PopUp(self.ui) # popup 연결
+
         self.managers = CommManangers()
         # _use_linescan_simulator == True 인 경우 라인 스캔 시뮬레이터를 사용하여 UI 화면 업데이트 확인 가능
         if self._use_linescan_simulator:
@@ -294,28 +295,28 @@ class App():
 
 # region PLC/hyperspectral
     def on_monitoring_start(self):
-        """모니터링 시작"""
+        """모니터링 시작""" 
         self.monitoring_enabled = True
         if self.managers.comm_manager is not None:
             self.managers.comm_manager.start_hypercam()
 
     def on_monitoring_stop(self):
-        """모니터링 종료"""
+        """모니터링 종료""" 
         if self.managers.comm_manager is not None:
             self.managers.comm_manager.stop_hypercam()
 
         self.monitoring_enabled = False
 
     def on_pixel_line_data(self, info):
-        """데이터를 UI로 전달 (메인 스레드에서 처리)"""
+        """데이터를 UI로 전달 (메인 스레드에서 처리)""" 
         self.ui.signals.hypercam_updated.emit(info)
 
     def on_obj_detected(self, info, classification):
-        """제품 감지"""
+        """제품 감지""" 
         self.ui.signals.obj_detected.emit(info, classification)
 
     def on_legend_info(self, legend_info_list):
-        """제품 범례 설정"""
+        """제품 범례 설정""" 
         self.ui.signals.legend_updated.emit(legend_info_list)
 
     def blow_block(self, air_num: int = 0):
@@ -363,8 +364,8 @@ class App():
         :param inverter_name: 인버터 이름
         :type inverter_name: str
         :param value: 가속 시간 값
-        :type value: float
-        """
+        :type value: float 
+        """ 
         log(f"Setting acceleration time for {inverter_name} to {value} sec")
         if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.set_acc(inverter_name, value)
@@ -394,8 +395,9 @@ class App():
         log(f"Starting motor: {inverter_name}")
         if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.motor_start(inverter_name)
+            self.popup.info(f"{inverter_name} 모터가 시작되었습니다.")
 
-    def motor_stop(self, inverter_name: str):
+    def motor_stop(self, inverter_name: str): 
         """
         인버터 정지
         
@@ -406,6 +408,7 @@ class App():
         log(f"Stopping motor: {inverter_name}")
         if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.motor_stop(inverter_name)
+            self.popup.info(f"{inverter_name} 모터가 정지되었습니다.")
 
     def inverter_custom_read(self, slave_id: int, addr: int):
         """
@@ -455,6 +458,7 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.servo_onoff(servo_id, True)
+        self.popup.info(f"servo {servo_id} ON")
 
     def servo_off(self, servo_id: int):
         """
@@ -466,6 +470,7 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.servo_onoff(servo_id, False)
+        self.popup.info(f"servo {servo_id} OFF")
 
     def servo_reset(self, servo_id: int):
         """
@@ -477,6 +482,7 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.servo_reset(servo_id)
+        self.popup.info(f"servo {servo_id} RESET")
 
     def servo_stop(self, servo_id: int):
         """
@@ -585,11 +591,13 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.airknife_on(air_num, on_term)
+        self.popup.info(f"airknife {air_num} ON")
 
     def on_airknife_off(self, air_num: int):
         """에어나이프 정지 시 UI 업데이트"""
         if self.ui.pages.settings_page is not None:
             self.ui.signals.airknife_updated.emit(air_num)
+            self.popup.info(f"airknife {air_num} OFF")
 
     def set_auto_mode(self, is_on: bool):
         """자동/수동 모드 세팅"""
@@ -655,11 +663,13 @@ class App():
         """호퍼 비었을 때 호출"""
         log("[INFO] hopper empty")
         # TODO: 호퍼 문닫기
+        self.popup.warning("호퍼가 비어있습니다.")
 
     def hopper_full(self):
         """호퍼 가득 찼을 때 호출"""
         log("[INFO] hopper full")
         # TODO: 호퍼 문열기
+        self.popup.warning("호퍼가 가득 찼습니다.")
 # endregion
 
     def on_auto_start(self):
