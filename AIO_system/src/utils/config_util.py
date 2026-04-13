@@ -466,7 +466,7 @@ class ToggleButton(QAbstractButton):
         self._handle_position = self._get_end_pos()
         super().resizeEvent(event)
 
-    def paintEvent(self, event): # pylint: disable=unused-argument
+    def paintEvent(self, event):
         # 직접 위젯 그리기
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing) # 부드럽게 처리

@@ -78,7 +78,6 @@ class ObjectInfo:
     y_position: int = 0         # 제품 중심 y좌표
 
 
-# pylint: disable=broad-exception-caught
 class CommManager(threading.Thread):
     """통신 관리자"""
     def __init__(self, app):

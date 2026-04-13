@@ -11,7 +11,6 @@ from src.utils.config_util import MODBUS_RTU_CONFIG
 from src.utils.logger import log
 
 
-# pylint: disable=broad-exception-caught, broad-exception-raised, bare-except
 class ModbusManager:
     """시리얼 통신 매니저"""
     _lock = threading.Lock()
@@ -270,7 +269,6 @@ class ModbusManager:
 
         self.app.on_update_inverter_status(_data)
 
-# pylint: disable=unused-argument
     # 주파수 설정 함수
     def set_freq(self, inverter_name: str = 'inverter_001', value: float = 0.0):
         """주파수 설정"""
@@ -365,7 +363,6 @@ class ModbusManager:
             log(f"{inverter_name} stopped")
         else:
             log(f"{inverter_name} stop failed")
-# pylint: enable=unused-argument
 
     # 자동 운전 시작
     def on_automode_start(self):

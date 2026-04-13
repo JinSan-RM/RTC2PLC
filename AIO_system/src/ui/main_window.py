@@ -51,6 +51,15 @@ class UpdateSignals(QObject):
     input_updated: Signal = Signal(int)
     output_updated: Signal = Signal(int)
 
+    def disconnect(self):
+        """모든 시그널 연결 해제"""
+        self.log_updated.disconnect()
+        self.servo_updated.disconnect()
+        self.inverter_updated.disconnect()
+        self.airknife_updated.disconnect()
+        self.input_updated.disconnect()
+        self.output_updated.disconnect()
+
 
 class MainWindow(QMainWindow):
     """UI 메인"""
@@ -342,18 +351,13 @@ class MainWindow(QMainWindow):
         log("긴급정지")
         self.update_status("긴급정지", "red")
 
-    def closeEvent(self, a0): # pylint: disable=invalid-name, disable=unused-argument
+    def closeEvent(self, a0):
         """UI 닫는 이벤트 발생 시 호출됨"""
         if self.app.is_reload:
             # 리로드 시 앱 종료 방지
             return
 
-        self.signals.log_updated.disconnect()
-        self.signals.servo_updated.disconnect()
-        self.signals.inverter_updated.disconnect()
-        self.signals.airknife_updated.disconnect()
-        self.signals.input_updated.disconnect()
-        self.signals.output_updated.disconnect()
+        self.signals.disconnect()
 
         self.app.quit()
         # return super().closeEvent(a0)

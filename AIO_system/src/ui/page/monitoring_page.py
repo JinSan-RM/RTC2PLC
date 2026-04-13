@@ -252,7 +252,7 @@ class CameraView(QFrame):
                 self.image_label.setFixedSize(pixmap.size())
                 self.image_label.setPixmap(pixmap)
             else:
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # pylint: disable=no-member
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_frame.shape
                 bytes_per_line = ch * w
                 qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
