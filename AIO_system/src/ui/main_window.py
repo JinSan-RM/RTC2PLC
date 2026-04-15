@@ -4,8 +4,8 @@ UI 메인
 from dataclasses import dataclass
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QPushButton, QLabel, QFrame, QTabBar,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,  
+    QStackedWidget, QPushButton, QLabel, QFrame, QTabBar, QLayout
 )
 from PySide6.QtCore import Qt, QObject, QDateTime, QTimer, Signal
 from PySide6.QtGui import QPixmap
@@ -16,10 +16,10 @@ from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
 from src.utils.config_util import UI_PATH
 from src.utils.logger import Logger, log
+from .popup.alert import PopUp 
 
 # import inspect
 # import platform
-
 
 @dataclass
 class Pages:
@@ -53,6 +53,7 @@ class UpdateSignals(QObject):
     hypercam_updated = Signal(object)
     obj_detected = Signal(object, str)
     legend_updated = Signal(object)
+    show_popup = Signal(str, str, str)
 
 
 class MainWindow(QMainWindow):
@@ -60,6 +61,8 @@ class MainWindow(QMainWindow):
     def __init__(self, app):
         super().__init__()
         self.app = app
+        self.popup = PopUp(self)
+        self.app.popup = self.popup
         self.pages = Pages()
         self.children_widget = ChildrenWidget()
 
@@ -78,6 +81,7 @@ class MainWindow(QMainWindow):
         self.signals.airknife_updated.connect(self.pages.settings_page.airknife_tab.on_airknife_off)
         self.signals.input_updated.connect(self.pages.logs_page.io_tab.update_input_status)
         self.signals.output_updated.connect(self.pages.logs_page.io_tab.update_output_status)
+        self.signals.show_popup.connect(self.popup.show_message)
 
         Logger.set_callback(self.add_log_to_ui)
         # 시간 업데이트 타이머
@@ -88,17 +92,21 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         self.setWindowTitle("위드위 플라스틱 선별 시스템")
         self.setGeometry(0, 0, 1920, 1080)
-        self.setFixedSize(1920, 1080)
+        # self.setFixedSize(1920, 1080)
+        self.setMinimumSize(1280, 720)
+        self.showMaximized()
 
         # 중앙 위젯
         central_widget = QWidget()
-        central_widget.setFixedSize(1920, 1080)
+        # central_widget.setFixedSize(1920, 1080)
         self.setCentralWidget(central_widget)
 
         # 메인 레이아웃
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
+
+        main_layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
 
         # 헤더 타이틀
         self._create_header_title(main_layout)
@@ -348,7 +356,7 @@ class MainWindow(QMainWindow):
         log("긴급정지")
         self.update_status("긴급정지", "red")
         self.app.emergency_stop()
-        self.app.popup.warning("⚠️긴급 정지가 되었습니다.⚠️")
+        self.app.on_popup("warning", "긴급 정지", "⚠️긴급 정지 되었습니다.⚠️")
 
     def closeEvent(self, a0):
         """UI 닫는 이벤트 발생 시 호출됨"""

@@ -484,13 +484,13 @@ class LogTab(QWidget):
         """로그 지우기"""
         self.log_text.clear()
         self.app.on_log("로그 지움")
-        self.app.popup.info("로그가 지워졌습니다.")
+        self.app.on_popup("info", "로그 지우기 ", "로그가 지워졌습니다.")
 
     def save_log(self):
         """로그 저장"""
         self.app.on_log("로그 저장")
         # TODO: 파일로 저장
-        self.app.popup.info("로그가 저장되었습니다.")
+        self.app.on_popup("info", "로그 저장", "로그가 저장되었습니다.")
 
     def apply_styles(self):
         """스타일시트 적용"""

@@ -505,7 +505,7 @@ class CameraView(QFrame):
 
 
 class MonitoringPage(QWidget):
-    """모니터링 페이지 - 카메라 스트림"""
+    """  페이지 - 카메라 스트림"""
     def __init__(self, app):
         super().__init__()
         self.app = app
@@ -554,7 +554,7 @@ class MonitoringPage(QWidget):
         scroll_content.setMaximumWidth(1610)
 
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setAlignment(Qt.AlignTop) 
         scroll_layout.setSpacing(0)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -826,10 +826,13 @@ class MonitoringPage(QWidget):
             ai_manager=None,
             is_hyperspectral=True
         )
-        self.hyper_camera.setMinimumSize(600, 400)
+        self.hyper_camera.setMinimumSize(400, 400)  # setFixedSixe(415, 422)에서 수정
+
+        self.hyper_camera.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정 부분 - 축소 제한 해제
+
         hyper_layout.addWidget(self.hyper_camera)
 
-        hyper_layout.addSpacing(20)
+        hyper_layout.addSpacing(10)
 
         # 우측: 분류 통계
         stats_layout = QVBoxLayout()
@@ -849,7 +852,10 @@ class MonitoringPage(QWidget):
 
         self.stats_frame = QFrame()
         self.stats_frame.setObjectName("stats_frame")
-        self.stats_frame.setFixedSize(415, 422)
+        # self.stats_frame.setFixedSize(415, 422)
+        self.stats_frame.setMinimumSize(400, 400)   # setFixedSixe(415, 422)에서 수정
+
+        self.stats_frame.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정부분 - 축소 제한 해제
 
         stats_layout.addWidget(self.stats_frame)
 
@@ -864,7 +870,7 @@ class MonitoringPage(QWidget):
         log("모든 카메라 시작")
         self.app.on_monitoring_start()
         self.start_all_btn.setEnabled(False)
-        self.app.popup.info("모니터링이 전체 시작되었습니다.")
+        self.app.on_popup("info", "전체 시작", "모니터링이 전체 시작되었습니다.")
 
         if self.ai_manager:
             self.ai_manager.start()
@@ -881,7 +887,7 @@ class MonitoringPage(QWidget):
             log("모든 카메라 정지")
             self.app.on_monitoring_stop()
             self.start_all_btn.setEnabled(True)
-            self.app.popup.info("모니터링이 전체 정지되었습니다.")
+            self.app.on_popup("info", "전체 정지", "모니터링이 전체 정지되었습니다.")
             if self.ai_manager:
                 self.ai_manager.stop()
 
@@ -890,8 +896,6 @@ class MonitoringPage(QWidget):
 
             if self.hyper_camera:
                 self.hyper_camera.stop_camera()
-        else: 
-            self.app.popup.info("모니터링을 시작해주세요.")
 
     def on_hypercam_updated(self, info):
         """초분광 카메라 스트리밍 출력"""
@@ -919,22 +923,25 @@ class MonitoringPage(QWidget):
 
     def on_snapshot(self):
         """스냅샷"""
-        log("스냅샷 저장")
-        # TODO: 현재 프레임 저장
-        self.app.popup.info("스냅샷이 저장되었습니다.")
+        if not self.start_all_btn.isEnabled():
+            log("스냅샷 저장")
+            # TODO: 현재 프레임 저장
+            self.start_all_btn.setEnabled(True)
+            self.app.on_popup("info", "스냅샷", "스냅샷이 저장되었습니다.")
 
     def on_record(self, checked):
         """녹화"""
-        if checked:
-            self.record_btn.setText("⏹ 녹화 중지")
-            log("녹화 시작")
-            # TODO: 녹화 시작
-            self.app.popup.info("녹화가 시작되었습니다.")
-        else:
-            self.record_btn.setText("⏺ 녹화 시작")
-            log("녹화 중지")
-            # TODO: 녹화 중지
-            self.app.popup.info("녹화가 중지되었습니다.")
+        if not self.start_all_btn.isEnabled():
+            if checked:
+                self.record_btn.setText("⏹ 녹화 중지")
+                log("녹화 시작")
+                # TODO: 녹화 시작
+                self.app.on_popup("info", "녹화 시작", "녹화가 시작되었습니다.")
+            else:
+                self.record_btn.setText("⏺ 녹화 시작")
+                log("녹화 중지")
+                # TODO: 녹화 중지
+                self.app.on_popup("info", "녹화 중지", "녹화가 중지되었습니다.")
 
     def on_reset_counter(self):
         """카운터 리셋"""
@@ -943,21 +950,28 @@ class MonitoringPage(QWidget):
             count_label.setText("0")
         self.total_count.setText("0")
         # TODO: 실제 카운터 리셋
+        self.app.on_popup("info", "카운터 리셋", "카운터가 리셋되었습니다.")
 
     def _on_set_sequence(self):
         if self.app.use_air_sequence:
             log("배출 제어 순서 사용 도중에는 순서를 변경할 수 없습니다.")
+            self.app.on_popup("warning", "경고", "배출 제어 순서 사용 도중에는 순서를 변경할 수 없습니다.")
             return
 
         air_pattern = self.sequence_edit.text()
         self.app.config["air_sequence"] = [int(c) for c in air_pattern] if air_pattern else []
         self.app.set_air_sequence_index()
-        log(f"배출 제어 순서 저장됨. {self.app.config['air_sequence']}")
+        if self.app.config['air_sequence']:
+            log(f"배출 제어 순서 저장됨. {self.app.config['air_sequence']}")
+            self.app.on_popup("info", "설정", f"배출 제어 순서 저장됨. {self.app.config['air_sequence']}")
+        else:
+            self.app.on_popup("warning", "경고", "배출 순서 제어의 값을 확인해 주세요. (1~3의 값 연속 입력 가능)")
 
     def _on_use_sequence(self, onoff):
         _pattern = self.app.config.get("air_sequence", [])
         if onoff and not _pattern:
             log("지정된 배출 제어 순서가 없습니다.")
+            self.app.on_popup("warning", "경고", "지정된 배출 제어 순서가 없습니다.")
             self.toggle_btn.setChecked(False)
             return
 
@@ -965,6 +979,7 @@ class MonitoringPage(QWidget):
         self.toggle_btn.setText(state)
         self.app.use_air_sequence = onoff
         log(f"배출 제어 순서 {state}")
+        self.app.on_popup("info", "알림", f"배출 제어 순서 {state}")
 
     def on_legend_info(self, legend_info_list):
         """재질 별 범례 설정"""

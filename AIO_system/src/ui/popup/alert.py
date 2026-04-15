@@ -1,160 +1,111 @@
 from PySide6.QtWidgets import (
-    QDialog, QLabel, QPushButton,
-    QVBoxLayout, QHBoxLayout,
-    QGraphicsDropShadowEffect
+    QDialog, QLabel, QPushButton, 
+    QVBoxLayout, QHBoxLayout, QGraphicsDropShadowEffect
 )
-from PySide6.QtCore import Qt, QTimer
-
+from PySide6.QtCore import Qt
 
 class CustomPopup(QDialog):
-    """메인 UI 스타일과 통일된 커스텀 팝업"""
-
     def __init__(self, parent, title, message, type_="info"):
         super().__init__(parent)
-
-        self.setWindowTitle(title)
-        self.setModal(True)
+        self.setAttribute(Qt.WA_DeleteOnClose)
         self.setObjectName("popup")
-
-        # 크기 
         self.setMinimumSize(360, 200)
-        self.setMaximumWidth(420)
 
-        # 타입별 색상&아이콘
+        # 타입별 색상 및 아이콘 설정
         if type_ == "info":
-            border_color = "#2DB591"
-            btn_color = "#2DB591"
-            icon = "🔔"
-
+            color, icon = "#2DB591", "🔔"
         elif type_ == "warning":
-                    border_color = "#FFA500"   # 🟠 경고 = 주황
-                    btn_color = "#FFA500"
-                    icon = "⚠️"
-
+            color, icon = "#FFA500", "⚠️"
         elif type_ == "error":
-            border_color = "#FF2427"   # 🔴 정지 = 빨강
-            btn_color = "#FF2427"
-            icon = "🔴"
-        else: 
-             border_color, btn_color, icon = "#4A90E2", "#4A90E2", "❓"
+            color, icon = "#FF2427", "🔴"
+        else: # confirm 포함
+            color, icon = "#4A90E2", "❓"
 
-        # 스타일
+        # 스타일시트
         self.setStyleSheet(f"""
             QDialog#popup {{
                 background-color: #FFFFFF;
-                border: 2px solid {border_color};
+                border: 2px solid {color};
                 border-radius: 10px;
             }}
-
             QLabel#title {{
-                font-size: 16px;
-                font-weight: bold;
-                color: #2D3039;
+                font-size: 16px; font-weight: bold; color: {color};
             }}
-
             QLabel#message {{
-                color: #000000;
-                font-family: 'Pretendard';
-                font-size: 14px;
-                padding-top: 6px;
-                padding-bottom: 6px;
+                color: #000000; font-size: 14px;
             }}
-
             QPushButton {{
-                background-color: {btn_color};
-                color: #FFFFFF;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-weight: bold;
-            }}
-
-            QPushButton:hover {{
-                opacity: 0.8;
+                background-color: {color};
+                color: #FFFFFF; border-radius: 6px; padding: 6px 12px; font-weight: bold;
             }}
         """)
 
-        # 그림자
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 0)
-        self.setGraphicsEffect(shadow)
+        # 레이아웃 구성
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
 
         # 타이틀
         title_label = QLabel(f"{icon} {title}")
         title_label.setObjectName("title")
         title_label.setAlignment(Qt.AlignCenter)
 
-        # 메시지 
+        # 메시지
         message_label = QLabel(message)
         message_label.setObjectName("message")
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
-        message_label.setMinimumHeight(60)
-        message_label.setContentsMargins(0, 6, 0, 6)
-
-        # 레이아웃
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(10)
 
         layout.addWidget(title_label)
         layout.addWidget(message_label)
         layout.addStretch()
 
-        # 버튼 영역
+        # 4. 버튼 영역
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
 
         if type_ == "confirm":
-            ok_btn = QPushButton("확인")
             cancel_btn = QPushButton("취소")
-
-            ok_btn.clicked.connect(self.accept)
             cancel_btn.clicked.connect(self.reject)
-
-            btn_layout.addStretch()
-            btn_layout.addWidget(ok_btn)
             btn_layout.addWidget(cancel_btn)
-            btn_layout.addStretch()
 
-        else:
-            btn = QPushButton("확인")
-            btn.clicked.connect(self.accept)
+        ok_btn = QPushButton("확인")
+        ok_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(ok_btn)
 
-            btn_layout.addStretch()
-            btn_layout.addWidget(btn)
-            btn_layout.addStretch()
-
+        btn_layout.addStretch()
         layout.addLayout(btn_layout)
-        self.setLayout(layout)
 
+        # 5. 효과 및 중앙 정렬
+        self._apply_effects()
         self.move_to_center()
 
-    def move_to_center(self):
-        """부모 창 기준 중앙 정렬"""
-        if self.parent():
-            parent_geom = self.parent().geometry()
-            self.move(
-                parent_geom.center().x() - self.width() // 2,
-                parent_geom.center().y() - self.height() // 2
-            )
+    def _apply_effects(self):
+        shadow = QGraphicsDropShadowEffect(self, blurRadius=20, xOffset=0, yOffset=0)
+        self.setGraphicsEffect(shadow)
 
+    def move_to_center(self):
+        if self.parent():
+            p = self.parent().geometry()
+            self.move(p.center().x() - self.width()//2, p.center().y() - self.height()//2)
+    
 
 class PopUp:
-    """팝업 호출용 클래스"""
-
     def __init__(self, main_window):
         self.main_window = main_window
-        self._last_popup = None
 
-    def info(self, message):
-        popup = CustomPopup(self.main_window, "알림", message, "info")
-        self._last_popup = popup
-        popup.show()
+    def show_message(self, popup_type: str, title: str, message: str):
+        popup = CustomPopup(self.main_window, title, message, popup_type)
+        
+        if popup_type == "info":
+            popup.show()
+        else: 
+            popup.exec()
+    
+    # def info(self, message, title="알림"):
+    #     self.show_message("info", title, message)
 
-    def warning(self, message):
-        CustomPopup(self.main_window, "경고", message, "warning").exec()
+    # def warning(self, message, title="경고"):
+    #     self.show_message("warning", title, message)
 
-    def error(self, message):
-        CustomPopup(self.main_window, "에러", message, "error").exec()
-
-    # except 부분의 메시지 내용
+    # def error(self, message, title="에러"):
+    #     self.show_message("error", title, message)

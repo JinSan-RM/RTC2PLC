@@ -230,7 +230,7 @@ class HomePage(QWidget):
         """실시간 모니터링 영역 생성"""
         # 상단: 인버터 출력 정보
         output_layout = QGridLayout()
-        output_layout.setSpacing(175)
+        # output_layout.setSpacing(175)
 
         # 출력 주파수
         self.monitor_values.frequency = \
@@ -383,7 +383,7 @@ class HomePage(QWidget):
         log("시스템 시작")
         self.app.on_auto_start()
         self.start_btn.setEnabled(False)
-        self.app.popup.info("시스템이 시작되었습니다.")
+        self.app.on_popup("info", "시스템 시작", "시스템이 시작되었습니다.")
 
     def on_stop_clicked(self):
         """정지 버튼 클릭"""
@@ -391,9 +391,7 @@ class HomePage(QWidget):
             log("시스템 정지")
             self.app.on_auto_stop()
             self.start_btn.setEnabled(True)
-            self.app.popup.info("시스템이 정지되었습니다.")
-        else: 
-            self.app.popup.info("시스템을 시작해주세요.")
+            self.app.on_popup("info", "시스템 정지", "시스템이 정지되었습니다.")
 
     def on_reset_clicked(self):
         """리셋 버튼 클릭"""
@@ -401,9 +399,7 @@ class HomePage(QWidget):
             log("시스템 리셋")
             # TODO: 실제 리셋 로직
             self.start_btn.setEnabled(True)
-            self.app.popup.info("시스템이 리셋되었습니다.")
-        else:
-            self.app.popup.info("시스템을 시작해주세요.")
+            self.app.on_popup("info", "시스템 리셋", "시스템이 리셋되었습니다.")
 
     def apply_styles(self):
         """스타일시트 적용"""

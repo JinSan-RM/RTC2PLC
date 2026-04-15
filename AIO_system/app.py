@@ -34,7 +34,7 @@ from src.utils.config_util import (
     USE_FEEDER_CAM, FEEDER_AIR_TERM
 )
 from src.utils.logger import log
-from src.ui.popup.alert import PopUp
+# from src.ui.popup.alert import PopUp
 
 _LOG_FILE = None
 _LOG_PATH = ""
@@ -168,7 +168,7 @@ class App():
         self.qt_app.setFont(font)
 
         self.ui = MainWindow(self)
-        self.popup =  PopUp(self.ui) # popup 연결
+        self.popup =  self.ui.popup # popup 연결
 
         self.managers = CommManangers()
         # _use_linescan_simulator == True 인 경우 라인 스캔 시뮬레이터를 사용하여 UI 화면 업데이트 확인 가능
@@ -393,9 +393,10 @@ class App():
         :type inverter_name: str
         """
         log(f"Starting motor: {inverter_name}")
+        self.on_popup("info", "인버터 운전", f"Starting motor: {inverter_name}")
         if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.motor_start(inverter_name)
-            self.popup.info(f"{inverter_name} 모터가 시작되었습니다.")
+            self.on_popup("info", "인버터 운전 시작", f"{inverter_name} 모터가 시작되었습니다.")
 
     def motor_stop(self, inverter_name: str): 
         """
@@ -406,9 +407,10 @@ class App():
         :type inverter_name: str
         """
         log(f"Stopping motor: {inverter_name}")
+        self.on_popup("info", "인버터 정지", f"Stopping motor: {inverter_name}")
         if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.motor_stop(inverter_name)
-            self.popup.info(f"{inverter_name} 모터가 정지되었습니다.")
+            self.on_popup("info", "인버터 정지", f"{inverter_name} 모터가 정지되었습니다.")
 
     def inverter_custom_read(self, slave_id: int, addr: int):
         """
@@ -458,7 +460,6 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.servo_onoff(servo_id, True)
-        self.popup.info(f"servo {servo_id} ON")
 
     def servo_off(self, servo_id: int):
         """
@@ -470,7 +471,6 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.servo_onoff(servo_id, False)
-        self.popup.info(f"servo {servo_id} OFF")
 
     def servo_reset(self, servo_id: int):
         """
@@ -482,7 +482,6 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.servo_reset(servo_id)
-        self.popup.info(f"servo {servo_id} RESET")
 
     def servo_stop(self, servo_id: int):
         """
@@ -591,13 +590,12 @@ class App():
         """
         if self.managers.ethercat_manager is not None:
             self.managers.ethercat_manager.airknife_on(air_num, on_term)
-        self.popup.info(f"airknife {air_num} ON")
 
     def on_airknife_off(self, air_num: int):
         """에어나이프 정지 시 UI 업데이트"""
         if self.ui.pages.settings_page is not None:
             self.ui.signals.airknife_updated.emit(air_num)
-            self.popup.info(f"airknife {air_num} OFF")
+            self.on_popup("info", "에어나이프 정지", f"airknife {air_num} OFF")
 
     def set_auto_mode(self, is_on: bool):
         """자동/수동 모드 세팅"""
@@ -663,13 +661,13 @@ class App():
         """호퍼 비었을 때 호출"""
         log("[INFO] hopper empty")
         # TODO: 호퍼 문닫기
-        self.popup.warning("호퍼가 비어있습니다.")
+        self.on_popup("info", "알림", "호퍼가 비어있습니다.")
 
     def hopper_full(self):
         """호퍼 가득 찼을 때 호출"""
         log("[INFO] hopper full")
         # TODO: 호퍼 문열기
-        self.popup.warning("호퍼가 가득 찼습니다.")
+        self.on_popup("info", "알림", "호퍼가 가득 찼습니다.")
 # endregion
 
     def on_auto_start(self):
@@ -686,6 +684,9 @@ class App():
 
     def on_on_log(self, message: str):
         self.on_log(message)
+
+    def on_popup(self, popup_type: str, title: str, message: str): 
+        self.ui.signals.show_popup.emit(popup_type, title, message)
 
     def _build_default_config(self):
         inverter_config = {f"inverter_00{i}": [0.0, 1.0, 1.0] for i in range(1, 7)}
