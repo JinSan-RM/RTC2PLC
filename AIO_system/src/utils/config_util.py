@@ -11,6 +11,7 @@ from dateutil import tz
 from PySide6.QtWidgets import QAbstractButton
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QRectF
 from PySide6.QtGui import QPainter, QColor, QFont
+import shiboken6
 
 # ============================================================
 # Breeze Runtime
@@ -614,6 +615,21 @@ UI_PATH = Path(__file__).resolve().parent.parent / "ui"
 
 MAX_IMG_LINES = 480 # 이미지 뷰어 화면에 표시할 라인 수
 UI_UPDATE_INTERVAL = 0.033 # 30fps 제한
+
+def clear_layout(layout):
+    """레이아웃 내부 위젯 제거"""
+    if layout is not None:
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+            else:
+                clear_layout(item.layout())
+        
+        shiboken6.delete(layout)
+
 
 class ToggleButton(QAbstractButton):
     """UI 알약 모양 토글 버튼 구현"""

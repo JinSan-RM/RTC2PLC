@@ -29,7 +29,7 @@ from src.AI.cam.camera_thread import CameraThread
 from src.AI.AI_manager import BatchAIManager
 from src.utils.logger import log
 from src.utils.config_util import (
-    UI_PATH, MAX_IMG_LINES
+    UI_PATH, MAX_IMG_LINES, clear_layout
 )
 
 
@@ -736,7 +736,9 @@ class MonitoringPage(QWidget):
     def _create_statistics_box(self, legend_info_list):
         if not self.stats_frame:
             return
-
+        old_layout = self.stats_frame.layout()
+        clear_layout(old_layout)
+        
         stats_frame_layout = QVBoxLayout()
 
         # 플라스틱 종류별 카운트
