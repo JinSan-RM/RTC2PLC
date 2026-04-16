@@ -817,7 +817,9 @@ class App():
         
         if self.managers.modbus_manager is not None:
             self.managers.modbus_manager.disconnect()
-        self.managers.ethercat_manager.disconnect()
+        
+        if self.managers.ethercat_manager is not None:
+            self.managers.ethercat_manager.disconnect()
 
         self.update_timer.stop()
         if hasattr(self, "shm_data"):
