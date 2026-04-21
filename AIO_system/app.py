@@ -6,7 +6,7 @@ import json
 import os
 import threading
 import time
-# import importlib
+import importlib
 from pathlib import Path
 from datetime import datetime, timedelta
 from itertools import cycle
@@ -175,7 +175,7 @@ class App():
         if self._use_linescan_simulator:
             self.managers.comm_manager = LineScanSimulator(self, width=640)
         else:
-            self.managers.comm_manager = CommManager(self)
+            self.managers.comm_manager = CommManager(self, None, None)
         self.managers.comm_manager.start()
 
         if self._use_direct_control:

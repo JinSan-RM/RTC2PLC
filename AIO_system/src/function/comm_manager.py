@@ -10,6 +10,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+
 import cv2
 import numpy as np
 
@@ -21,6 +22,7 @@ from src.utils.config_util import (
     classify_object_size, calc_delay, get_border_coords
 )
 from src.utils.logger import log
+from src.AI.tracking.part_MC_small_material_classify import LineTrigger, MaterialEventBuffer, MaterialInfo
 from .XGT_run import XGTTester
 
 
@@ -76,11 +78,19 @@ class ObjectInfo:
 # region Comm Manager
 class CommManager(threading.Thread):
     """통신 관리자"""
-    def __init__(self, app):
+    def __init__(self, app, material_handler, plc_callback):
         super().__init__(daemon=True)
         self.app = app
         self.comm_sockets = CommSockets()
         self.threads = Threads()
+        self.material_handler = material_handler
+        self.plc_callback = plc_callback
+        self.buffer = MaterialEventBuffer()
+
+        self.line_trigger = LineTrigger(    # 연결 부분: 선 통과 감지 시 버퍼에서 재질 정보 꺼내서 PLC 신호 전송하는 역할
+            buffer=self.buffer,
+            plc_callback=self.plc_callback
+        )
 
         # ==================== 라인 스캔 타이밍 제어 설정 ====================
         self.queue_n_lock = QueueAndLock()
@@ -273,9 +283,11 @@ class CommManager(threading.Thread):
                 log(f"객체 제거: ID={obj_id}")
 
     def _schedule_plc_signal_delay(self, obj_info: ObjectInfo, delay: float):
+        print("plc 신호 예약")
         """
         10ms 펄스로 신호 전송 (PLC에서 상승엣지 감지)
         """
+        print("plc 신호 실행")
         def _send_signal(_info=obj_info):
             try:
                 with self.trackings.tracking_lock:
@@ -377,6 +389,7 @@ class CommManager(threading.Thread):
                 log(f"[ERROR] Error in event loop: {str(e)}")
                 continue
 
+    print("이벤트 들어옴")
     def _process_event_buffer(self, message_buffer: str):
         """이벤트 메시지 처리"""
         while '\r\n' in message_buffer:
@@ -385,20 +398,27 @@ class CommManager(threading.Thread):
                 message_json = json.loads(message)
                 event = message_json.get('Event', '')
                 inner_message = json.loads(message_json.get('Message', '{}'))
+                print("inner_message:", inner_message)
 
                 if not getattr(self.app, "monitoring_enabled", True):
                     continue
 
                 if event == "PredictionObject":
+                    cam_obj_info = inner_message.get("Object")
                     descriptors = inner_message.get('Descriptors', [])
                     try:
                         descriptor_value = int(descriptors[0]) if descriptors else 0
                     except (TypeError, ValueError, IndexError):
                         descriptor_value = 0
                     classification = CLASS_MAPPING.get(descriptor_value, "Unknown")
+                    size = classify_object_size(cam_obj_info.center[0])
+                    log(f"버퍼에 재질 정보 추가: {classification}, size={size}")
 
                     shape = inner_message.get('Shape', {})
                     center = shape.get('Center', [])
+
+                    # self.material_handler.on_hyperspectral_event(inner_message)
+
                     if not center:
                         log("[WARNING] No center position in shape data")
                         continue
@@ -441,6 +461,27 @@ class CommManager(threading.Thread):
                             y_position=y_position
                         )
 
+                        new_material = MaterialInfo(
+                        classification=classification,
+                        size=size,
+                        timestamp=time.time()
+                    )
+                        
+                        self.buffer.add(new_material)   # 선 통과 감지 시 버퍼에 재질 정보 저장하는 부분
+                        print(f"buffer 추가: ID={obj_id}, 재질={classification}, 크기={size}")
+                        # self.line_trigger.on_cross_line(obj_info)   # 선 통과 감지 시 버퍼에서 재질 정보 꺼내서 PLC 신호 전송하는 역할
+
+                        if size == "small":
+                            self.line_trigger.on_cross_line(obj_info)  # 작은 재질은 선 통과 시점에 분석 완료된 정보로 PLC 신호 전송
+                            print(f"작은 재질 선 통과 감지")
+                        else:
+                            delay = calc_delay(y_position)
+                            self._schedule_plc_signal_delay(obj_info, delay)
+                            print(f"큰 재질 신호 예약: ID={obj_id}, Y={y_position}, 재질={classification}, size={size}, delay={delay:.2f}초")
+
+                        # self.material_handler.on_hyperspectral_event(inner_message)
+                        
+
                         # 객체 정보 저장
                         self.trackings.tracked_objects[obj_id] = {
                             'object_info': obj_info,
@@ -475,7 +516,9 @@ class CommManager(threading.Thread):
                     # )
 
                     # 고정 지연 시간 후 PLC 신호 예약
-                    self._schedule_plc_signal_delay(obj_info, delay)
+                    self._schedule_plc_signal_delay(obj_info, delay)    # 대형의 경우
+
+                    
                 else:
                     log(f"event:{event}")
             except json.JSONDecodeError:
