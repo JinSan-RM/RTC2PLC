@@ -529,6 +529,7 @@ class DetectBoxInfo:
 CAMERA_CONFIGS = {
     0: {  # 카메라 1
         'camera_ip': '192.168.1.100',
+        'type': 'line',
         'roi':{
             'x': 500,
             'y': 0,
@@ -567,10 +568,20 @@ CAMERA_CONFIGS = {
                 'target_classes': ['PLASTIC'],
                 'airknife_id': 1
             },
+        ],
+        'line': [
+            {
+                'line_id': 1,
+                'x': 600,
+                'y': 10,
+                'width': 5,
+                'height': 1000,
+            }
         ]
     },
     1: {  # 카메라 2
         'camera_ip': '192.168.1.101',
+        'type': 'box',
         'roi':{
             'x': 500,
             'y': 0,

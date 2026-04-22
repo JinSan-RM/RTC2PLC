@@ -10,7 +10,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-
 import cv2
 import numpy as np
 
@@ -22,7 +21,6 @@ from src.utils.config_util import (
     classify_object_size, calc_delay, get_border_coords
 )
 from src.utils.logger import log
-from src.AI.tracking.part_MC_small_material_classify import LineTrigger, MaterialEventBuffer, MaterialInfo
 from .XGT_run import XGTTester
 
 
@@ -61,6 +59,8 @@ class Trackings:
     tracked_objects: dict = field(default_factory=dict)
     obj_counter: int = 0
     tracking_lock: threading.Lock = field(default_factory=threading.Lock)
+    small_queue: deque = field(default_factory=deque)
+    small_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 @dataclass
@@ -78,16 +78,11 @@ class ObjectInfo:
 # region Comm Manager
 class CommManager(threading.Thread):
     """통신 관리자"""
-    def __init__(self, app, material_handler, plc_callback):
+    def __init__(self, app):
         super().__init__(daemon=True)
         self.app = app
         self.comm_sockets = CommSockets()
         self.threads = Threads()
-        self.material_handler = material_handler
-        self.plc_callback = plc_callback
-        self.buffer = MaterialEventBuffer()
-
-        self.line_trigger = LineTrigger(self)   # 연결 부분: 선 통과 감지 시 버퍼에서 재질 정보 꺼내서 PLC 신호 전송하는 역할
 
         # ==================== 라인 스캔 타이밍 제어 설정 ====================
         self.queue_n_lock = QueueAndLock()
@@ -279,53 +274,53 @@ class CommManager(threading.Thread):
                 del self.trackings.tracked_objects[obj_id]
                 log(f"객체 제거: ID={obj_id}")
 
-    def _schedule_plc_signal_delay(self, obj_info: ObjectInfo, delay: float):
-        log("plc 신호 예약")
-        """
-        10ms 펄스로 신호 전송 (PLC에서 상승엣지 감지)
-        """
-        def _send_signal(_info=obj_info):
-            try:
-                with self.trackings.tracking_lock:
-                    if _info.obj_id in self.trackings.tracked_objects:
-                        obj_data = self.trackings.tracked_objects[_info.obj_id]
-                        
-                        if obj_data['analysis_complete']:
-                            # 재질 신호 직후 사이즈 신호
-                            success1 = self.xgt_tester.write_bit_packet(
-                                address=_info.plc_value,
-                                onoff=1
-                            )
-                            success2 = self.xgt_tester.write_bit_packet(
-                                address=_info.size_addr,
-                                onoff=1
-                            )
-                            if success1 and success2:
-                                # 재질 on-off 사이에 사이즈 on-off 가 들어갈 수 있도록 처리
-                                self.xgt_tester.schedule_bit_off(
-                                    address=_info.size_addr,
-                                    delay=MIN_PULSE_WIDTH
-                                )
-                                self.xgt_tester.schedule_bit_off(
-                                    address=_info.plc_value,
-                                    delay=MIN_PULSE_WIDTH
-                                )
-                                log(f"✓ [PLC펄스] ID={_info.obj_id}, Y={_info.y_position}, 재질={_info.classification}, size={_info.size}, 주소=P{_info.plc_value:03X}/P{_info.size_addr:03X}")
-                            else:
-                                log(f"[WARNING] ✗ [PLC펄스] ID={_info.obj_id} - 전송 실패")
+    def _send_plc_pulse(self, _info: ObjectInfo):
+        """10ms 펄스로 신호 전송 (PLC에서 상승엣지 감지)"""
+        # 재질 신호 직후 사이즈 신호
+        success1 = self.xgt_tester.write_bit_packet(
+            address=_info.plc_value,
+            onoff=1
+        )
+        success2 = self.xgt_tester.write_bit_packet(
+            address=_info.size_addr,
+            onoff=1
+        )
+        if success1 and success2:
+            # 재질 on-off 사이에 사이즈 on-off 가 들어갈 수 있도록 처리
+            self.xgt_tester.schedule_bit_off(
+                address=_info.size_addr,
+                delay=MIN_PULSE_WIDTH
+            )
+            self.xgt_tester.schedule_bit_off(
+                address=_info.plc_value,
+                delay=MIN_PULSE_WIDTH
+            )
+            log(f"✓ [PLC펄스] ID={_info.obj_id}, Y={_info.y_position}, 재질={_info.classification}, size={_info.size}, 주소=P{_info.plc_value:03X}/P{_info.size_addr:03X}")
+        else:
+            log(f"[WARNING] ✗ [PLC펄스] ID={_info.obj_id} - 전송 실패")
 
-                            obj_data['status'] = 'completed'
-                            threading.Timer(1.0, lambda: self._cleanup_object(_info.obj_id)).start()
-                        else:
-                            log(f"[WARNING] ⚠ [PLC펄스] ID={_info.obj_id} - 분석 미완료")
-                            obj_data['status'] = 'timeout'
+    def _send_signal(self, _info: ObjectInfo):
+        """PLC 신호 전송 후 오브젝트 삭제 예약"""
+        try:
+            with self.trackings.tracking_lock:
+                if _info.obj_id in self.trackings.tracked_objects:
+                    obj_data = self.trackings.tracked_objects[_info.obj_id]
+                    
+                    if obj_data['analysis_complete']:
+                        self._send_plc_pulse(_info)
+                        obj_data['status'] = 'completed'
+                        threading.Timer(1.0, lambda: self._cleanup_object(_info.obj_id)).start()
                     else:
-                        log(f"[ERROR] ✗ [PLC펄스] ID={_info.obj_id} - 객체 없음")
-            except Exception as e:
-                log(f"[ERROR] PLC 신호 전송 오류: {str(e)}")
+                        log(f"[WARNING] ⚠ [PLC펄스] ID={_info.obj_id} - 분석 미완료")
+                        obj_data['status'] = 'timeout'
+                else:
+                    log(f"[ERROR] ✗ [PLC펄스] ID={_info.obj_id} - 객체 없음")
+        except Exception as e:
+            log(f"[ERROR] PLC 신호 전송 오류: {str(e)}")
 
-        # 고정 지연 시간 후 신호 전송
-        timer = threading.Timer(delay, _send_signal)
+    def _schedule_plc_signal_delay(self, obj_info: ObjectInfo, delay: float):
+        """고정 지연 시간 후 신호 전송"""
+        timer = threading.Timer(delay, lambda: self._send_signal(obj_info))
         timer.daemon = True
         timer.start()
 
@@ -392,28 +387,21 @@ class CommManager(threading.Thread):
             try:
                 message_json = json.loads(message)
                 event = message_json.get('Event', '')
-                log(("이벤트 들어옴"))
                 inner_message = json.loads(message_json.get('Message', '{}'))
-                log(("inner_message:", inner_message))
 
                 if not getattr(self.app, "monitoring_enabled", True):
                     continue
 
                 if event == "PredictionObject":
-                    cam_obj_info = inner_message.get("Object")
                     descriptors = inner_message.get('Descriptors', [])
                     try:
                         descriptor_value = int(descriptors[0]) if descriptors else 0
                     except (TypeError, ValueError, IndexError):
                         descriptor_value = 0
                     classification = CLASS_MAPPING.get(descriptor_value, "Unknown")
-                    size = classify_object_size(cam_obj_info.center[0])
-                    log(f"버퍼에 재질 정보 추가: {classification}, size={size}")
 
                     shape = inner_message.get('Shape', {})
                     center = shape.get('Center', [])
-
-                    # self.material_handler.on_hyperspectral_event(inner_message)
 
                     if not center:
                         log("[WARNING] No center position in shape data")
@@ -457,22 +445,6 @@ class CommManager(threading.Thread):
                             y_position=y_position
                         )
 
-                        new_material = MaterialInfo(
-                        classification=classification,
-                        size=size,
-                        timestamp=time.time()
-                    )
-                        
-                        self.buffer.add(new_material)   # 선 통과 감지 시 버퍼에 재질 정보 저장하는 부분
-                        log(f"buffer 추가: ID={obj_id}, 재질={classification}, 크기={size}")
-                        # self.line_trigger.on_cross_line(obj_info)   # 선 통과 감지 시 버퍼에서 재질 정보 꺼내서 PLC 신호 전송하는 역할
-    
-                        if size == "small":
-                            self.line_trigger.on_cross_line(obj_info)  # 작은 재질은 선 통과 시점에 분석 완료된 정보로 PLC 신호 전송
-                            log(f"작은 재질 선 통과 감지") 
-
-                        # self.material_handler.on_hyperspectral_event(inner_message)                     
-
                         # 객체 정보 저장
                         self.trackings.tracked_objects[obj_id] = {
                             'object_info': obj_info,
@@ -507,9 +479,13 @@ class CommManager(threading.Thread):
                     # )
 
                     # 고정 지연 시간 후 PLC 신호 예약
-                    self._schedule_plc_signal_delay(obj_info, delay)    # 대형의 경우
-
-                    
+                    if size == "large":
+                        # 대형의 경우 바로 펄스 신호 예약 (delay 후 자동 off)
+                        self._schedule_plc_signal_delay(obj_info, delay)    
+                    elif size == "small":
+                        # 소형의 경우 큐에 저장
+                        with self.trackings.small_lock:
+                            self.trackings.small_queue.append(obj_id)
                 else:
                     log(f"event:{event}")
             except json.JSONDecodeError:
@@ -518,6 +494,20 @@ class CommManager(threading.Thread):
                 log(f"[ERROR] Error processing event: {str(e)}")
                 traceback.print_exc()
         return message_buffer
+    
+    def on_small_material_cross(self):
+        """작은 재질 선 통과 감지 및 처리"""
+        with self.trackings.small_lock:
+            obj_id = self.trackings.small_queue.popleft() if self.trackings.small_queue else None
+        if obj_id:
+            obj_info = self.trackings.tracked_objects.get(obj_id, {}).get('object_info')
+            if obj_info:
+                self._send_signal(obj_info)
+                log(f"선 통과 감지 - 큐에서 obj_id 꺼냄: {obj_id}")
+            else:
+                log("[WARNING] 선 통과 감지 - 객체 정보 없음")
+        else:
+            log("[WARNING] 선 통과 감지 - 큐에 obj_id 없음")
 # endregion event listener
 
 # region data stream listener
@@ -908,6 +898,10 @@ class LineScanSimulator(threading.Thread):
     def blow_block(self):
         """피더 배출구 막힘 해소"""
         log("피더 배출구 air 동작")
+
+    def on_small_material_cross(self):
+        """작은 재질 선 통과 감지 및 처리"""
+        log("선 통과 감지")
 
     def run(self):
         while not self.main_stop_event.is_set():

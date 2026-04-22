@@ -29,7 +29,7 @@ from src.AI.cam.camera_thread import CameraThread
 from src.AI.AI_manager import BatchAIManager
 from src.utils.logger import log
 from src.utils.config_util import (
-    UI_PATH, MAX_IMG_LINES, clear_layout
+    UI_PATH, MAX_IMG_LINES, clear_layout, CAMERA_CONFIGS
 )
 
 
@@ -58,7 +58,7 @@ class CameraView(QFrame):
     def __init__(
         self, camera_id, camera_name, camera_index,
         app, ai_manager=None,
-        is_hyperspectral=False, is_block_detect=False
+        is_hyperspectral=False
     ):
         super().__init__()
         self.app = app
@@ -67,15 +67,16 @@ class CameraView(QFrame):
         self.camera_index = camera_index
         self.ai_manager = ai_manager
         self.is_hyperspectral = is_hyperspectral
-        self.is_block_detect = is_block_detect
         if self.is_hyperspectral:
             self.img_data = HyperSpectralData(max_lines=MAX_IMG_LINES)
             self.img_data.line_buffer = deque(maxlen=self.img_data.max_lines)
             self.img_data.overlay_info = deque(maxlen=self.img_data.max_lines * 10)
             self.img_data.overlay_items = []
             self.img_data.update_interval = 0.033
+            self.config = None
         else:
             self.img_data = None
+            self.config = CAMERA_CONFIGS.get(camera_index, {})
 
         self.image_label = None
         self.detector = None
@@ -223,10 +224,15 @@ class CameraView(QFrame):
                 self.update_status(True)
                 log(f"{self.camera_name} 시작 완료 (CommManager 수신 대기)")
                 return
+            
+            check_type = self.config.get('type') if self.config else None
 
-            airknife_callback = self.app.airknife_on
-            if self.is_block_detect:
+            if check_type == 'box':
+                airknife_callback = self.app.airknife_on
+            elif check_type == 'entrance':
                 airknife_callback = self.app.blow_block
+            elif check_type == 'line':
+                airknife_callback = self.app.on_small_material_cross
 
             # CameraThread 생성
             self.camera_thread = CameraThread(
@@ -712,20 +718,19 @@ class MonitoringPage(QWidget):
 
         # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
-            ("RGB 카메라 1", 0, False),
-            # ("RGB 카메라 2", 1, False),
-            # ("RGB 카메라 3", 1, 0, False),
-            # ("RGB 카메라 4", 1, 1, False),
+            ("RGB 카메라 1", 0),
+            # ("RGB 카메라 2", 1),
+            # ("RGB 카메라 3", 1, 0),
+            # ("RGB 카메라 4", 1, 1),
         ]
 
-        for name, camera_index, is_block_detect in cameras:
+        for name, camera_index in cameras:
             cam = CameraView(
                 camera_id=f"rgb_{camera_index}",
                 camera_name=name,
                 camera_index=camera_index,
                 app=self.app,
-                ai_manager=self.ai_manager,
-                is_block_detect=is_block_detect
+                ai_manager=self.ai_manager
             )
             cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             rgb_layout.addWidget(cam)

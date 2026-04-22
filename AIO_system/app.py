@@ -323,6 +323,11 @@ class App():
         """피더 배출구 air 동작"""
         if self.managers.comm_manager is not None:
             self.managers.comm_manager.blow_block()
+
+    def on_small_material_cross(self):
+        """작은 재질 선 통과 감지 및 처리"""
+        if self.managers.comm_manager is not None:
+            self.managers.comm_manager.on_small_material_cross()
 # endregion
 
 # region inverter control
