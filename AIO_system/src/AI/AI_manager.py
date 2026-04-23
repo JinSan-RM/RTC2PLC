@@ -39,12 +39,14 @@ class BatchAIManager:
         num_cameras: int = 2,
         confidence_threshold: float = 0.65,
         img_size: int = 640,
-        max_det: int = 50
+        max_det: int = 50,
+        device_preference: str = "cpu",
     ):
         self.num_cameras = num_cameras
         self.confidence_threshold = confidence_threshold
         self.img_size = img_size
         self.max_det = max_det
+        self.device_preference = (device_preference or "auto").lower()
 
         # 카메라별 입력 큐 (프레임 저장)
         self.input_queues = {
@@ -74,7 +76,10 @@ class BatchAIManager:
         """모델 초기화"""
         try:
             log("BatchAIManager 초기화")
-            self.model, self.device = load_yolov11(model_path)
+            self.model, self.device = load_yolov11(
+                model_path,
+                force_device=self.device_preference
+            )
 
             if self.model is None:
                 log("모델 로드 실패")
@@ -99,6 +104,24 @@ class BatchAIManager:
             log(f"BatchAIManager 초기화 실패: {e}")
             traceback.print_exc()
             return False
+
+    def _switch_to_cpu(self):
+        """CUDA 오류 발생 시 CPU 모드로 전환"""
+        if self.device == "cpu":
+            return
+
+        try:
+            self.device = "cpu"
+            if self.model is not None:
+                self.model.to("cpu")
+                self.model.overrides["device"] = "cpu"
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            log("[WARNING] CUDA 추론 오류로 CPU 모드로 전환합니다.")
+        except Exception as e:
+            log(f"[ERROR] CPU 전환 실패: {e}")
 
     def start(self):
         """배치 추론 스레드 시작"""
@@ -240,6 +263,7 @@ class BatchAIManager:
                             conf=self.confidence_threshold,
                             imgsz=self.img_size,
                             verbose=False,
+                            device=self.device,
                             max_det=self.max_det,
                             persist=True,
                             tracker="bytetrack.yaml",
@@ -261,6 +285,11 @@ class BatchAIManager:
                         self.total_inferences += 1
 
                     except Exception as cam_e:
+                        err_msg = str(cam_e)
+                        if "CUDA" in err_msg.upper() and self.device != "cpu":
+                            log(f"[WARNING] 카메라 {cam_id} CUDA 오류 감지: {cam_e}")
+                            self._switch_to_cpu()
+                            continue
                         log(f"카메라 {cam_id} 추론 오류: {cam_e}")
 
                 self.batch_count += 1

@@ -58,7 +58,7 @@ def enable_crash_handler():
             os.makedirs(log_dir)
 
         today = datetime.now().strftime("%y%m%d(%a)_%H%M%S")
-        _LOG_PATH = os.path.join(log_dir, f"\\crash_log_{today}.txt")
+        _LOG_PATH = os.path.join(log_dir, f"crash_log_{today}.txt")
 
         _LOG_FILE = open(_LOG_PATH, 'w', encoding='utf-8')
         faulthandler.enable(file=_LOG_FILE)
