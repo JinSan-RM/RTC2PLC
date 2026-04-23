@@ -4,29 +4,29 @@ UI 메인
 from dataclasses import dataclass
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QPushButton, QLabel, QFrame, QTabBar,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,  
+    QStackedWidget, QPushButton, QLabel, QFrame, QTabBar, QLayout
 )
 from PySide6.QtCore import Qt, QObject, QDateTime, QTimer, Signal
 from PySide6.QtGui import QPixmap
 
 from src.ui.page.home_page import HomePage
 from src.ui.page.monitoring_page import MonitoringPage
-# from src.ui.page.setting_page import SettingsPage
+from src.ui.page.setting_page import SettingsPage
 from src.ui.page.logs_page import LogsPage
 from src.utils.config_util import UI_PATH
 from src.utils.logger import Logger, log
+from .popup.alert import PopUp 
 
 # import inspect
 # import platform
-
 
 @dataclass
 class Pages:
     """페이지 모음"""
     home_page: HomePage = None
     monitoring_page: MonitoringPage = None
-    # settings_page: SettingsPage = None
+    settings_page: SettingsPage = None
     logs_page: LogsPage = None
 
 
@@ -53,6 +53,7 @@ class UpdateSignals(QObject):
     hypercam_updated = Signal(object)
     obj_detected = Signal(object, str)
     legend_updated = Signal(object)
+    show_popup = Signal(str, str, str)
 
 
 class MainWindow(QMainWindow):
@@ -60,6 +61,8 @@ class MainWindow(QMainWindow):
     def __init__(self, app):
         super().__init__()
         self.app = app
+        self.popup = PopUp(self)
+        self.app.popup = self.popup
         self.pages = Pages()
         self.children_widget = ChildrenWidget()
 
@@ -72,12 +75,13 @@ class MainWindow(QMainWindow):
         self.signals.hypercam_updated.connect(self.pages.monitoring_page.on_hypercam_updated)
         self.signals.obj_detected.connect(self.pages.monitoring_page.on_object_detected)
         self.signals.legend_updated.connect(self.pages.monitoring_page.on_legend_info)
-        # self.signals.servo_updated.connect(self.pages.settings_page.servo_tab.update_values)
-        # self.signals.inverter_updated.connect(self.pages.settings_page.feeder_tab.update_values)
-        # self.signals.inverter_updated.connect(self.pages.settings_page.conveyor_tab.update_values)
-        # self.signals.airknife_updated.connect(self.pages.settings_page.airknife_tab.on_airknife_off)
+        self.signals.servo_updated.connect(self.pages.settings_page.servo_tab.update_values)
+        self.signals.inverter_updated.connect(self.pages.settings_page.feeder_tab.update_values)
+        self.signals.inverter_updated.connect(self.pages.settings_page.conveyor_tab.update_values)
+        self.signals.airknife_updated.connect(self.pages.settings_page.airknife_tab.on_airknife_off)
         self.signals.input_updated.connect(self.pages.logs_page.io_tab.update_input_status)
         self.signals.output_updated.connect(self.pages.logs_page.io_tab.update_output_status)
+        self.signals.show_popup.connect(self.popup.show_message)
 
         Logger.set_callback(self.add_log_to_ui)
         # 시간 업데이트 타이머
@@ -88,17 +92,21 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         self.setWindowTitle("위드위 플라스틱 선별 시스템")
         self.setGeometry(0, 0, 1920, 1080)
-        self.setFixedSize(1920, 1080)
+        # self.setFixedSize(1920, 1080)
+        self.setMinimumSize(1280, 720)
+        self.showMaximized()
 
         # 중앙 위젯
         central_widget = QWidget()
-        central_widget.setFixedSize(1920, 1080)
+        # central_widget.setFixedSize(1920, 1080)
         self.setCentralWidget(central_widget)
 
         # 메인 레이아웃
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
+
+        main_layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
 
         # 헤더 타이틀
         self._create_header_title(main_layout)
@@ -201,11 +209,11 @@ class MainWindow(QMainWindow):
         # 2개의 QStackedWidget에 내용 채우기
         home_page = self.pages.home_page = HomePage(self.app)
         monitoring_page = self.pages.monitoring_page = MonitoringPage(self.app)
-        # settings_page = self.pages.settings_page = SettingsPage(
-        #     self.app,
-        #     self.children_widget.contents_title,
-        #     self.children_widget.contents_explain
-        # )
+        settings_page = self.pages.settings_page = SettingsPage(
+            self.app,
+            self.children_widget.contents_title,
+            self.children_widget.contents_explain
+        )
         logs_page = self.pages.logs_page = LogsPage(
             self.app,
             self.children_widget.contents_title
@@ -213,12 +221,12 @@ class MainWindow(QMainWindow):
 
         self.children_widget.side_stack.addWidget(home_page.side_widget)
         self.children_widget.side_stack.addWidget(monitoring_page.side_widget)
-        # self.children_widget.side_stack.addWidget(settings_page.side_widget)
+        self.children_widget.side_stack.addWidget(settings_page.side_widget)
         self.children_widget.side_stack.addWidget(logs_page.side_widget)
 
         self.children_widget.main_stack.addWidget(home_page.main_widget)
         self.children_widget.main_stack.addWidget(monitoring_page.main_widget)
-        # self.children_widget.main_stack.addWidget(settings_page.main_widget)
+        self.children_widget.main_stack.addWidget(settings_page.main_widget)
         self.children_widget.main_stack.addWidget(logs_page.main_widget)
 
         parent_layout.addWidget(contents_area)
@@ -320,18 +328,12 @@ class MainWindow(QMainWindow):
                 self.children_widget.contents_title.setText("홈 대시보드")
             case 1:
                 self.children_widget.contents_title.setText("실시간 모니터링")
-            # case 2:
-            #     self.pages.settings_page.btn_group.button(0).setChecked(True)
-            #     self.pages.settings_page.show_page(0)
             case 2:
+                self.pages.settings_page.btn_group.button(0).setChecked(True)
+                self.pages.settings_page.show_page(0)
+            case 3:
                 self.pages.logs_page.btn_group.button(0).setChecked(True)
                 self.pages.logs_page.show_page(0)
-            # case 2:
-            #     self.pages.settings_page.btn_group.button(0).setChecked(True)
-            #     self.pages.settings_page.show_page(0)
-            # case 3:
-            #     self.pages.logs_page.btn_group.button(0).setChecked(True)
-            #     self.pages.logs_page.show_page(0)
 
     def update_time(self):
         """시간 업데이트"""
@@ -353,17 +355,19 @@ class MainWindow(QMainWindow):
         """긴급 정지"""
         log("긴급정지")
         self.update_status("긴급정지", "red")
+        self.app.emergency_stop()
+        self.app.on_popup("warning", "긴급 정지", "⚠️긴급 정지 되었습니다.⚠️")
 
-    def closeEvent(self, a0): # pylint: disable=invalid-name, disable=unused-argument
+    def closeEvent(self, a0):
         """UI 닫는 이벤트 발생 시 호출됨"""
         if self.app.is_reload:
             # 리로드 시 앱 종료 방지
             return
 
         self.signals.log_updated.disconnect()
-        # self.signals.servo_updated.disconnect()
-        # self.signals.inverter_updated.disconnect()
-        # self.signals.airknife_updated.disconnect()
+        self.signals.servo_updated.disconnect()
+        self.signals.inverter_updated.disconnect()
+        self.signals.airknife_updated.disconnect()
         self.signals.input_updated.disconnect()
         self.signals.output_updated.disconnect()
 

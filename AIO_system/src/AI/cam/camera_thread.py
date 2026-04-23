@@ -14,6 +14,7 @@ from src.AI.cam.basler_manager import BaslerCameraManager
 from src.utils.config_util import CAMERA_CONFIGS
 from src.AI.tracking.detection_box import ConveyorBoxZone, ConveyorBoxManager, DetectedObject
 from src.AI.tracking.part_MC_entrance_traffic_detect import EntranceBoxZone, EntranceBoxManager
+from src.AI.tracking.part_MC_small_material_classify import LineCrossManager, LineCrossZone
 
 
 class CameraThread(QThread):
@@ -63,11 +64,14 @@ class CameraThread(QThread):
 
         # 박스 매니저 생성
         self.box_manager = None
-        if self.config.get('boxes', []):
+        check_type = self.config.get('type')
+        if check_type == 'box':
             self.box_manager = self._create_box_manager()
-        elif self.config.get('entrance_boxes', []):
+        elif check_type == 'entrance':
             # 배출 감지 박스 매니저 생성
             self.box_manager = self._create_entrance_box_manager()
+        elif check_type == 'line':
+            self.box_manager = self._create_line_manager()
 
         # 캐싱된 결과 (프레임 스킵용)
         self.last_detected_objects = []
@@ -114,6 +118,22 @@ class CameraThread(QThread):
             boxes.append(box)
         log(f"카메라 {self.camera_index}: {len(boxes)}개 배출 감지 박스 생성")
         return EntranceBoxManager(boxes)
+
+    def _create_line_manager(self):
+        """카메라별 선 통과 감지 영역 생성"""
+        boxes = []
+        for line_cfg in self.config.get('line', []):
+            line = LineCrossZone(
+                    line_id=line_cfg['line_id'],
+                    x=line_cfg['x'],
+                    y=line_cfg['y'],
+                    width=line_cfg['width'],
+                    height=line_cfg['height'],
+                    on_cross_callback=self.airknife_callback
+            )
+            boxes.append(line)
+        log(f"카메라 {self.camera_index}: {len(boxes)}개 감지 라인 생성")
+        return LineCrossManager(boxes)
 
     def run(self):
         """스레드 실행"""
@@ -185,8 +205,6 @@ class CameraThread(QThread):
 
                 # 4. 박스 매니저 업데이트
                 self.box_manager.update_detections(detected_objects)
-
-                # self.entrance_box_manager.update_detections(detected_objects)
 
                 # 5. AirKnife 동작
                 if len(detected_objects) > 0:

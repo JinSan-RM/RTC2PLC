@@ -130,32 +130,32 @@ class ServoController(QWidget):
         control_layout.setContentsMargins(30, 30, 30, 30)
 
         # 서보 ON/OFF
-        toggle_btn = ToggleButton(None, 138, 48, "서보 ON", "서보 OFF")
-        toggle_btn.setChecked(False)
-        toggle_btn.setObjectName(f"toggle_btn_{self.servo_id}")
-        toggle_btn.clicked.connect(self.on_servo_toggle)
-        control_layout.addWidget(toggle_btn)
+        self.toggle_btn = ToggleButton(None, 138, 48, "서보 ON", "서보 OFF")
+        self.toggle_btn.setChecked(False)
+        self.toggle_btn.setObjectName(f"toggle_btn_{self.servo_id}")
+        self.toggle_btn.clicked.connect(self.on_servo_toggle)
+        control_layout.addWidget(self.toggle_btn)
 
         # 리셋
-        reset_btn = QPushButton("🔄️리셋")
-        reset_btn.setObjectName("control_btn_reset")
-        reset_btn.setFixedSize(199, 65)
-        reset_btn.clicked.connect(self.on_reset)
-        control_layout.addWidget(reset_btn)
+        self.reset_btn = QPushButton("🔄️리셋")
+        self.reset_btn.setObjectName("control_btn_reset")
+        self.reset_btn.setFixedSize(199, 65)
+        self.reset_btn.clicked.connect(self.on_reset)
+        control_layout.addWidget(self.reset_btn)
 
         # 정지
-        stop_btn = QPushButton("⏹️정지")
-        stop_btn.setObjectName("control_btn_stop")
-        stop_btn.setFixedSize(199, 65)
-        stop_btn.clicked.connect(self.on_stop)
-        control_layout.addWidget(stop_btn)
+        self.stop_btn = QPushButton("⏹️정지")
+        self.stop_btn.setObjectName("control_btn_stop")
+        self.stop_btn.setFixedSize(199, 65)
+        self.stop_btn.clicked.connect(self.on_stop)
+        control_layout.addWidget(self.stop_btn)
 
         # 원점복귀
-        homing_btn = QPushButton("원점복귀")
-        homing_btn.setObjectName("control_btn_homing")
-        homing_btn.setFixedSize(199, 65)
-        homing_btn.clicked.connect(self.on_homing)
-        control_layout.addWidget(homing_btn)
+        self.homing_btn = QPushButton("원점복귀")
+        self.homing_btn.setObjectName("control_btn_homing")
+        self.homing_btn.setFixedSize(199, 65)
+        self.homing_btn.clicked.connect(self.on_homing)
+        control_layout.addWidget(self.homing_btn)
 
         control_layout.addStretch()
 
@@ -371,9 +371,11 @@ class ServoController(QWidget):
         if checked:
             log("서보 ON")
             self.app.servo_on(self.servo_id)
+            self.app.on_popup("info", "서보 ON", f"서보 {self.servo_id} ON")
         else:
             log("서보 OFF")
             self.app.servo_off(self.servo_id)
+            self.app.on_popup("info", "서보 OFF", f"서보 {self.servo_id} OFF")
 
     def on_reset(self):
         """개별 서보 알람/경고 리셋"""
@@ -381,16 +383,38 @@ class ServoController(QWidget):
         # self.alarm_indicator.setText("⚫ 정상")
         # self.error_code.setText("0x0000")
         self.app.servo_reset(self.servo_id)
+        self.app.on_popup("info", "서보 리셋", "서보가 리셋되었습니다.")
 
     def on_stop(self):
         """개별 서보 정지"""
         log("서보 정지")
         self.app.servo_stop(self.servo_id)
+        self.app.on_popup("info", "서보 정지", "서보가 정지되었습니다.")
 
     def on_homing(self):
         """개별 서보 원점 복귀"""
         log("서보 원점 복귀")
         self.app.servo_homing(self.servo_id)
+        self.app.on_popup("info", "서보 원점 복귀", "서보가 원점 복귀되었습니다.")
+
+    def _validate_position_speed(self, position, speed):
+        """ 목표 위치, 속도 검증 """
+        if not position or not speed:
+            return "목표 위치와 속도 값을 입력해 주세요."
+        
+        try:
+            pos_val = float(position)
+            speed_val = float(speed)
+        except:
+            return "입력값이 올바르지 않습니다."
+
+        if not (-1000.0 <= pos_val <= 1000.0):
+            return "목표 위치 범위를 벗어났습니다."
+
+        if not (0.0 <= speed_val <= 1000.0):
+            return "속도 범위를 벗어났습니다."
+
+        return None
 
     def on_save_position(self, idx):
         """이동 위치 및 속도 저장"""
@@ -402,10 +426,17 @@ class ServoController(QWidget):
             position = pos_txt.text()
             speed = speed_txt.text()
 
+            error = self._validate_position_speed(position, speed)
+
+            if error:
+                self.app.on_popup("warning", "경고", error)
+                return    
+
             pos_info = [ float(position), float(speed) ]
             self.app.config["servo_config"][f"servo_{self.servo_id}"]["position"][idx] = pos_info
 
             log(f"{_name} {idx+1} 저장. 위치: {position}mm, 속도: {speed}mm/s")
+            self.app.on_popup("info", f"{_name} {idx+1} 저장",  f"위치: {position}mm, 속도: {speed}mm/s")
 
     def on_move_to_position(self, idx):
         """지정 위치로 이동"""
@@ -414,12 +445,22 @@ class ServoController(QWidget):
         if pos_txt and speed_txt:
             position = pos_txt.text()
             speed = speed_txt.text()
-            log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
+
+            error = self._validate_position_speed(position, speed)
+
+            if error:
+                self.app.on_popup("warning", "경고", error)
+                return
+
             self.app.servo_move_to_position(
                 self.servo_id,
                 float(position)*(10**3),
                 float(speed)*(10**3)
             )
+
+            log(f"위치 이동: {position}mm, 속도: {speed}mm/s")
+            self.app.on_popup("info", "위치 이동", f"위치 이동: {position}mm, 속도: {speed}mm/s")
+            
 
     def save_jog_speed(self):
         """조그 속도 저장"""
@@ -429,6 +470,7 @@ class ServoController(QWidget):
                 float(jog_speed.text())
 
         log(f"조그 속도 저장: {jog_speed}mm/s")
+        # self.app.on_popup("info", "조그 속도 저장", f"조그 속도 저장: {jog_speed}mm/s")
 
     def save_inch_distance(self):
         """인칭 거리 저장"""
@@ -438,6 +480,7 @@ class ServoController(QWidget):
                 float(inch_dist.text())
 
         log(f"인칭 거리 저장: {inch_dist}mm")
+        # self.app.on_popup("info", "인칭 거리 저장", f"인칭 거리 저장: {inch_dist}mm")
 
     def on_jog_move(self, direction):
         """조그 이동"""
@@ -445,10 +488,12 @@ class ServoController(QWidget):
         jog_speed = getattr(self, f"servo_{self.servo_id}_jog_speed")
         if is_jog and is_jog.isChecked():
             log(f"조그 이동: {direction}")
+            
             _dir = 1 if direction == "right" else -1
             v = float(jog_speed.text()) * (10 ** 3)
             if v == 0:
                 log("조그 속도를 설정해주세요")
+                self.app.on_popup("warning", "경고", "조그 속도를 설정해주세요.")     
             else:
                 self.app.servo_jog_move(self.servo_id, v*_dir)
 
@@ -458,10 +503,13 @@ class ServoController(QWidget):
         inch_dist = getattr(self, f"servo_{self.servo_id}_inch_dist")
         if is_inch and is_inch.isChecked():
             log(f"인칭 이동: {direction}")
+            
             _dir = 1 if direction == "right" else -1
             dist = float(inch_dist.text()) * (10 ** 3)
+
             if dist == 0:
                 log("인칭 거리를 설정해주세요")
+                self.app.on_popup("warning", "경고", "인칭 거리를 설정해주세요")
             else:
                 self.app.servo_inch_move(self.servo_id, dist*_dir)
 

@@ -230,7 +230,7 @@ class HomePage(QWidget):
         """실시간 모니터링 영역 생성"""
         # 상단: 인버터 출력 정보
         output_layout = QGridLayout()
-        output_layout.setSpacing(175)
+        # output_layout.setSpacing(175)
 
         # 출력 주파수
         self.monitor_values.frequency = \
@@ -307,25 +307,25 @@ class HomePage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         # 리셋 버튼
-        reset_btn = QPushButton("리셋")
-        reset_btn.setObjectName("control_btn_reset")
-        reset_btn.setFixedHeight(60)
-        reset_btn.clicked.connect(self.on_reset_clicked)
-        layout.addWidget(reset_btn)
+        self.reset_btn = QPushButton("리셋")
+        self.reset_btn.setObjectName("control_btn_reset")
+        self.reset_btn.setFixedHeight(60)
+        self.reset_btn.clicked.connect(self.on_reset_clicked)
+        layout.addWidget(self.reset_btn)
 
         # 정지 버튼
-        stop_btn = QPushButton("정지")
-        stop_btn.setObjectName("control_btn_stop")
-        stop_btn.setFixedHeight(60)
-        stop_btn.clicked.connect(self.on_stop_clicked)
-        layout.addWidget(stop_btn)
+        self.stop_btn = QPushButton("정지")
+        self.stop_btn.setObjectName("control_btn_stop")
+        self.stop_btn.setFixedHeight(60)
+        self.stop_btn.clicked.connect(self.on_stop_clicked)
+        layout.addWidget(self.stop_btn)
 
         # 시작 버튼
-        start_btn = QPushButton("시작")
-        start_btn.setObjectName("control_btn_start")
-        start_btn.setFixedHeight(60)
-        start_btn.clicked.connect(self.on_start_clicked)
-        layout.addWidget(start_btn)
+        self.start_btn = QPushButton("시작")
+        self.start_btn.setObjectName("control_btn_start")
+        self.start_btn.setFixedHeight(60)
+        self.start_btn.clicked.connect(self.on_start_clicked)
+        layout.addWidget(self.start_btn)
 
         parent_layout.addLayout(layout)
 
@@ -382,16 +382,24 @@ class HomePage(QWidget):
         """시작 버튼 클릭"""
         log("시스템 시작")
         self.app.on_auto_start()
+        self.start_btn.setEnabled(False)
+        self.app.on_popup("info", "시스템 시작", "시스템이 시작되었습니다.")
 
     def on_stop_clicked(self):
         """정지 버튼 클릭"""
-        log("시스템 정지")
-        self.app.on_auto_stop()
+        if not self.start_btn.isEnabled():
+            log("시스템 정지")
+            self.app.on_auto_stop()
+            self.start_btn.setEnabled(True)
+            self.app.on_popup("info", "시스템 정지", "시스템이 정지되었습니다.")
 
     def on_reset_clicked(self):
         """리셋 버튼 클릭"""
-        log("시스템 리셋")
-        # TODO: 실제 리셋 로직
+        if not self.start_btn.isEnabled():
+            log("시스템 리셋")
+            # TODO: 실제 리셋 로직
+            self.start_btn.setEnabled(True)
+            self.app.on_popup("info", "시스템 리셋", "시스템이 리셋되었습니다.")
 
     def apply_styles(self):
         """스타일시트 적용"""

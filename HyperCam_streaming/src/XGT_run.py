@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name
 """
 PLC 통신 매니저
 """
@@ -9,7 +8,6 @@ from typing import Optional
 # from enum import Enum
 
 
-# pylint: disable=broad-exception-caught
 class XGTTester:
     """PLC 통신 매니저"""
     def __init__(self, ip="192.168.250.120", port=2004):

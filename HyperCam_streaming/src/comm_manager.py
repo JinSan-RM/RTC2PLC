@@ -78,7 +78,6 @@ class ObjectInfo:
     y_position: int = 0         # 제품 중심 y좌표
 
 
-# pylint: disable=broad-exception-caught
 class CommManager(threading.Thread):
     """통신 관리자"""
     def __init__(self, app):
@@ -159,6 +158,7 @@ class CommManager(threading.Thread):
         """카메라로부터의 응답"""
         if not response:
             logging.error("No response or incorrect response ID received from camera")
+            self.app.on_popup("error", "카메라 응답 없음", "No response or incorrect response ID received from camera")
             raise ValueError("No response or incorrect response ID received")
         message = response.get('Message', '')
         if not response.get("Success", False):

@@ -1,4 +1,4 @@
-﻿"""
+"""
 모니터링 페이지 - 카메라 스트림
 """
 import traceback
@@ -29,7 +29,7 @@ from src.AI.cam.camera_thread import CameraThread
 from src.AI.AI_manager import BatchAIManager
 from src.utils.logger import log
 from src.utils.config_util import (
-    UI_PATH, MAX_IMG_LINES
+    UI_PATH, MAX_IMG_LINES, clear_layout, CAMERA_CONFIGS
 )
 
 
@@ -53,13 +53,12 @@ class HyperSpectralData:
     overlay_info: deque = None
 
 
-# pylint: disable=broad-exception-caught
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
     def __init__(
         self, camera_id, camera_name, camera_index,
         app, ai_manager=None,
-        is_hyperspectral=False, is_block_detect=False
+        is_hyperspectral=False
     ):
         super().__init__()
         self.app = app
@@ -68,15 +67,16 @@ class CameraView(QFrame):
         self.camera_index = camera_index
         self.ai_manager = ai_manager
         self.is_hyperspectral = is_hyperspectral
-        self.is_block_detect = is_block_detect
         if self.is_hyperspectral:
             self.img_data = HyperSpectralData(max_lines=MAX_IMG_LINES)
             self.img_data.line_buffer = deque(maxlen=self.img_data.max_lines)
             self.img_data.overlay_info = deque(maxlen=self.img_data.max_lines * 10)
             self.img_data.overlay_items = []
             self.img_data.update_interval = 0.033
+            self.config = None
         else:
             self.img_data = None
+            self.config = CAMERA_CONFIGS.get(camera_index, {})
 
         self.image_label = None
         self.detector = None
@@ -224,10 +224,15 @@ class CameraView(QFrame):
                 self.update_status(True)
                 log(f"{self.camera_name} 시작 완료 (CommManager 수신 대기)")
                 return
+            
+            check_type = self.config.get('type') if self.config else None
 
-            airknife_callback = self.app.airknife_on
-            if self.is_block_detect:
+            if check_type == 'box':
+                airknife_callback = self.app.airknife_on
+            elif check_type == 'entrance':
                 airknife_callback = self.app.blow_block
+            elif check_type == 'line':
+                airknife_callback = self.app.on_small_material_cross
 
             # CameraThread 생성
             self.camera_thread = CameraThread(
@@ -295,8 +300,7 @@ class CameraView(QFrame):
     def update_frame(self, frame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
-            # pylint: disable=no-member
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) 
 
             h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
@@ -345,7 +349,7 @@ class CameraView(QFrame):
             self.status.setText("🔴 연결 끊김")
             self.status.setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold;")
 
-    def on_error(self, error_msg):
+    def on_error(self, error_msg):  
         """에러 처리"""
         log(f"{self.camera_name} 오류: {error_msg}")
         if self.is_hyperspectral:
@@ -507,7 +511,7 @@ class CameraView(QFrame):
 
 
 class MonitoringPage(QWidget):
-    """모니터링 페이지 - 카메라 스트림"""
+    """  페이지 - 카메라 스트림"""
     def __init__(self, app):
         super().__init__()
         self.app = app
@@ -556,7 +560,7 @@ class MonitoringPage(QWidget):
         scroll_content.setMaximumWidth(1610)
 
         scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setAlignment(Qt.AlignTop)
+        scroll_layout.setAlignment(Qt.AlignTop) 
         scroll_layout.setSpacing(0)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -619,17 +623,17 @@ class MonitoringPage(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
 
         # 전체 시작/정지
-        start_all_btn = QPushButton("▶️전체 시작")
-        start_all_btn.setObjectName("control_btn_start")
-        start_all_btn.setFixedSize(199, 60)
-        start_all_btn.clicked.connect(self.on_start_all)
-        layout.addWidget(start_all_btn)
+        self.start_all_btn = QPushButton("▶️전체 시작")
+        self.start_all_btn.setObjectName("control_btn_start")
+        self.start_all_btn.setFixedSize(199, 60)
+        self.start_all_btn.clicked.connect(self.on_start_all)
+        layout.addWidget(self.start_all_btn)
 
-        stop_all_btn = QPushButton("⏹️전체 정지")
-        stop_all_btn.setObjectName("control_btn_stop")
-        stop_all_btn.setFixedSize(199, 60)
-        stop_all_btn.clicked.connect(self.on_stop_all)
-        layout.addWidget(stop_all_btn)
+        self.stop_all_btn = QPushButton("⏹️전체 정지")
+        self.stop_all_btn.setObjectName("control_btn_stop")
+        self.stop_all_btn.setFixedSize(199, 60)
+        self.stop_all_btn.clicked.connect(self.on_stop_all)
+        layout.addWidget(self.stop_all_btn)
 
         # 녹화
         self.record_btn = QPushButton("▶️녹화 시작")
@@ -640,11 +644,11 @@ class MonitoringPage(QWidget):
         layout.addWidget(self.record_btn)
 
         # 스냅샷
-        snapshot_btn = QPushButton("📸스냅샷")
-        snapshot_btn.setObjectName("control_btn_snapshot")
-        snapshot_btn.setFixedSize(199, 60)
-        snapshot_btn.clicked.connect(self.on_snapshot)
-        layout.addWidget(snapshot_btn)
+        self.snapshot_btn = QPushButton("📸스냅샷")
+        self.snapshot_btn.setObjectName("control_btn_snapshot")
+        self.snapshot_btn.setFixedSize(199, 60)
+        self.snapshot_btn.clicked.connect(self.on_snapshot)
+        layout.addWidget(self.snapshot_btn)
 
         layout.addSpacing(15)
 
@@ -714,20 +718,19 @@ class MonitoringPage(QWidget):
 
         # 카메라 추가할 떄에는 이걸 주석 풀어서 하나씩 추가
         cameras = [
-            ("RGB 카메라 1", 0, False),
-            # ("RGB 카메라 2", 1, False),
-            # ("RGB 카메라 3", 1, 0, False),
-            # ("RGB 카메라 4", 1, 1, False),
+            ("RGB 카메라 1", 0),
+            # ("RGB 카메라 2", 1),
+            # ("RGB 카메라 3", 1, 0),
+            # ("RGB 카메라 4", 1, 1),
         ]
 
-        for name, camera_index, is_block_detect in cameras:
+        for name, camera_index in cameras:
             cam = CameraView(
                 camera_id=f"rgb_{camera_index}",
                 camera_name=name,
                 camera_index=camera_index,
                 app=self.app,
-                ai_manager=self.ai_manager,
-                is_block_detect=is_block_detect
+                ai_manager=self.ai_manager
             )
             cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             rgb_layout.addWidget(cam)
@@ -738,7 +741,9 @@ class MonitoringPage(QWidget):
     def _create_statistics_box(self, legend_info_list):
         if not self.stats_frame:
             return
-
+        old_layout = self.stats_frame.layout()
+        clear_layout(old_layout)
+        
         stats_frame_layout = QVBoxLayout()
 
         # 플라스틱 종류별 카운트
@@ -828,10 +833,13 @@ class MonitoringPage(QWidget):
             ai_manager=None,
             is_hyperspectral=True
         )
-        self.hyper_camera.setMinimumSize(600, 400)
+        self.hyper_camera.setMinimumSize(400, 400)  # setFixedSixe(415, 422)에서 수정
+
+        self.hyper_camera.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정 부분 - 축소 제한 해제
+
         hyper_layout.addWidget(self.hyper_camera)
 
-        hyper_layout.addSpacing(20)
+        hyper_layout.addSpacing(10)
 
         # 우측: 분류 통계
         stats_layout = QVBoxLayout()
@@ -851,7 +859,10 @@ class MonitoringPage(QWidget):
 
         self.stats_frame = QFrame()
         self.stats_frame.setObjectName("stats_frame")
-        self.stats_frame.setFixedSize(415, 422)
+        # self.stats_frame.setFixedSize(415, 422)
+        self.stats_frame.setMinimumSize(400, 400)   # setFixedSixe(415, 422)에서 수정
+
+        self.stats_frame.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정부분 - 축소 제한 해제
 
         stats_layout.addWidget(self.stats_frame)
 
@@ -865,6 +876,8 @@ class MonitoringPage(QWidget):
         """전체 시작"""
         log("모든 카메라 시작")
         self.app.on_monitoring_start()
+        self.start_all_btn.setEnabled(False)
+        self.app.on_popup("info", "전체 시작", "모니터링이 전체 시작되었습니다.")
 
         if self.ai_manager:
             self.ai_manager.start()
@@ -877,16 +890,19 @@ class MonitoringPage(QWidget):
 
     def on_stop_all(self):
         """전체 정지"""
-        log("모든 카메라 정지")
-        self.app.on_monitoring_stop()
-        if self.ai_manager:
-            self.ai_manager.stop()
+        if not self.start_all_btn.isEnabled():
+            log("모든 카메라 정지")
+            self.app.on_monitoring_stop()
+            self.start_all_btn.setEnabled(True)
+            self.app.on_popup("info", "전체 정지", "모니터링이 전체 정지되었습니다.")
+            if self.ai_manager:
+                self.ai_manager.stop()
 
-        for camera in self.rgb_cameras:
-            camera.stop_camera()
+            for camera in self.rgb_cameras:
+                camera.stop_camera()
 
-        if self.hyper_camera:
-            self.hyper_camera.stop_camera()
+            if self.hyper_camera:
+                self.hyper_camera.stop_camera()
 
     def on_hypercam_updated(self, info):
         """초분광 카메라 스트리밍 출력"""
@@ -914,19 +930,25 @@ class MonitoringPage(QWidget):
 
     def on_snapshot(self):
         """스냅샷"""
-        log("스냅샷 저장")
-        # TODO: 현재 프레임 저장
+        if not self.start_all_btn.isEnabled():
+            log("스냅샷 저장")
+            # TODO: 현재 프레임 저장
+            self.start_all_btn.setEnabled(True)
+            self.app.on_popup("info", "스냅샷", "스냅샷이 저장되었습니다.")
 
     def on_record(self, checked):
         """녹화"""
-        if checked:
-            self.record_btn.setText("⏹ 녹화 중지")
-            log("녹화 시작")
-            # TODO: 녹화 시작
-        else:
-            self.record_btn.setText("⏺ 녹화 시작")
-            log("녹화 중지")
-            # TODO: 녹화 중지
+        if not self.start_all_btn.isEnabled():
+            if checked:
+                self.record_btn.setText("⏹ 녹화 중지")
+                log("녹화 시작")
+                # TODO: 녹화 시작
+                self.app.on_popup("info", "녹화 시작", "녹화가 시작되었습니다.")
+            else:
+                self.record_btn.setText("⏺ 녹화 시작")
+                log("녹화 중지")
+                # TODO: 녹화 중지
+                self.app.on_popup("info", "녹화 중지", "녹화가 중지되었습니다.")
 
     def on_reset_counter(self):
         """카운터 리셋"""
@@ -935,21 +957,28 @@ class MonitoringPage(QWidget):
             count_label.setText("0")
         self.total_count.setText("0")
         # TODO: 실제 카운터 리셋
+        self.app.on_popup("info", "카운터 리셋", "카운터가 리셋되었습니다.")
 
     def _on_set_sequence(self):
         if self.app.use_air_sequence:
             log("배출 제어 순서 사용 도중에는 순서를 변경할 수 없습니다.")
+            self.app.on_popup("warning", "경고", "배출 제어 순서 사용 도중에는 순서를 변경할 수 없습니다.")
             return
 
         air_pattern = self.sequence_edit.text()
         self.app.config["air_sequence"] = [int(c) for c in air_pattern] if air_pattern else []
         self.app.set_air_sequence_index()
-        log(f"배출 제어 순서 저장됨. {self.app.config['air_sequence']}")
+        if self.app.config['air_sequence']:
+            log(f"배출 제어 순서 저장됨. {self.app.config['air_sequence']}")
+            self.app.on_popup("info", "설정", f"배출 제어 순서 저장됨. {self.app.config['air_sequence']}")
+        else:
+            self.app.on_popup("warning", "경고", "배출 순서 제어의 값을 확인해 주세요. (1~3의 값 연속 입력 가능)")
 
     def _on_use_sequence(self, onoff):
         _pattern = self.app.config.get("air_sequence", [])
         if onoff and not _pattern:
             log("지정된 배출 제어 순서가 없습니다.")
+            self.app.on_popup("warning", "경고", "지정된 배출 제어 순서가 없습니다.")
             self.toggle_btn.setChecked(False)
             return
 
@@ -957,6 +986,7 @@ class MonitoringPage(QWidget):
         self.toggle_btn.setText(state)
         self.app.use_air_sequence = onoff
         log(f"배출 제어 순서 {state}")
+        self.app.on_popup("info", "알림", f"배출 제어 순서 {state}")
 
     def on_legend_info(self, legend_info_list):
         """재질 별 범례 설정"""

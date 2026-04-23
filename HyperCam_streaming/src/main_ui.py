@@ -57,7 +57,6 @@ class UIConfig:
     update_interval: float = 0.0
 
 
-# pylint: disable=broad-exception-caught
 class MainUI:
     """UI"""
     def __init__(self, app):
@@ -246,7 +245,7 @@ class MainUI:
             # PIL Image로 변환
             img = Image.fromarray(img_data)
             # 크기 조정
-            img = img.resize((640, 480), Image.NEAREST) # pylint: disable=no-member
+            img = img.resize((640, 480), Image.NEAREST)
 
             photo = ImageTk.PhotoImage(img)
 

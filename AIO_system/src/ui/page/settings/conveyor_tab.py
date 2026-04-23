@@ -6,7 +6,7 @@ from typing import Callable
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QLineEdit, QFrame, QScrollArea
+    QLabel, QPushButton, QLineEdit, QFrame, QScrollArea, QDoubleSpinBox
 )
 from PySide6.QtGui import QDoubleValidator
 from PySide6.QtCore import Qt
@@ -257,6 +257,7 @@ class ConveyorController(QWidget):
         name_label.setObjectName("name_label")
         parent_layout.addWidget(name_label, row, 0)
         _input = QLineEdit(f"{value_info.def_val}")
+        # _input = QDoubleSpinBox(f"{value_info.def_val}")
         _input.setValidator(QDoubleValidator(
             value_info.min_val,
             value_info.max_val,
@@ -321,6 +322,7 @@ class ConveyorController(QWidget):
             freq = float(getattr(self, f"{inverter_name}_target_freq").text())
             self.app.on_set_freq(inverter_name, freq)
             log(f"{inverter_name} 주파수 설정: {freq} Hz")
+            self.app.on_popup("info", "주파수 설정", f"{inverter_name} 목표 주파수 설정: {freq} Hz")
 
             freq_label = self.findChild(QLabel, f"{inverter_name}_freq")
             if freq_label:
@@ -328,6 +330,7 @@ class ConveyorController(QWidget):
         except ValueError:
             txt = getattr(self, f"{inverter_name}_target_freq").text()
             log(f"잘못된 주파수 값: {txt}")
+            self.app.on_popup("error", f"잘못된 주파수 값: {txt}", "주파수 값을 확인해 주세요.")
 
     def on_set_acc(self, inverter_name: str):
         """가속 시간 설정"""
@@ -335,6 +338,7 @@ class ConveyorController(QWidget):
             acc = float(getattr(self, f"{inverter_name}_target_acc").text())
             self.app.on_set_acc(inverter_name, acc)
             log(f"{inverter_name} 가속시간 설정: {acc} s")
+            self.app.on_popup("info", "가속 시간 설정", f"{inverter_name} 가속 시간 설정: {acc} s")
 
             acc_label = self.findChild(QLabel, f"{inverter_name}_acc")
             if acc_label:
@@ -342,13 +346,15 @@ class ConveyorController(QWidget):
         except ValueError:
             txt = getattr(self, f"{inverter_name}_target_acc").text()
             log(f"잘못된 가속시간 값: {txt}")
+            self.app.on_popup("error", f"잘못된 가속 시간 값: {txt}", "가속 시간을 확인해 주세요.")
 
     def on_set_dec(self, inverter_name: str):
         """감속 시간 설정"""
         try:
             dec = float(getattr(self, f"{inverter_name}_target_dec").text())
             self.app.on_set_dec(inverter_name, dec)
-            log(f"{inverter_name} 감속시간 설정: {dec} s")
+            log(f"{inverter_name} 감속 시간 설정: {dec} s")
+            self.app.on_popup("info","감속 시간 설정" , f"{inverter_name} 감속 시간 설정: {dec} s")
 
             dec_label = self.findChild(QLabel, f"{inverter_name}_dec")
             if dec_label:
@@ -356,6 +362,7 @@ class ConveyorController(QWidget):
         except ValueError:
             txt = getattr(self, f"{inverter_name}_target_dec").text()
             log(f"잘못된 감속시간 값: {txt}")
+            self.app.on_popup("error", f"잘못된 감속 시간 값: {txt}", "감속 시간을 확인해 주세요.")
 
     def on_conveyor_start(self, inverter_name: str):
         """개별 컨베이어 운전"""

@@ -137,11 +137,11 @@ class AirknifeController(QWidget):
         layout.addStretch()
 
         # ON/OFF 버튼
-        toggle_btn = ToggleButton(None, 126, 48, "활성화", "비활성화")
-        toggle_btn.setObjectName(f"toggle_btn_{self.num}")
-        toggle_btn.setChecked(True)
-        toggle_btn.clicked.connect(self.on_toggle)
-        layout.addWidget(toggle_btn)
+        self.toggle_btn = ToggleButton(None, 126, 48, "활성화", "비활성화")
+        self.toggle_btn.setObjectName(f"toggle_btn_{self.num}")
+        self.toggle_btn.setChecked(True)
+        self.toggle_btn.clicked.connect(self.on_toggle)
+        layout.addWidget(self.toggle_btn)
 
         parent_layout.addLayout(layout)
 
@@ -166,23 +166,63 @@ class AirknifeController(QWidget):
         return _edit
 
     # 이벤트 핸들러
+    def _validate_airknife(self, timing, duration):
+        """분사 타이밍, 시간 검증"""
+
+        if not timing or not duration:
+            return None, None, "분사 타이밍과 시간 값을 입력해 주세요."
+        try:
+            timing_val = int(timing)
+            duration_val = int(duration)
+        except:
+            return None, None, "입력값이 올바르지 않습니다."
+        
+        if not (0 <= timing_val <= 100000):
+            return None, None, "분사 타이밍 범위를 벗어났습니다."
+
+        if not (0 <= duration_val <= 100000):
+            return None, None, "분사 시간 범위를 벗어났습니다."
+
+        return timing_val, duration_val, None
+    
     def on_apply_settings(self):
         """설정 적용"""
-        timing = getattr(self, f"airknife_{self.num}_timing").text()
-        duration = getattr(self, f"airknife_{self.num}_duration").text()
+        if self.toggle_btn.isChecked():
+            timing = getattr(self, f"airknife_{self.num}_timing").text()
+            duration = getattr(self, f"airknife_{self.num}_duration").text()
+            
+            timing_val, duration_val, error = self._validate_airknife(timing, duration)
 
-        self.app.config["airknife_config"][f"airknife_{self.num}"]["timing"] = int(timing)
-        self.app.config["airknife_config"][f"airknife_{self.num}"]["duration"] = int(duration)
+            if error:
+                log(f"에어나이프 #{self.num} 설정 값 오류")
+                self.app.on_popup("warning", "경고", f"에어나이프 #{self.num}: {error}")
+                return
 
-        log(f"에어나이프 #{self.num} 설정: 타이밍={timing}ms, 시간={duration}ms")
+            self.app.config["airknife_config"][f"airknife_{self.num}"]["timing"] = timing_val
+            self.app.config["airknife_config"][f"airknife_{self.num}"]["duration"] = duration_val
+
+            log(f"에어나이프 #{self.num} 설정: 타이밍={timing}ms, 시간={duration}ms")
+            self.app.on_popup("info", f"에어나이프 #{self.num} 설정", f"타이밍={timing}ms, 시간={duration}ms")
 
     def on_test(self):
         """개별 테스트"""
-        log(f"에어나이프 #{self.num} 테스트 분사")
-        duration = getattr(self, f"airknife_{self.num}_duration").text()
-        self.app.airknife_on(self.num, int(duration))
+        if self.toggle_btn.isChecked():
+            timing = getattr(self, f"airknife_{self.num}_timing").text()
+            duration = getattr(self, f"airknife_{self.num}_duration").text()
+            
+            timing_val, duration_val, msg = self._validate_airknife(timing, duration)
 
-        # 상태 표시 업데이트 (시뮬레이션)
+            if msg:
+                self.app.on_popup("warning", "경고", f"에어나이프 #{self.num}: {msg}")
+                return
+
+            self.app.airknife_on(self.num, timing_val)
+            self.app.airknife_on(self.num, duration_val)
+
+            log(f"에어나이프 #{self.num} 테스트 분사")
+            self.app.on_popup("info", "테스트", f"에어나이프 #{self.num} 테스트")
+
+            # 상태 표시 업데이트 (시뮬레이션)
         status_label = self.findChild(QLabel, f"airknife_{self.num}_status")
         if status_label:
             status_label.setText("🟢 활성화")
@@ -191,7 +231,8 @@ class AirknifeController(QWidget):
         """개별 ON/OFF"""
         state = "활성화" if enabled else "비활성화"
         log(f"에어나이프 #{self.num} {state}")
-        # TODO: 실제 활성화/비활성화
+        self.app.on_popup("info", f"{state}", f"에어나이프 #{self.num} {state}")
+        # TODO: 실제 활성화/비활성화 
 
     def apply_styles(self):
         """스타일시트 적용"""
@@ -341,16 +382,16 @@ class AirKnifeTab(QWidget):
             return _btn
 
         # 전체 활성화
-        all_on_btn = _create_btn("전체 활성화", "global_btn_on", lambda: self.on_all_toggle(True))
-        contents_layout.addWidget(all_on_btn)
+        self.all_on_btn = _create_btn("전체 활성화", "global_btn_on", lambda: self.on_all_toggle(True))
+        contents_layout.addWidget(self.all_on_btn)
 
         # 전체 비활성화
-        all_off_btn = _create_btn("전체 비활성화", "global_btn_off", lambda: self.on_all_toggle(False))
-        contents_layout.addWidget(all_off_btn)
+        self.all_off_btn = _create_btn("전체 비활성화", "global_btn_off", lambda: self.on_all_toggle(False))
+        contents_layout.addWidget(self.all_off_btn)
 
         # 전체 테스트
-        all_test_btn = _create_btn("전체 테스트", "global_btn_test", self.on_all_test)
-        contents_layout.addWidget(all_test_btn)
+        self.all_test_btn = _create_btn("전체 테스트", "global_btn_test", self.on_all_test)
+        contents_layout.addWidget(self.all_test_btn)
 
         # 긴급 정지
         emergency_btn = _create_btn("전체 정지", "emergency_btn", self.on_emergency_stop)
@@ -371,7 +412,16 @@ class AirKnifeTab(QWidget):
     def on_all_toggle(self, enable):
         """전체 활성화/비활성화"""
         state = "활성화" if enable else "비활성화"
+
+        targets_btn = self.all_on_btn if enable else self.all_off_btn
+        if not targets_btn.isEnabled():
+            return
+
         log(f"에어나이프 전체 {state}")
+        self.app.on_popup("info", f"전체 {state}", f"에어나이프가 전체 {state}되었습니다.")
+
+        self.all_on_btn.setEnabled(not enable)
+        self.all_off_btn.setEnabled(enable)
 
         # 모든 토글 버튼 상태 변경
         for i in range(1, 9):
@@ -382,13 +432,17 @@ class AirKnifeTab(QWidget):
 
     def on_all_test(self):
         """전체 테스트"""
-        log("에어나이프 전체 테스트 분사")
-        # TODO: 실제 전체 테스트
+        if not self.all_on_btn.isEnabled():
+            log("에어나이프 전체 테스트 분사")
+            self.app.on_popup("info", "전체 테스트", "에어나이프가 전체 테스트되었습니다.")
+            # TODO: 실제 전체 테스트
 
     def on_emergency_stop(self):
         """긴급 정지"""
-        log("🚨 에어나이프 긴급 정지!")
-        # TODO: 실제 긴급 정지
+        if not self.all_on_btn.isEnabled():
+            log("🚨 에어나이프 긴급 정지!")
+            self.app.on_popup("info", "전체 정지", "에어나이프가 전체 정지되었습니다.")
+            # TODO: 실제 긴급 정지
 
     def apply_styles(self):
         """스타일시트 적용"""
