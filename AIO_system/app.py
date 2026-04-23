@@ -24,9 +24,9 @@ from PySide6.QtGui import QFont, QFontDatabase
 
 from src.ui.main_window import MainWindow
 from src.function.comm_manager import CommManager, LineScanSimulator
-from src.function.sharedmemory_manager import SharedMemoryManager
-from src.function.modbus_manager import ModbusManager
-from src.function.ethercat_manager import EtherCATManager
+# from src.function.sharedmemory_manager import SharedMemoryManager
+# from src.function.modbus_manager import ModbusManager
+# from src.function.ethercat_manager import EtherCATManager
 from src.utils.config_util import (
     CONFIG_PATH, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH, SHM_NAME,
     PRCS_HTH_CHECK_TERM, MAX_PRCS_DEAD_COUNT,
@@ -112,13 +112,13 @@ class UpdateHandler(FileSystemEventHandler):
 @dataclass
 class CommManangers:
     comm_manager: CommManager = None
-    modbus_manager: ModbusManager = None
-    ethercat_manager: EtherCATManager = None
+    # modbus_manager: ModbusManager = None
+    # ethercat_manager: EtherCATManager = None
 
 class App():
     """메인 앱 클래스"""
     is_reload = False
-    _use_linescan_simulator = True # 라인스캔 이미지/오버레이 확인용 시뮬레이터 사용 여부
+    _use_linescan_simulator = False # 라인스캔 이미지/오버레이 확인용 시뮬레이터 사용 여부
     _use_direct_control = False
 
     def __init__(self):
@@ -126,7 +126,7 @@ class App():
         self.config = {}
         self._load_config()
 
-        self.shm_data = SharedMemoryManager(mem_name=SHM_NAME).data
+        # self.shm_data = SharedMemoryManager(mem_name=SHM_NAME).data
         self.prcs_vars = ProcessCheckVars(last_check_time=time.time())
 
         self.auto_mode = False
@@ -175,7 +175,7 @@ class App():
         if self._use_linescan_simulator:
             self.managers.comm_manager = LineScanSimulator(self, width=640)
         else:
-            self.managers.comm_manager = CommManager(self, None, None)
+            self.managers.comm_manager = CommManager(self)
         self.managers.comm_manager.start()
 
         if self._use_direct_control:
@@ -200,13 +200,13 @@ class App():
         """주기적 업데이트"""
         self.ui.update_time()
 
-        if not USE_FEEDER_CAM and self.monitoring_enabled:
-            # 피더 카메라 사용 안하는 경우 일정 시간마다 에어 분사
-            current_time = datetime.now()
-            if (current_time - self._feeder_air_time).total_seconds() > FEEDER_AIR_TERM:
-                # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
-                self.blow_block()
-                self._feeder_air_time = current_time
+        # if not USE_FEEDER_CAM and self.monitoring_enabled:
+        #     # 피더 카메라 사용 안하는 경우 일정 시간마다 에어 분사
+        #     current_time = datetime.now()
+        #     if (current_time - self._feeder_air_time).total_seconds() > FEEDER_AIR_TERM:
+        #         # FEEDER_AIR_TERM 마다 피더 배출부에 에어 분사
+        #         self.blow_block()
+        #         self._feeder_air_time = current_time
 
     def _check_sub_process(self):
         # 정해진 시간마다 프로세스 생존 여부 체크
@@ -820,11 +820,11 @@ class App():
             if self.managers.comm_manager.is_alive():
                 log("comm manager thread did not terminate properly")
         
-        if self.managers.modbus_manager is not None:
-            self.managers.modbus_manager.disconnect()
+        # if self.managers.modbus_manager is not None:
+        #     self.managers.modbus_manager.disconnect()
         
-        if self.managers.ethercat_manager is not None:
-            self.managers.ethercat_manager.disconnect()
+        # if self.managers.ethercat_manager is not None:
+        #     self.managers.ethercat_manager.disconnect()
 
         self.update_timer.stop()
         if hasattr(self, "shm_data"):

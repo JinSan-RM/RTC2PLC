@@ -16,11 +16,12 @@ import shiboken6
 # ============================================================
 # Breeze Runtime
 # ============================================================
-HOST = '169.254.188.53'
+HOST = '169.254.99.104'
 COMMAND_PORT = 2000
 EVENT_PORT = 2500
 DATA_STREAM_PORT = 3000
-WORKFLOW_PATH = "C:/Users/USER/Breeze/Data/Runtime/251111.xml"
+WORKFLOW_PATH = "C:/Users/USER/Breeze/Data/Runtime/260417.xml"
+# 기존 모델 260320_new.xml
 
 # ==================== 라인 스캔 타이밍 제어 설정 ====================
 # 라인 스캔 카메라는 고정된 위치에서 촬영하므로
@@ -71,26 +72,30 @@ FEEDER_AIR_TERM = 15 # 15초마다 피더 배출부에 에어를 쏴서 막힘�
 CLASS_MAPPING = {
     0: "_",
     1: "PP",
-    2: "HDPE",
-    3: "PS",
-    4: "PET",
+    2: "PS",
+    3: "LDPE",
+    4: "HDPE",
     5: "background",
+    6: "HDPE_LABEL",
+    # 5: "PET",
 }
 
 PLASTIC_VALUE_MAPPING_LARGE = {
     "PP": 0x88,
     "HDPE": 0x89,
     "PS": 0x8A,
-    "PET": 0x90,
+    "PET": 0x97
+    # "PET": 0x90,
     # "LDPE": 0x8C,
     # "PET": 0x8E,
     # "_": 0x88,
 }
 PLASTIC_VALUE_MAPPING_SMALL = {
-    "PP": 0x8B,
-    "HDPE": 0x8C,
-    "PS": 0x8E,
-    "PET": 0x8F,
+    "PP": 0x88,
+    "HDPE": 0x89,
+    "PS": 0x8A,
+    "PET": 0x97
+    # "PET": 0x90,
     # "LDPE": 0x8C,
     # "PET": 0x8E,
     # "_": 0x88,
@@ -528,25 +533,25 @@ class DetectBoxInfo:
 
 CAMERA_CONFIGS = {
     0: {  # 카메라 1
-        'camera_ip': '192.168.1.100',
+        'camera_ip': '192.168.1.210',
         'type': 'line',
         'roi':{
-            'x': 500,
-            'y': 0,
-            'width': 500,
-            'height': 1920
+            'x': 0,
+            'y': 350,
+            'width': 1280,
+            'height': 400
         },
-        'boxes': [
-            {
-                'box_id': 1,
-                'x': 50,
-                'y': 300,
-                'width': 350,
-                'height': 400,
-                # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
-                'target_classes': ['PLASTIC'],
-                'airknife_id': 1
-            },
+        # 'boxes': [
+        #     {
+        #         'box_id': 1,
+        #         'x': 50,
+        #         'y': 300,
+        #         'width': 350,
+        #         'height': 400,
+        #         # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
+        #         'target_classes': ['PLASTIC'],
+        #         'airknife_id': 1
+        #     },
             # {
             #     'box_id': 2,
             #     'x': 300,
@@ -556,61 +561,61 @@ CAMERA_CONFIGS = {
             #     'target_classes': ['PP', 'PS'],
             #     'airknife_id': 2
             # }
-        ],
-        'entrance_boxes': [
-            {
-                'box_id': 1,
-                'x': 50,
-                'y': 200,
-                'width': 350,
-                'height': 400,
-                # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
-                'target_classes': ['PLASTIC'],
-                'airknife_id': 1
-            },
-        ],
+        # ],
+        # 'entrance_boxes': [
+        #     {
+        #         'box_id': 1,
+        #         'x': 50,
+        #         'y': 200,
+        #         'width': 350,
+        #         'height': 400,
+        #         # 'target_classes': ['PP', 'PET', 'PE', 'BOTTLE_PET'],
+        #         'target_classes': ['PLASTIC'],
+        #         'airknife_id': 1
+        #     },
+        # ],
         'line': [
             {
                 'line_id': 1,
-                'x': 600,
+                'x': 700,
                 'y': 10,
                 'width': 5,
                 'height': 1000,
             }
         ]
     },
-    1: {  # 카메라 2
-        'camera_ip': '192.168.1.101',
-        'type': 'box',
-        'roi':{
-            'x': 500,
-            'y': 0,
-            'width': 500,
-            'height': 1080
-        },
-        'boxes': [
-            {
-                'box_id': 2,
-                'x': 50,
-                'y': 750,
-                'width': 400,
-                'height': 330,
-                # 'target_classes': ['PE'],
-                'target_classes': ['PP', 'PS', 'PET', 'PE', 'BOTTLE_PET'],
-                'airknife_id': 3
-            },
-            {
-                'box_id': 3,
-                'x': 30,
-                'y': 70,
-                'width': 400,
-                'height': 430,
-                'target_classes': ['PP', 'PS', 'PET', 'PE', 'BOTTLE_PET'],
-                # 'target_classes': ['PP', 'PE', 'BOTTLE_PET'],
-                'airknife_id': 2
-            }
-        ]
-    }
+    # 1: {  # 카메라 2
+    #     'camera_ip': '192.168.1.101',
+    #     'type': 'box',
+    #     'roi':{
+    #         'x': 0,
+    #         'y': 0,
+    #         'width': 1920,
+    #         'height': 1080
+    #     },
+    #     'boxes': [
+    #         {
+    #             'box_id': 2,
+    #             'x': 50,
+    #             'y': 750,
+    #             'width': 400,
+    #             'height': 330,
+    #             # 'target_classes': ['PE'],
+    #             'target_classes': ['PP', 'PS', 'PET', 'PE', 'BOTTLE_PET'],
+    #             'airknife_id': 3
+    #         },
+    #         {
+    #             'box_id': 3,
+    #             'x': 30,
+    #             'y': 70,
+    #             'width': 400,
+    #             'height': 430,
+    #             'target_classes': ['PP', 'PS', 'PET', 'PE', 'BOTTLE_PET'],
+    #             # 'target_classes': ['PP', 'PE', 'BOTTLE_PET'],
+    #             'airknife_id': 2
+    #         }
+    #     ]
+    # }
 }
 
 # ============================================================

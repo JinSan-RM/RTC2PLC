@@ -1,4 +1,4 @@
-"""
+﻿"""
 모니터링 페이지 - 카메라 스트림
 """
 import traceback
@@ -523,7 +523,7 @@ class MonitoringPage(QWidget):
             img_size=640,
             max_det=50
         )
-        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\260323_best.pt"
         # model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
         if not self.ai_manager.initialize(model_path):
             log("AI 매니저 초기화 실패")

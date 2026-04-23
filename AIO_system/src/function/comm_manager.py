@@ -405,13 +405,22 @@ class CommManager(threading.Thread):
 
                     if not center:
                         log("[WARNING] No center position in shape data")
+                    
                         continue
-
+                    
                     # ==================== 라인 스캔 처리 ====================
                     # 라인 스캔이므로 X 좌표는 무의미, Y 좌표로 객체 구분
+                    border = shape.get("Border", [])
+                    x0, x1, y0, y1 = get_border_coords(border)
+                    print(f"객체 사이즈 정보: width={abs(x0-x1)}, height={abs(y0-y1)}")
+                    if abs(x1 - x0) < 15:
+                        print("오탐지 객체")
+                        continue
+
                     y_position = center[1] if len(center) > 1 else center[0]
                     delay = calc_delay(y_position)
-                    if y_position >= 4800:
+                    
+                    if y_position >= 1000:
                         continue
 
                     # 일단 감지했으므로 감지 신호 보냄
@@ -453,11 +462,10 @@ class CommManager(threading.Thread):
                             'status': 'scheduled'
                         }
 
-                    border = shape.get("Border", [])
                     if not border:
                         log("[WARNING] No border coordinates in shape data")
                         continue
-                    x0, x1, y0, y1 = get_border_coords(border)
+
                     start_frame = inner_message.get("StartLine", 0)
                     end_frame = inner_message.get("EndLine", 0)
                     info = {
@@ -486,8 +494,8 @@ class CommManager(threading.Thread):
                         # 소형의 경우 큐에 저장
                         with self.trackings.small_lock:
                             self.trackings.small_queue.append(obj_id)
-                else:
-                    log(f"event:{event}")
+                # else:
+                #     log(f"event:{event}")
             except json.JSONDecodeError:
                 log("[ERROR] Invalid JSON received from camera")
             except Exception as e:
