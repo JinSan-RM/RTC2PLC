@@ -37,16 +37,48 @@ class MaterialEventBuffer:
     def __init__(self):
         self.buffer = deque()
 
-    def add(self, material: MaterialInfo):
+    # def add(self, material: MaterialInfo):
+    def add(self, material: MaterialInfo, x: int):
         """재질 추가"""
-        self.buffer.append(material)
+        # self.buffer.append(material)
+        self.buffer.append({
+            "material": material,
+            "x": x,
+            "timestamp": material.timestamp
+        })
 
-    def pop(self) -> MaterialInfo | None:
-        """선 통과 시 하나 꺼냄"""
-        if self.buffer:
-            return self.buffer.popleft()
-        return None
+    # def pop(self) -> MaterialInfo | None:
+    #     """선 통과 시 하나 꺼냄"""
+    #     if self.buffer:
+    #         return self.buffer.popleft()
+    #     return None
+    def pop_closest(self, line_x: int, max_age_sec=0.2, distance_threshold=80):
+        now = time.time()
 
+        # 1. 시간 필터
+        candidates = [
+            b for b in self.buffer
+            if (now - b["timestamp"]) <= max_age_sec
+        ]
+
+        if not candidates:
+            return None
+
+        # 2. 거리 필터
+        candidates = [
+            b for b in candidates
+            if abs(b["x"] - line_x) < distance_threshold
+        ]
+
+        if not candidates:
+            return None
+
+        # 3. 가장 가까운 것 선택
+        closest = min(candidates, key=lambda b: abs(b["x"] - line_x))
+
+        self.buffer.remove(closest)
+
+        return closest["material"]
     def remove_old(self, max_age_sec=2.0):
         """오래된 데이터 제거"""
         now = time.time()
@@ -98,21 +130,24 @@ class LineCrossZone:
         """감지 업데이트"""
         obj_id = obj.id
         current_x = obj.center[0]
+
         prev_x = self.prev_positions.get(obj_id)
 
-        # 이전 위치 저장
-        self.prev_positions[obj_id] = current_x
-
-        # 처음 들어온 객체는 비교 불가
+        # 첫 프레임은 스킵
         if prev_x is None:
+            self.prev_positions[obj_id] = current_x
             return False
 
+        # crossing 판단
         crossed = self.is_crossed(current_x, prev_x)
 
+        # 현재 위치 업데이트
+        self.prev_positions[obj_id] = current_x
+        log(f"obj ID: {obj_id}, obj: {obj}")
+        # crossing 발생 시 1회만 트리거
         if crossed and obj_id not in self.crossed_objects:
-            self.crossed_objects.add(obj_id)
 
-            log(f"[LINE] object {obj_id} crossed line")
+            self.crossed_objects.add(obj_id)
 
             if self.on_cross_callback:
                 self.on_cross_callback()
@@ -183,19 +218,20 @@ class LineCrossManager:
 
 class LineTrigger:
     """선 통과 감지 시 버퍼에서 재질 정보 꺼내서 PLC 신호 전송"""
-    def __init__(self, buffer: MaterialEventBuffer, plc_callback):
+    # def __init__(self, buffer: MaterialEventBuffer, plc_callback):
+    #     self.buffer = buffer
+    #     self.plc_callback = plc_callback
+    def __init__(self, buffer, plc_callback, line_x):
         self.buffer = buffer
         self.plc_callback = plc_callback
+        self.line_x = line_x
 
     def on_cross_line(self, obj):
-        """ 선 통과 시 신호 처리 """
 
-        self.buffer.remove_old()
-
-        material = self.buffer.pop()
+        material = self.buffer.pop_closest(self.line_x)
 
         if not material:
-            log("매칭 재질 없음")
+            log(f"매칭 실패 (obj_id={obj.id})")
             return
 
         plc_value = self.buffer.get_plc_value(material)
@@ -204,7 +240,28 @@ class LineTrigger:
             log("PLC 매핑 실패")
             return
 
-        if self.plc_callback:   # PLC 신호 전송
+        if self.plc_callback:
             self.plc_callback(plc_value)
 
         log(f"AIR: {material.classification} (obj_id={obj.id})")
+    # def on_cross_line(self, obj):
+    #     """ 선 통과 시 신호 처리 """
+
+    #     self.buffer.remove_old()
+
+    #     material = self.buffer.pop()
+
+    #     if not material:
+    #         log("매칭 재질 없음")
+    #         return
+
+    #     plc_value = self.buffer.get_plc_value(material)
+
+    #     if plc_value is None:
+    #         log("PLC 매핑 실패")
+    #         return
+
+    #     if self.plc_callback:   # PLC 신호 전송
+    #         self.plc_callback(plc_value)
+
+    #     log(f"AIR: {material.classification} (obj_id={obj.id})")
