@@ -1,4 +1,4 @@
-"""통신 관리자"""
+﻿"""통신 관리자"""
 import socket
 import json
 import uuid
