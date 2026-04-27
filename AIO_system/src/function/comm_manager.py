@@ -23,6 +23,10 @@ from src.utils.config_util import (
 from src.utils.logger import log
 from .XGT_run import XGTTester
 
+SMALL_EVENT_TTL = 10.0
+SMALL_EVENT_MATCH_WINDOW = 0.35
+SMALL_EVENT_FALLBACK_WINDOW = 0.8
+
 
 # region data classes
 @dataclass
@@ -45,7 +49,7 @@ class Threads:
 @dataclass
 class QueueAndLock:
     """큐와 락 모음"""
-    # USE_MIN_INTERVAL = True일 때 사용할 부분
+    # USE_MIN_INTERVAL = True일 때 사용하는 부분
     timestamp_queue: deque = None
     timestamp_lock: threading.Lock = field(default_factory=threading.Lock)
     # 분석 완료 대기 큐
@@ -55,11 +59,11 @@ class QueueAndLock:
 
 @dataclass
 class Trackings:
-    """제품 트래킹 관리"""
+    """Tracked object state."""
     tracked_objects: dict = field(default_factory=dict)
     obj_counter: int = 0
     tracking_lock: threading.Lock = field(default_factory=threading.Lock)
-    small_queue: deque = field(default_factory=deque)
+    small_events: deque = field(default_factory=deque)
     small_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -68,10 +72,15 @@ class ObjectInfo:
     """제품 정보"""
     obj_id: int = 0             # ID
     classification: str = ""    # 재질 분류
-    plc_value: int = 0          # 재질 - 사이즈 에 따른 에어 분사 관련 PLC 주소
-    size: str = ""              # 사이즈(large/small)
-    size_addr: int = 0          # 사이즈에 따른 배출 알림 PLC 주소
+    plc_value: int = 0          # 재질/사이즈에 따른 PLC 주소
+    size: str = ""              # 사이즈 (large/small)
+    size_addr: int = 0          # 사이즈에 따른 배출 PLC 주소
     y_position: int = 0         # 제품 중심 y좌표
+@dataclass
+class SmallMaterialEvent:
+    object_info: ObjectInfo
+    detect_time: float
+    expected_cross_time: float
 # endregion data classes
 
 
@@ -90,7 +99,7 @@ class CommManager(threading.Thread):
         self.queue_n_lock.analysis_queue = deque(maxlen=100)
         # =================================================================
         # 라인 스캔 카메라는 고정된 위치에서 촬영하므로
-        # 스캔 라인 → 에어솔까지의 거리만 중요!
+        # 스캔 라인에서 에어솔까지의 거리만 중요함
         # 객체 추적 (Y 좌표 기반)
 
         self.trackings = Trackings()
@@ -105,7 +114,7 @@ class CommManager(threading.Thread):
         command['Id'] = command_id
         message = json.dumps(command, separators=(',', ':')) + '\r\n'
 
-        log(f"📝 Raw message: {message[:200]}")
+        log(f"송신 Raw message: {message[:200]}")
 
         try:
             command_socket.sendall(message.encode('utf-8'))
@@ -149,7 +158,7 @@ class CommManager(threading.Thread):
         return message
 
     def _start_command_client(self) -> socket.socket:
-        """요청 관리자 시작"""
+        """요청 클라이언트 시작"""
         log(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
         try:
             soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -167,17 +176,17 @@ class CommManager(threading.Thread):
         log("="*70)
         log("라인 스캔 카메라 타이밍 제어")
         log(f"  - 컨베이어 속도: {CONVEYOR_SPEED:.2f} cm/s")
-        log(f"  - 스캔라인 → 에어솔 거리: {SCAN_LINE_TO_AIRSOL:.2f} cm")
+        log(f"  - 스캔 라인 -> 에어솔 거리: {SCAN_LINE_TO_AIRSOL:.2f} cm")
         log("")
         log("  작동 방식:")
         log("  1. 객체가 스캔 라인을 지나가면 즉시 분석")
-        log("  2. 딜레이(초) 후 PLC 신호 전송")
-        log("  3. 모든 객체가 동일한 타이밍에 신호 전송됨")
+        log("  2. 지연 시간 후 PLC 신호 전송")
+        log("  3. All objects use the same trigger timing")
         log("="*70)
         # =================================================
 
         try:
-            # 소켓을 인스턴스 변수에 저장
+            # 소켓 인스턴스를 멤버 변수에 저장
             self.comm_sockets.command_socket = self._start_command_client()
             with self.comm_sockets.command_socket as command_socket:
                 log("Sending InitializeCamera command")
@@ -241,9 +250,9 @@ class CommManager(threading.Thread):
 # endregion command client
 
 # region event listener
-    # ==================== 라인 스캔용 타이밍 제어 ====================
+    # ==================== 라인 스캔 타이밍 제어 ====================
     def _process_interval(self):
-        # 물체 간 최소 간격이 지난 데이터를 지워줌
+        # 물체 간 최소 간격만 지난 데이터만 유지
         current_time = datetime.now()
         _interval = timedelta(seconds=MIN_INTERVAL)
         with self.queue_n_lock.timestamp_lock:
@@ -251,7 +260,7 @@ class CommManager(threading.Thread):
                 if current_time - self.queue_n_lock.timestamp_queue[0][1] > _interval:
                     self.queue_n_lock.timestamp_queue.popleft()
                 else:
-                    # deque 내부 원소들은 시간 순서로 쌓이므로, 더이상 지울 게 없으면 break
+                    # deque는 시간 순서로 쌓이므로 더 지울 항목이 없으면 break
                     break
 
     def _check_interval(self, address):
@@ -260,7 +269,7 @@ class CommManager(threading.Thread):
         with self.queue_n_lock.timestamp_lock:
             for addr, timestamp in self.queue_n_lock.timestamp_queue:
                 if addr == address and current_time - timestamp <= _interval:
-                    # 0.5초 이내로 들어온 동일 재질-사이즈 물체는 무시
+                    # 0.5초 이내 들어온 동일 재질-사이즈 물체는 무시
                     log(f"주소 P{address:03X}로 {MIN_INTERVAL:.2f}초 간격 내 물체 진입 감지")
                     return False
 
@@ -274,6 +283,69 @@ class CommManager(threading.Thread):
                 del self.trackings.tracked_objects[obj_id]
                 log(f"객체 제거: ID={obj_id}")
 
+    def _cleanup_small_events_locked(self, now: float):
+        while self.trackings.small_events:
+            event = self.trackings.small_events[0]
+            age = now - event.detect_time
+            if age > SMALL_EVENT_TTL:
+                self.trackings.small_events.popleft()
+            else:
+                break
+
+    def _remove_small_event(self, obj_id: int):
+        with self.trackings.small_lock:
+            if not self.trackings.small_events:
+                return
+            self.trackings.small_events = deque(
+                event
+                for event in self.trackings.small_events
+                if event.object_info.obj_id != obj_id
+            )
+
+    def _queue_small_event(self, obj_info: ObjectInfo, detect_time: float, delay: float):
+        expected_cross_time = detect_time + max(delay, 0.0)
+        event = SmallMaterialEvent(
+            object_info=obj_info,
+            detect_time=detect_time,
+            expected_cross_time=expected_cross_time,
+        )
+        with self.trackings.small_lock:
+            self._cleanup_small_events_locked(detect_time)
+            self.trackings.small_events.append(event)
+            log(
+                f"[SMALL인식] ID={obj_info.obj_id}, 재질={obj_info.classification}, "
+                f"size={obj_info.size}, 주소=P{obj_info.plc_value:03X}/P{obj_info.size_addr:03X}"
+            )
+
+    def _pop_best_small_event(self, cross_time: float):
+        with self.trackings.small_lock:
+            self._cleanup_small_events_locked(cross_time)
+            if not self.trackings.small_events:
+                return None
+
+            events = list(self.trackings.small_events)
+            best_event = min(
+                events,
+                key=lambda event: abs(event.expected_cross_time - cross_time)
+            )
+            time_diff = abs(best_event.expected_cross_time - cross_time)
+
+            if time_diff > SMALL_EVENT_FALLBACK_WINDOW:
+                log(
+                    f"[SMALL] no event in fallback window: "
+                    f"buffer={len(self.trackings.small_events)}, diff={time_diff:.3f}s"
+                )
+                return None
+
+            self.trackings.small_events.remove(best_event)
+
+        level = "INFO" if time_diff <= SMALL_EVENT_MATCH_WINDOW else "WARNING"
+        log(
+            f"[{level}] [SMALL] matched event: obj_id={best_event.object_info.obj_id}, "
+            f"class={best_event.object_info.classification}, diff={time_diff:.3f}s"
+        )
+        return best_event
+
     def _send_plc_pulse(self, _info: ObjectInfo):
         """10ms 펄스로 신호 전송 (PLC에서 상승엣지 감지)"""
         # 재질 신호 직후 사이즈 신호
@@ -286,7 +358,7 @@ class CommManager(threading.Thread):
             onoff=1
         )
         if success1 and success2:
-            # 재질 on-off 사이에 사이즈 on-off 가 들어갈 수 있도록 처리
+            # 재질 on-off 사이에 사이즈 on-off가 들어가도록 처리
             self.xgt_tester.schedule_bit_off(
                 address=_info.size_addr,
                 delay=MIN_PULSE_WIDTH
@@ -295,12 +367,12 @@ class CommManager(threading.Thread):
                 address=_info.plc_value,
                 delay=MIN_PULSE_WIDTH
             )
-            log(f"✓ [PLC펄스] ID={_info.obj_id}, Y={_info.y_position}, 재질={_info.classification}, size={_info.size}, 주소=P{_info.plc_value:03X}/P{_info.size_addr:03X}")
+            log(f"[PLC펄스] ID={_info.obj_id}, Y={_info.y_position}, 재질={_info.classification}, size={_info.size}, 주소=P{_info.plc_value:03X}/P{_info.size_addr:03X}")
         else:
-            log(f"[WARNING] ✗ [PLC펄스] ID={_info.obj_id} - 전송 실패")
+            log(f"[WARNING] [PLC펄스] ID={_info.obj_id} - 전송 실패")
 
     def _send_signal(self, _info: ObjectInfo):
-        """PLC 신호 전송 후 오브젝트 삭제 예약"""
+        """PLC 신호 전송 전 객체 존재 여부 확인"""
         try:
             with self.trackings.tracking_lock:
                 if _info.obj_id in self.trackings.tracked_objects:
@@ -311,10 +383,10 @@ class CommManager(threading.Thread):
                         obj_data['status'] = 'completed'
                         threading.Timer(1.0, lambda: self._cleanup_object(_info.obj_id)).start()
                     else:
-                        log(f"[WARNING] ⚠ [PLC펄스] ID={_info.obj_id} - 분석 미완료")
+                        log(f"[WARNING] PLC pulse skipped: ID={_info.obj_id} analysis incomplete")
                         obj_data['status'] = 'timeout'
                 else:
-                    log(f"[ERROR] ✗ [PLC펄스] ID={_info.obj_id} - 객체 없음")
+                    log(f"[ERROR] [PLC펄스] ID={_info.obj_id} - 객체 없음")
         except Exception as e:
             log(f"[ERROR] PLC 신호 전송 오류: {str(e)}")
 
@@ -325,7 +397,7 @@ class CommManager(threading.Thread):
         timer.start()
 
         # log(
-        #     "→ [신호예약] ID=%d, Y=%d, 재질=%s, %.2f초 후 전송",
+        #     "[신호예약] ID=%d, Y=%d, 재질=%s, %.2f초 후 전송",
         #     obj_info.obj_id,
         #     obj_info.y_position,
         #     obj_info.classification,
@@ -334,7 +406,7 @@ class CommManager(threading.Thread):
     # ================================================================
 
     def _listen_for_events(self):
-        """제품 감지 이벤트"""
+        """Listen for classification events from the camera."""
         log(f"Connecting to camera event port at {HOST}:{EVENT_PORT}")
         try:
             self.comm_sockets.event_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -349,13 +421,13 @@ class CommManager(threading.Thread):
         message_buffer = ""
 
         while not self.threads.stop_event.is_set():
-            # 0.5초 이내 들어오는 데이터들을 하나로 객체 묶음
+            # 0.5초 이내 들어오는 데이터들을 하나의 객체로 묶음
             # USE_MIN_INTERVAL = True    # default
-            # 동작 유무 판단 시 320줄, 380줄 주석 처리 필요
+            # 동작 여부 판단 로직은 현장 조건에 맞게 조정 필요
             if USE_MIN_INTERVAL:
                 self._process_interval()
 
-            # 활성화 된 비트들 off 처리 - 각 프레임마다 프로세스 진행해야 함
+            # 생성된 비트 off 처리 - 매 루프마다 실행되어야 함
             self.xgt_tester.process_bit_off()
 
             self.comm_sockets.event_socket.settimeout(1)
@@ -409,12 +481,11 @@ class CommManager(threading.Thread):
                         continue
                     
                     # ==================== 라인 스캔 처리 ====================
-                    # 라인 스캔이므로 X 좌표는 무의미, Y 좌표로 객체 구분
+                    # 라인 스캔이므로 X 좌표보다 Y 좌표로 객체를 구분
                     border = shape.get("Border", [])
                     x0, x1, y0, y1 = get_border_coords(border)
-                    print(f"객체 사이즈 정보: width={abs(x0-x1)}, height={abs(y0-y1)}")
                     if abs(x1 - x0) < 15:
-                        print("오탐지 객체")
+                        log("[INFO] ignoring thin object")
                         continue
 
                     y_position = center[1] if len(center) > 1 else center[0]
@@ -423,12 +494,12 @@ class CommManager(threading.Thread):
                     if y_position >= 1000:
                         continue
 
-                    # 일단 감지했으므로 감지 신호 보냄
+                    # 일단 감지됐으므로 감지 신호 처리
                     size = classify_object_size(center[0])
                     plc_value = None
                     if size is None:
-                        log("⊗ [가이드라인] 무시")
-                        continue  # ← 다음 객체로 스킵!
+                        log("[가이드라인] 무시")
+                        continue  # 다음 객체로 스킵
 
                     if size == "large":
                         plc_value = PLASTIC_VALUE_MAPPING_LARGE.get(classification)
@@ -478,7 +549,7 @@ class CommManager(threading.Thread):
                     }
                     self.app.on_obj_detected(info, classification)
                     # log(
-                    #     "★ [감지완료] Y=%d, 재질=%s, border=%s, start=%d, end=%d",
+                    #     "[감지완료] Y=%d, 재질=%s, border=%s, start=%d, end=%d",
                     #     y_position,
                     #     classification,
                     #     str(border),
@@ -488,12 +559,11 @@ class CommManager(threading.Thread):
 
                     # 고정 지연 시간 후 PLC 신호 예약
                     if size == "large":
-                        # 대형의 경우 바로 펄스 신호 예약 (delay 후 자동 off)
+                        # 대형의 경우 즉시 펄스 신호 예약
                         self._schedule_plc_signal_delay(obj_info, delay)    
                     elif size == "small":
                         # 소형의 경우 큐에 저장
-                        with self.trackings.small_lock:
-                            self.trackings.small_queue.append(obj_id)
+                        self._queue_small_event(obj_info, detection_time, delay)
                 # else:
                 #     log(f"event:{event}")
             except json.JSONDecodeError:
@@ -502,25 +572,31 @@ class CommManager(threading.Thread):
                 log(f"[ERROR] Error processing event: {str(e)}")
                 traceback.print_exc()
         return message_buffer
+
+    def on_small_material_cross_matched(self):
+        """Handle small-material trigger using FIFO queue consumption."""
+        now = time.time()
+        with self.trackings.small_lock:
+            self._cleanup_small_events_locked(now)
+            if not self.trackings.small_events:
+                return
+
+            matched_event = self.trackings.small_events.popleft()
+
+        if not matched_event:
+            return
+
+        obj_info = matched_event.object_info
+        self._send_signal(obj_info)
     
     def on_small_material_cross(self):
-        """작은 재질 선 통과 감지 및 처리"""
-        with self.trackings.small_lock:
-            obj_id = self.trackings.small_queue.popleft() if self.trackings.small_queue else None
-        if obj_id:
-            obj_info = self.trackings.tracked_objects.get(obj_id, {}).get('object_info')
-            if obj_info:
-                self._send_signal(obj_info)
-                log(f"선 통과 감지 - 큐에서 obj_id 꺼냄: {obj_id}")
-            else:
-                log("[WARNING] 선 통과 감지 - 객체 정보 없음")
-        else:
-            log("[WARNING] 선 통과 감지 - 큐에 obj_id 없음")
+        """Backward-compatible entrypoint for small-material line crossings."""
+        self.on_small_material_cross_matched()
 # endregion event listener
 
 # region data stream listener
     def _listen_for_data_stream(self):
-        """카메라 라인 스캔 데이터 스트림"""
+        """Listen for line-scan data stream frames."""
         log(f"Connecting to data stream at {HOST}:{DATA_STREAM_PORT}")
         try:
             self.comm_sockets.stream_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -534,7 +610,7 @@ class CommManager(threading.Thread):
 
         expected_header_size = 25
         last_processed_time = 0
-        # UI 스트리밍은 약 30fps로 제한
+        # UI 스트리밍은 30fps로 제한
         throttle_interval = 1.0 / 30.0
 
         while not self.threads.stop_event.is_set():
@@ -571,7 +647,7 @@ class CommManager(threading.Thread):
                         break
                     metadata += chunk
 
-                # ✓ 수정: 완전한 데이터를 받은 후에 한 번만 호출
+                # 중요: data body 전체를 먼저 수신
                 data_body = b""
                 while len(data_body) < data_body_size:
                     chunk = self.comm_sockets.stream_socket.recv(data_body_size - len(data_body))
@@ -585,7 +661,7 @@ class CommManager(threading.Thread):
                 #         metadata : {metadata} \n
                 #         data_body : {data_body}""")
                 # print(f"stream_type: {stream_type}\ndata_body; {data_body}")
-                # 완전한 데이터를 받은 후에 한 번만 호출
+                # data body 전체를 모두 받은 경우에만 처리
                 if len(data_body) != data_body_size:
                     continue
 
@@ -612,9 +688,9 @@ class CommManager(threading.Thread):
 
 # region run, start, stop, quit
     def blow_block(self):
-        """피더 배출구 막힘 해소"""
-        # 대형 4번: 0x80, 0x8B
-        # 소형 4번: 0x81, 0x8F
+        """블로우 배출구 막힘 해소"""
+        # 현재 사용 주소: size=0x80, sol=0x8B
+        # 대체 주소 예시: size=0x81, sol=0x8F
         size_addr = 0x80
         sol_addr = 0x8B
         success1 = self.xgt_tester.write_bit_packet(
@@ -626,7 +702,7 @@ class CommManager(threading.Thread):
             onoff=1
         )
         if success1 and success2:
-            # 재질 on-off 사이에 사이즈 on-off 가 들어갈 수 있도록 처리
+            # 재질 on-off 사이에 사이즈 on-off가 들어가도록 처리
             self.xgt_tester.schedule_bit_off(
                 address=size_addr,
                 delay=MIN_PULSE_WIDTH
@@ -635,9 +711,9 @@ class CommManager(threading.Thread):
                 address=sol_addr,
                 delay=MIN_PULSE_WIDTH
             )
-            log("피더 배출구 air 동작 성공")
+            log("블로우 배출구 air 동작 성공")
         else:
-            log("피더 배출구 air 동작 실패")
+            log("블로우 배출구 air 동작 실패")
 
     def _cleanup_old_objects(self):
         """오래된 객체 자동 정리"""
@@ -649,18 +725,18 @@ class CommManager(threading.Thread):
                 age = current_time - obj_data['detect_time']
                 if age > 10:  # 10초 이상
                     to_remove.append(obj_id)
-                    log(f"타임아웃: ID={obj_id} (상태={obj_data['status']})")
+                    log(f"[타임아웃] ID={obj_id} (상태={obj_data['status']})")
 
             for obj_id in to_remove:
                 del self.trackings.tracked_objects[obj_id]
 
     def run(self):
-        """스레드의 메인 함수 - start() 호출 시 실행됨"""
+        """Main loop started by start()."""
         log("Starting comm manager")
 
         try:
             while not self.threads.main_stop_event.is_set():
-                # PLC와 통신 유지
+                # PLC 상태 통신 점검
                 self.xgt_tester.status_check()
 
                 # 오래된 객체 정리
@@ -717,7 +793,7 @@ class CommManager(threading.Thread):
         except Exception as e:
             log(f"Error closing stream socket: {str(e)}")
 
-        # 3. 선별 종료 및 카메라 연결 끊기
+        # 3. 예측 종료 및 카메라 연결 끊기
         try:
             if self.comm_sockets.command_socket:
                 with self.comm_sockets.command_socket as command_socket:
@@ -773,17 +849,17 @@ class LineScanSimulator(threading.Thread):
 
     def __init__(self, app, width=640):
         super().__init__(daemon=True)
-        self.app = app # 메인 앱 클래스
+        self.app = app # 메인 앱 참조
 
-        self.width = width # 초분광 카메라용 UI 영상 캔버스의 폭
-        self.frame_number = 0 # 현재 생성한 프레임(라인)의 수
+        self.width = width # 초분광 카메라용 UI 캔버스 너비
+        self.frame_number = 0 # 현재 생성된 프레임(라인) 번호
         self.canvas_height = 2000 # 캔버스 높이
         self.canvas = np.zeros(
             (self.canvas_height, self.width, 3),
             dtype=np.uint8
         ) # 가상 오브젝트를 생성할 캔버스
-        self.objects_metadata = [] # 오브젝트 좌표 정보를 담을 리스트
-        self.current_y = 0 # 실제 초분광 카메라 이벤트 발생 시점을 모방하기 위하여 오브젝트 Y좌표 저장
+        self.objects_metadata = [] # 오브젝트 좌표 정보를 담아둘 리스트
+        self.current_y = 0 # 초분광 카메라 이벤트 시점을 흉내내기 위한 Y 좌표
         self._generate_new_objects()
 
         self._thread = None
@@ -791,8 +867,8 @@ class LineScanSimulator(threading.Thread):
         self.main_stop_event = threading.Event()
 
     def _generate_new_objects(self):
-        """가상의 오브젝트를 생성"""
-        self.canvas.fill(15) # 일단 어두운 색으로 채워서
+        """가상의 오브젝트 생성"""
+        self.canvas.fill(15) # 일단 어두운 색으로 채워둠
         self.objects_metadata = []
 
         scan_ratio = 1
@@ -820,7 +896,7 @@ class LineScanSimulator(threading.Thread):
 
             cv2.fillPoly(self.canvas, [pts], color)
 
-            # 오브젝트의 실제 경계값(Bounding Box) 저장
+            # 오브젝트의 실제 경계값(Bounding Box) 계산
             self.objects_metadata.append({
                 "classification": classification,
                 "x_min": int(np.min(pts[:, 0])),
@@ -833,22 +909,22 @@ class LineScanSimulator(threading.Thread):
             })
 
     def _get_next_data(self):
-        """이미지 라인 데이터와 해당 라인에서 완성된 이벤트 데이터를 반환"""
+        """다음 라인 데이터와 완료된 이벤트 데이터를 반환"""
         y_idx = self.current_y
         line_data = self.canvas[y_idx, :, :].tobytes()
 
         current_frame = self.frame_number
 
-        # 현재 라인(y_idx)이 물체의 하단 끝(y_max)에 도달했을 때 이벤트 발생
-        # 실제 카메라 시스템에서 '식별 완료' 시점을 흉내냄
+        # 현재 라인(y_idx)이 물체의 하단(y_max)에 도달하면 이벤트 발생
+        # 실제 카메라 처리 흐름의 종료 시점을 흉내냄
         event_data = None
         classification = None
         for obj in self.objects_metadata:
-            # 1. 물체의 시작 지점을 지날 때 시작 프레임 기록
+            # 1. 물체의 시작 지점을 지나면 시작 프레임 기록
             if obj["start_frame"] is None and y_idx >= obj["y_min_rel"]:
                 obj["start_frame"] = current_frame
 
-            # 2. 물체의 끝 지점을 지날 때 종료 프레임 기록 및 이벤트 생성
+            # 2. 물체의 끝 지점을 지나면 종료 프레임 기록 및 이벤트 생성
             if not obj["sent"] and y_idx >= obj["y_max_rel"]:
                 obj["end_frame"] = current_frame
 
@@ -879,7 +955,7 @@ class LineScanSimulator(threading.Thread):
         return info, event_data, classification
 
     def _pseudo_linescan_loop(self):
-        """소켓 없이 내부 시뮬레이터에서 데이터를 발생시키는 루프"""
+        """소켓 없이 데이터 스트림을 흉내내는 루프"""
         log("Starting pseudo data stream simulator")
 
         self.app.on_legend_info(self.legend_list)
@@ -896,20 +972,20 @@ class LineScanSimulator(threading.Thread):
                 self.app.on_pixel_line_data(info)
                 last_processed_time = current_time
 
-            # 2. 이벤트 데이터 전송 (추가된 로직)
+            # 2. 이벤트 데이터 전송 (추가 로직)
             if event_info:
-                # 실제 앱의 이벤트 소켓 처리 핸들러를 호출
+                # 실제 이벤트 처리 핸들러만 호출
                 self.app.on_obj_detected(event_info, classification)
 
             time.sleep(0.01)
 
     def blow_block(self):
-        """피더 배출구 막힘 해소"""
-        log("피더 배출구 air 동작")
+        """블로우 배출구 막힘 해소"""
+        log("블로우 배출구 air 동작")
 
     def on_small_material_cross(self):
-        """작은 재질 선 통과 감지 및 처리"""
-        log("선 통과 감지")
+        """소형 재질 선통과 감지 및 처리"""
+        log("선통과 감지")
 
     def run(self):
         while not self.main_stop_event.is_set():
@@ -934,4 +1010,12 @@ class LineScanSimulator(threading.Thread):
         """종료"""
         self.stop_hypercam()
         self.main_stop_event.set()
+
+    def on_small_material_cross_matched(self):
+        """Compatibility shim for the simulator path."""
+        self.on_small_material_cross()
+
 # endregion LineScanSimulator
+
+
+

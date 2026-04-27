@@ -118,8 +118,8 @@ class AIPlasticDetectionSystem:
     def __init__(
         self,
         model_path: str = None,
-        confidence_threshold: float = 0.65,
-        img_size: int = 640,
+        confidence_threshold: float = 0.4,
+        img_size: int = 480,
         airknife_callback=None,
         app=None,
         camera_index: int = 0
@@ -376,6 +376,7 @@ class AIPlasticDetectionSystem:
 
                 else:
                     detected_objects = last_detected_objects
+                log("detected_objects", detected_objects)
 
                 # 박스안에 객체가 감지되어 객체의 중앙점이 박스 안에 들어오면, blow 동작 시키는것
                 if len(detected_objects) > 0:
@@ -439,8 +440,8 @@ if __name__ == "__main__":
     try:
         detector = AIPlasticDetectionSystem(
             model_path=model_path,
-            confidence_threshold=0.65,
-            img_size=640  # 더 빠르게: 640
+            confidence_threshold=0.5,
+            img_size=320  # 더 빠르게: 640
         )
         detector.run()
     except Exception as e:

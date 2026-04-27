@@ -37,8 +37,8 @@ class BatchAIManager:
     def __init__(
         self,
         num_cameras: int = 2,
-        confidence_threshold: float = 0.65,
-        img_size: int = 640,
+        confidence_threshold: float = 0.4,
+        img_size: int = 480,
         max_det: int = 50,
         device_preference: str = "cpu",
     ):
@@ -273,7 +273,7 @@ class BatchAIManager:
                         detected_objects = []
                         if results is not None and len(results) > 0:
                             detected_objects = self._parse_result(results[0])
-
+                        # print(f" detected_objects : {detected_objects}")
                         # 큐에 넣기 (가득 차면 오래된 결과 버림)
                         if self.output_queues[cam_id].full():
                             try:

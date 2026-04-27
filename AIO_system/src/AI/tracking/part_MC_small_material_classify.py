@@ -15,15 +15,13 @@ from src.utils.logger import log
 
 @dataclass
 class MaterialInfo:
-    """ 재질 정보 """
-    classification: str # 재질 종류 (PP, HDPE, PS, PET 등)
+    classification: str
     size: str
     timestamp: float
 
 
 @dataclass
 class DetectLineInfo:
-    """ 감지 선 정보 """
     line_id: int
     x: int
     y: int
@@ -31,76 +29,70 @@ class DetectLineInfo:
     height: int
 
 
+@dataclass
+class LocalTrack:
+    track_id: int
+    center_x: float
+    center_y: float
+    last_seen: float
+    crossed: bool = False
+
+
 class MaterialEventBuffer:
-    """ 재질 이벤트 버퍼 (선 통과를 기준으로) """
+    """Material event buffer kept for time/position based matching."""
 
     def __init__(self):
         self.buffer = deque()
 
-    # def add(self, material: MaterialInfo):
     def add(self, material: MaterialInfo, x: int):
-        """재질 추가"""
-        # self.buffer.append(material)
         self.buffer.append({
             "material": material,
             "x": x,
-            "timestamp": material.timestamp
+            "timestamp": material.timestamp,
         })
 
-    # def pop(self) -> MaterialInfo | None:
-    #     """선 통과 시 하나 꺼냄"""
-    #     if self.buffer:
-    #         return self.buffer.popleft()
-    #     return None
     def pop_closest(self, line_x: int, max_age_sec=0.2, distance_threshold=80):
         now = time.time()
 
-        # 1. 시간 필터
         candidates = [
-            b for b in self.buffer
-            if (now - b["timestamp"]) <= max_age_sec
+            item for item in self.buffer
+            if (now - item["timestamp"]) <= max_age_sec
         ]
-
         if not candidates:
             return None
 
-        # 2. 거리 필터
         candidates = [
-            b for b in candidates
-            if abs(b["x"] - line_x) < distance_threshold
+            item for item in candidates
+            if abs(item["x"] - line_x) < distance_threshold
         ]
-
         if not candidates:
             return None
 
-        # 3. 가장 가까운 것 선택
-        closest = min(candidates, key=lambda b: abs(b["x"] - line_x))
-
+        closest = min(candidates, key=lambda item: abs(item["x"] - line_x))
         self.buffer.remove(closest)
-
         return closest["material"]
-    def remove_old(self, max_age_sec=2.0):
-        """오래된 데이터 제거"""
-        now = time.time()
 
+    def remove_old(self, max_age_sec=2.0):
+        now = time.time()
         while self.buffer:
-            if (now - self.buffer[0].timestamp) > max_age_sec:
-                old = self.buffer.popleft()
-                log(f"[BUFFER] drop old: {old.classification}")
+            oldest = self.buffer[0]
+            if (now - oldest["timestamp"]) > max_age_sec:
+                dropped = self.buffer.popleft()
+                log(f"[BUFFER] drop old: {dropped['material'].classification}")
             else:
                 break
 
     def get_plc_value(self, material: MaterialInfo) -> int | None:
-        """ 재질과 크기에 따른 PLC 값 반환 """
         if material.size == "small":
             return PLASTIC_VALUE_MAPPING_SMALL.get(material.classification)
-        elif material.size == "large":
+        if material.size == "large":
             return PLASTIC_VALUE_MAPPING_LARGE.get(material.classification)
         return None
 
 
 class LineCrossZone:
-    """기준 선 통과 감지 영역"""
+    """Line crossing detector using local centroid matching."""
+
     def __init__(self, line_id: int, x: int, y: int,
                  width: int, height: int,
                  on_cross_callback=None):
@@ -111,157 +103,162 @@ class LineCrossZone:
             x=x,
             y=y,
             width=width,
-            height=height
+            height=height,
         )
 
-        self.prev_positions: dict[int, int] = {}
-        self.tracked_objects = set()
-        self.crossed_objects = set()
-        self.tracked_objects_info: dict[int, DetectedObject] = {}
+        self.local_tracks: dict[int, LocalTrack] = {}
+        self.next_track_id = 0
+        self.track_ttl = 0.35
+        self.track_match_distance = 120.0
+        self.track_x_margin = 260
+        self.track_y_margin = 40
+        self.cooldown_sec = 0.2
+        self.last_trigger_time = 0.0
 
         self.on_cross_callback = on_cross_callback
-
         self.is_active = False
 
     def is_crossed(self, cur_x: int, prev_x: int) -> bool:
         return cur_x <= self.line_info.x and prev_x > self.line_info.x
 
-    def update(self, obj: DetectedObject):
-        """감지 업데이트"""
-        obj_id = obj.id
-        current_x = obj.center[0]
+    def _cleanup_stale_tracks(self, now: float):
+        stale_ids = [
+            track_id
+            for track_id, track in self.local_tracks.items()
+            if now - track.last_seen > self.track_ttl
+        ]
+        for track_id in stale_ids:
+            del self.local_tracks[track_id]
 
-        prev_x = self.prev_positions.get(obj_id)
+    def _is_relevant(self, obj: DetectedObject) -> bool:
+        center_x, center_y = obj.center
+        within_x = abs(center_x - self.line_info.x) <= self.track_x_margin
+        within_y = (
+            self.line_info.y - self.track_y_margin
+            <= center_y
+            <= self.line_info.y + self.line_info.height + self.track_y_margin
+        )
+        return within_x and within_y
 
-        # 첫 프레임은 스킵
-        if prev_x is None:
-            self.prev_positions[obj_id] = current_x
+    def _distance(self, track: LocalTrack, obj: DetectedObject) -> float:
+        cur_x, cur_y = obj.center
+        return float(np.hypot(track.center_x - cur_x, track.center_y - cur_y))
+
+    def _is_vertical_relevant(self, obj: DetectedObject) -> bool:
+        _, center_y = obj.center
+        return (
+            self.line_info.y - self.track_y_margin
+            <= center_y
+            <= self.line_info.y + self.line_info.height + self.track_y_margin
+        )
+
+    def _is_left_trigger_candidate(self, obj: DetectedObject) -> bool:
+        if not self._is_vertical_relevant(obj):
             return False
 
-        # crossing 판단
-        crossed = self.is_crossed(current_x, prev_x)
+        center_x, _ = obj.center
+        return center_x <= self.line_info.x
 
-        # 현재 위치 업데이트
-        self.prev_positions[obj_id] = current_x
-        log(f"obj ID: {obj_id}, obj: {obj}")
-        # crossing 발생 시 1회만 트리거
-        if crossed and obj_id not in self.crossed_objects:
+    def _create_track(self, obj: DetectedObject, now: float):
+        cur_x, cur_y = obj.center
+        self.local_tracks[self.next_track_id] = LocalTrack(
+            track_id=self.next_track_id,
+            center_x=cur_x,
+            center_y=cur_y,
+            last_seen=now,
+        )
+        self.next_track_id += 1
 
-            self.crossed_objects.add(obj_id)
+    def _update_track(self, track: LocalTrack, obj: DetectedObject, now: float):
+        prev_x = track.center_x
+        cur_x, cur_y = obj.center
 
+        track.center_x = cur_x
+        track.center_y = cur_y
+        track.last_seen = now
+
+        if not track.crossed and self.is_crossed(cur_x, prev_x):
+            track.crossed = True
             if self.on_cross_callback:
                 self.on_cross_callback()
+            log(
+                f"[LINE] crossed line_id={self.line_info.line_id}, "
+                f"track_id={track.track_id}, obj_id={obj.id}, x={cur_x}"
+            )
 
-            return True
+    def update_frame(self, detected_objects: list[DetectedObject]):
+        now = time.time()
+        # Line mode triggers the callback directly, so box-based airknife flow
+        # should stay inactive to avoid duplicate callbacks with wrong args.
+        self.is_active = False
+        trigger_candidates = [
+            obj for obj in detected_objects
+            if self._is_left_trigger_candidate(obj)
+        ]
+        if not trigger_candidates:
+            return
 
-        return False
-    
+        if now - self.last_trigger_time < self.cooldown_sec:
+            return
+
+        self.last_trigger_time = now
+        lead_object = min(trigger_candidates, key=lambda item: item.center[0])
+
+        if self.on_cross_callback:
+            self.on_cross_callback()
+
     def draw(self, frame: np.ndarray) -> np.ndarray:
-        """선 그리기"""
         color = (0, 255, 0)
         cv2.line(
             frame,
             (self.line_info.x, self.line_info.y),
             (self.line_info.x, self.line_info.y + self.line_info.height),
             color,
-            self.line_info.width
+            self.line_info.width,
         )
         return frame
 
     def cleanup(self, active_ids: set):
-        """프레임에서 사라진 객체 정리"""
-        self.prev_positions = {
-            obj_id: y for obj_id, y in self.prev_positions.items()
-            if obj_id in active_ids
-        }
-
-        self.crossed_objects &= active_ids
+        _ = active_ids
 
 
 class LineCrossManager:
-    """선 통과 감지 관리"""
     def __init__(self, boxes: list[LineCrossZone]):
         self.boxes = boxes
 
     def update_detections(self, detected_objects: list[DetectedObject]):
-        """모든 박스에 대해 감지 업데이트"""
-        # 조기 리턴으로 불필요한 연산 제거
-        if not detected_objects:
-            for box in self.boxes:
-                box.tracked_objects.clear()
-                box.tracked_objects_info.clear()
-            return
-
-        current_ids = {obj.id for obj in detected_objects}
-
-        # 새로운 객체들 업데이트
-        for obj in detected_objects:
-            for box in self.boxes:
-                box.update(obj)
-
-        # 각 박스에서 사라진 객체 제거
         for box in self.boxes:
-            # 현재 프레임에 없는 ID는 tracked_objects에서 제거
-            # box.tracked_objects = box.tracked_objects & current_ids
-            box.tracked_objects &= current_ids
-            box.tracked_objects_info = {
-                k: v for k, v in box.tracked_objects_info.items()
-                if k in current_ids
-            }
+            box.update_frame(detected_objects)
 
     def draw_all(self, frame: np.ndarray) -> np.ndarray:
-        """모든 박스 그리기"""
         for box in self.boxes:
             box.draw(frame)
         return frame
 
 
 class LineTrigger:
-    """선 통과 감지 시 버퍼에서 재질 정보 꺼내서 PLC 신호 전송"""
-    # def __init__(self, buffer: MaterialEventBuffer, plc_callback):
-    #     self.buffer = buffer
-    #     self.plc_callback = plc_callback
+    """Legacy helper kept for compatibility."""
+
     def __init__(self, buffer, plc_callback, line_x):
         self.buffer = buffer
         self.plc_callback = plc_callback
         self.line_x = line_x
 
     def on_cross_line(self, obj):
-
         material = self.buffer.pop_closest(self.line_x)
 
         if not material:
-            log(f"매칭 실패 (obj_id={obj.id})")
+            obj_id = getattr(obj, "id", "n/a")
+            log(f"matching failed (obj_id={obj_id})")
             return
 
         plc_value = self.buffer.get_plc_value(material)
-
         if plc_value is None:
-            log("PLC 매핑 실패")
+            log("PLC mapping failed")
             return
 
         if self.plc_callback:
             self.plc_callback(plc_value)
 
-        log(f"AIR: {material.classification} (obj_id={obj.id})")
-    # def on_cross_line(self, obj):
-    #     """ 선 통과 시 신호 처리 """
-
-    #     self.buffer.remove_old()
-
-    #     material = self.buffer.pop()
-
-    #     if not material:
-    #         log("매칭 재질 없음")
-    #         return
-
-    #     plc_value = self.buffer.get_plc_value(material)
-
-    #     if plc_value is None:
-    #         log("PLC 매핑 실패")
-    #         return
-
-    #     if self.plc_callback:   # PLC 신호 전송
-    #         self.plc_callback(plc_value)
-
-    #     log(f"AIR: {material.classification} (obj_id={obj.id})")
+        obj_id = getattr(obj, "id", "n/a")
+        log(f"AIR: {material.classification} (obj_id={obj_id})")
