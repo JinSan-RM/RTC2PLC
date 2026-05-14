@@ -281,7 +281,7 @@ class App():
         if self.ui.pages.settings_page is not None and \
             self.ui.children_widget.main_stack.currentIndex() == 2:
             tab_index = self.ui.pages.settings_page.pages.currentIndex()
-            if tab_index in (1, 2):
+            if tab_index in (1, 2, 4):
                 self.ui.signals.inverter_updated.emit(_data)
 
     def on_set_freq(self, inverter_name: str, value: float):
@@ -600,7 +600,7 @@ class App():
         self.set_auto_mode(False)
 
     def _build_default_config(self):
-        inverter_config = {f"inverter_00{i}": [0.0, 1.0, 1.0] for i in range(1, 7)}
+        inverter_config = {f"inverter_00{i}": [0.0, 1.0, 1.0] for i in range(1, 9)}
         base_positions = [[0.0, 0.0] for _ in range(6)]
         airknife_config = {
             f"airknife_{i}": {"timing": 0, "duration": 100}

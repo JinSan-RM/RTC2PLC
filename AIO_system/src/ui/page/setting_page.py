@@ -12,6 +12,7 @@ from src.ui.page.settings.servo_tab import ServoTab
 from src.ui.page.settings.feeder_tab import FeederTab
 from src.ui.page.settings.conveyor_tab import ConveyorTab
 from src.ui.page.settings.airknife_tab import AirKnifeTab
+from src.ui.page.settings.shredder_tab import ShredderTab
 
 from src.utils.config_util import UI_PATH
 
@@ -55,11 +56,12 @@ class SettingsPage(QWidget):
         self.feeder_tab = FeederTab(self.app)
         self.conveyor_tab = ConveyorTab(self.app)
         self.airknife_tab = AirKnifeTab(self.app)
-
+        self.shredder_tab = ShredderTab(self.app)
         self.pages.addWidget(self.servo_tab)
         self.pages.addWidget(self.feeder_tab)
         self.pages.addWidget(self.conveyor_tab)
         self.pages.addWidget(self.airknife_tab)
+        self.pages.addWidget(self.shredder_tab)
 
         main_layout.addWidget(self.pages)
 
@@ -94,6 +96,7 @@ class SettingsPage(QWidget):
         "피더 제어",
         "컨베이어 제어",
         "에어나이프 제어",
+        "파쇄기/트롬멜 제어",
     ]
 
     def _create_side_tab(self, parent_layout):

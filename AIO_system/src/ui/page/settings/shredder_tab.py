@@ -1,5 +1,5 @@
 """
-컨베이어 제어 탭
+파쇄기, 트롬멜 제어 탭
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -41,15 +41,16 @@ class ControllerValueInfo:
     decimal_point: int = 0
 
 
-# region ConveyorController
-class ConveyorController(QWidget):
-    """개별 컨베이어 제어 박스"""
-    def __init__(self, app, conv_id):
+# region DeviceController
+class DeviceController(QWidget):
+    """개별 장치 제어 박스"""
+    def __init__(self, app, device_id, title):
         super().__init__()
 
         self.app = app
-        self.conv_id = conv_id
-        self.inverter_name = f"inverter_00{conv_id+2}"
+        self.device_id = device_id
+        self.title = title
+        self.inverter_name = f"inverter_00{device_id}"
 
         self._init_ui()
 
@@ -59,7 +60,7 @@ class ConveyorController(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(0)
 
-        self._create_header_layout(layout, f"컨베이어 0{self.conv_id}")
+        self._create_header_layout(layout, f"{self.title}")
 
         layout.addSpacing(10)
 
@@ -478,8 +479,8 @@ class ConveyorController(QWidget):
 # endregion
 
 
-# region ConveyorTab
-class ConveyorTab(QWidget):
+# region ShredderTab
+class ShredderTab(QWidget):
     """컨베이어 제어 탭 (CV01~CV04)"""
     def __init__(self, app):
         super().__init__()
@@ -506,11 +507,15 @@ class ConveyorTab(QWidget):
 
         scroll_layout.addSpacing(25)
 
-        # CV01 ~ CV04 컨베이어 섹션 생성
-        for i in range(1, 5):
-            _controller = ConveyorController(self.app, i)
-            scroll_layout.addWidget(_controller)
-            scroll_layout.addSpacing(20)
+        # 파쇄기
+        shredder_controller = DeviceController(self.app, 7, "파쇄기")
+        scroll_layout.addWidget(shredder_controller)
+        scroll_layout.addSpacing(20)
+
+        # 트롬멜
+        trommel_controller = DeviceController(self.app, 8, "트롬멜")
+        scroll_layout.addWidget(trommel_controller)
+        scroll_layout.addSpacing(20)
 
         scroll_layout.addSpacing(10)
 

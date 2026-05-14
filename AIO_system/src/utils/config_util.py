@@ -20,7 +20,9 @@ MODBUS_RTU_CONFIG = {
         "inverter_003": 3,
         "inverter_004": 4,
         "inverter_005": 5,
-        "inverter_006": 6
+        "inverter_006": 6,
+        "inverter_007": 7,
+        "inverter_008": 8,
     },
     "port": "COM7",
     "baudrate": 9600,

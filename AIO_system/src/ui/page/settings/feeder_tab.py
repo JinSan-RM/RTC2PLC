@@ -54,6 +54,8 @@ class FeederController(QWidget):
 
         self._init_ui()
 
+        self.apply_styles()
+
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(0)
