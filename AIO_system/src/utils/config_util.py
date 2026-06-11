@@ -618,6 +618,57 @@ CAMERA_CONFIGS = {
     # }
 }
 
+
+def build_default_camera_connection_config():
+    """Return editable camera connection defaults for the settings UI."""
+    return {
+        "rgb_cameras": {
+            "0": {
+                "enabled": True,
+                "camera_index": 0,
+                "camera_ip": "",
+                "fallback_webcam": True,
+            }
+        },
+        "hyperspectral": {
+            "enabled": True,
+            "connection_mode": "breeze",
+            "host": HOST,
+            "command_port": COMMAND_PORT,
+            "event_port": EVENT_PORT,
+            "data_stream_port": DATA_STREAM_PORT,
+            "workflow_path": WORKFLOW_PATH,
+            "breeze": {
+                "host": HOST,
+                "command_port": COMMAND_PORT,
+                "event_port": EVENT_PORT,
+                "data_stream_port": DATA_STREAM_PORT,
+                "workflow_path": WORKFLOW_PATH,
+            },
+            "camera": {
+                "band_count": 224,
+                "spatial_width": 640,
+                "integration_time_us": 4000,
+                "line_rate_hz": 100.0,
+                "rgb_bands": [32, 96, 160],
+            },
+            "lumo": {
+                "auto_from_local_network": False,
+                "serial_number": "",
+                "interface_name": "",
+                "mac_address": "",
+                "ip_address": "",
+                "device_index": 0,
+                "grab_timeout_ms": 5000,
+                "skip_scan": False,
+                "provider_mode": "native",
+            },
+            "breeze_compat": {
+                "mirror_line": False,
+            },
+        },
+    }
+
 # ============================================================
 # endregion
 # ============================================================

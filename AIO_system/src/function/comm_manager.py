@@ -106,6 +106,43 @@ class CommManager(threading.Thread):
 
         self.xgt_tester = XGTTester(ip="192.168.1.3", port=2004)
 
+    def _hyperspectral_config(self):
+        app_config = getattr(self.app, "config", {}) or {}
+        camera_config = app_config.get("camera_connection_config", {})
+        if not isinstance(camera_config, dict):
+            return {}
+        hyper_config = camera_config.get("hyperspectral", {})
+        return hyper_config if isinstance(hyper_config, dict) else {}
+
+    def _breeze_config(self):
+        hyper_config = self._hyperspectral_config()
+        breeze_config = hyper_config.get("breeze", {})
+        return breeze_config if isinstance(breeze_config, dict) else {}
+
+    def _hyper_enabled(self) -> bool:
+        return bool(self._hyperspectral_config().get("enabled", True))
+
+    def _hyper_connection_mode(self) -> str:
+        return str(self._hyperspectral_config().get("connection_mode", "breeze") or "breeze")
+
+    def _hyper_host(self) -> str:
+        breeze_config = self._breeze_config()
+        hyper_config = self._hyperspectral_config()
+        return str(breeze_config.get("host", hyper_config.get("host", HOST)) or HOST)
+
+    def _hyper_port(self, key: str, default: int) -> int:
+        breeze_config = self._breeze_config()
+        hyper_config = self._hyperspectral_config()
+        try:
+            return int(breeze_config.get(key, hyper_config.get(key, default)))
+        except (TypeError, ValueError):
+            return int(default)
+
+    def _hyper_workflow_path(self) -> str:
+        breeze_config = self._breeze_config()
+        hyper_config = self._hyperspectral_config()
+        return str(breeze_config.get("workflow_path", hyper_config.get("workflow_path", WORKFLOW_PATH)) or WORKFLOW_PATH)
+
 # region command client
     def _send_command(self, command_socket: socket.socket, command: dict):
         """카메라로 요청 전송"""
@@ -159,11 +196,13 @@ class CommManager(threading.Thread):
 
     def _start_command_client(self) -> socket.socket:
         """요청 클라이언트 시작"""
-        log(f"Connecting to camera at {HOST}:{COMMAND_PORT}")
+        host = self._hyper_host()
+        port = self._hyper_port("command_port", COMMAND_PORT)
+        log(f"Connecting to camera at {host}:{port}")
         try:
             soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            soc.connect((HOST, COMMAND_PORT))
+            soc.connect((host, port))
             soc.settimeout(120)
             log("Camera connection successful")
             return soc
@@ -205,7 +244,7 @@ class CommManager(threading.Thread):
                     )
                 )
 
-                workflow_path = WORKFLOW_PATH
+                workflow_path = self._hyper_workflow_path()
                 log(f"Loading workflow: {workflow_path}")
                 workflow_json = self._handle_response(
                     self._send_command(
@@ -407,12 +446,14 @@ class CommManager(threading.Thread):
 
     def _listen_for_events(self):
         """Listen for classification events from the camera."""
-        log(f"Connecting to camera event port at {HOST}:{EVENT_PORT}")
+        host = self._hyper_host()
+        port = self._hyper_port("event_port", EVENT_PORT)
+        log(f"Connecting to camera event port at {host}:{port}")
         try:
             self.comm_sockets.event_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.comm_sockets.event_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.comm_sockets.event_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            self.comm_sockets.event_socket.connect((HOST, EVENT_PORT))
+            self.comm_sockets.event_socket.connect((host, port))
             log("Event socket connected")
         except Exception as e:
             log(f"[ERROR] Failed to connect to event port: {str(e)}", )
@@ -597,12 +638,14 @@ class CommManager(threading.Thread):
 # region data stream listener
     def _listen_for_data_stream(self):
         """Listen for line-scan data stream frames."""
-        log(f"Connecting to data stream at {HOST}:{DATA_STREAM_PORT}")
+        host = self._hyper_host()
+        port = self._hyper_port("data_stream_port", DATA_STREAM_PORT)
+        log(f"Connecting to data stream at {host}:{port}")
         try:
             self.comm_sockets.stream_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.comm_sockets.stream_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.comm_sockets.stream_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            self.comm_sockets.stream_socket.connect((HOST, DATA_STREAM_PORT))
+            self.comm_sockets.stream_socket.connect((host, port))
             log("Data stream connected")
         except Exception as e:
             log(f"[ERROR] Failed to connect to data stream: {str(e)}")
@@ -746,9 +789,16 @@ class CommManager(threading.Thread):
 
         except Exception as e:
             log(f"[ERROR] Main function error: {str(e)}")
+            log(traceback.format_exc())
 
     def start_hypercam(self):
         """초분광 카메라 연결 및 감지 시작"""
+        if not self._hyper_enabled():
+            log("[INFO] hyperspectral camera connection is disabled")
+            return
+        if self._hyper_connection_mode() != "breeze":
+            log("[INFO] spectral-runtime hyperspectral mode is configured; Breeze command path is skipped")
+            return
         self.threads.stop_event.clear()
         try:
             # 초분광 카메라 시작

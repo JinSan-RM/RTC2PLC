@@ -1,0 +1,39 @@
+camera:
+  band_count: 224
+  spatial_width: 640
+  # Canonical app key is integration_time_us; Lumo/Specim status reports the same value as ExposureTime.
+  integration_time_us: 4000
+  exposure_time_us: 4000
+  line_rate_hz: 100.0
+  wavelength_range_nm: [950.0, 1700.0]
+  rgb_bands: [32, 96, 160]
+
+frame_filter:
+  dark_mean_threshold: 1.0
+
+simulate:
+  seed: 7
+
+lumo:
+  auto_from_local_network: true
+  serial_number:
+  interface_name: "이더넷 3"
+  mac_address: "70-F8-E7-B0-11-1B"
+  device_index: 2
+  grab_timeout_ms: 5000
+  skip_scan: false
+  provider_mode: native
+
+breeze_compat:
+  mirror_line: false
+  offline_source_mode: "Automatic - Selected Study group"
+  offline_source_value: ""
+  trigger_selector: "FrameStart"
+  trigger_source: "Freerun"
+  trigger_activation: "RisingEdge"
+  trigger_mode: false
+  trigger_delay_us: 0
+  binning_spectral: 1
+  binning_spatial: 1
+  requested_port: 0
+  initialize_timeout_s: 20

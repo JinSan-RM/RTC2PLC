@@ -7,7 +7,7 @@ from src.utils.logger import log
 
 def get_camera_count() -> int:
     """
-    연결된 카메라 개수 확인
+    연결된 카메라 수 확인
     """
     
     try:
@@ -52,8 +52,8 @@ class BaslerCameraManager:
                 
                 device = devices[self.camera_index]
                 log(f"선택된 카메라: {device.GetModelName()} - {device.GetSerialNumber()}")
-                log(f"  • IP 주소: {device.GetIpAddress()}")
-                log(f"  • 맥 주소: {device.GetMacAddress()}")
+                log(f"• IP 주소: {device.GetIpAddress()}")
+                log(f"• 맥 주소: {device.GetMacAddress()}")
                 self.camera = pylon.InstantCamera(tlFactory.CreateDevice(device))
             
             self.camera.Open()
@@ -105,9 +105,9 @@ class BaslerCameraManager:
                     log("✓ PixelFormat = BayerBG8 (RAW)")
                 else:
                     current_format = self.camera.PixelFormat.GetValue()
-                    log(f"⚠️ PixelFormat 변경 불가, 현재: {current_format}")
+                    log(f"PixelFormat 변경 불가, 현재: {current_format}")
             except Exception as e:
-                log(f"❌ PixelFormat 설정 실패: {e}")
+                log(f"PixelFormat 설정 실패: {e}")
                     
             # 3) ROI 설정
             if self.roi:
@@ -125,11 +125,11 @@ class BaslerCameraManager:
                     from pypylon import genicam
                     if hasattr(self.camera, 'OffsetX') and self.camera.OffsetX.GetAccessMode() == genicam.RW:
                         self.camera.OffsetX.SetValue(0)
-                        log("✓ OffsetX = 0 (초기화)")
+                        log("OffsetX = 0 (초기화)")
                         
                     if hasattr(self.camera, 'OffsetY') and self.camera.OffsetY.GetAccessMode() == genicam.RW:
                         self.camera.OffsetY.SetValue(0)
-                        log("✓ OffsetY = 0 (초기화)")
+                        log("OffsetY = 0 (초기화)")
                     
                     # Step 2: Width 설정
                     adjusted_width = (width // width_inc) * width_inc
@@ -137,20 +137,20 @@ class BaslerCameraManager:
                     # 최소/최대값 검증
                     if adjusted_width < min_width:
                         adjusted_width = min_width
-                        log(f"⚠️ Width가 최소값({min_width})보다 작음. 조정함")
+                        log(f"Width가 최소값({min_width})보다 작음. 조정함")
                         
                     if adjusted_width > max_width:
                         adjusted_width = max_width
-                        log(f"⚠️ Width가 최대값({max_width})보다 큼. 조정함")
+                        log(f"Width가 최대값({max_width})보다 큼. 조정함")
                     
                     # Offset 고려
                     if offset_x + adjusted_width > max_width:
                         adjusted_width = max_width - offset_x
                         adjusted_width = (adjusted_width // width_inc) * width_inc
-                        log(f"⚠️ OffsetX 고려하여 Width 재조정: {adjusted_width}")
+                        log(f"OffsetX 고려하여 Width 재조정: {adjusted_width}")
                     
                     self.camera.Width.SetValue(adjusted_width)
-                    log(f"✓ Width = {adjusted_width}")
+                    log(f"Width = {adjusted_width}")
                     
                     # Step 3: Height 설정
                     adjusted_height = (height // height_inc) * height_inc
@@ -158,11 +158,11 @@ class BaslerCameraManager:
                     # 최소/최대값 검증
                     if adjusted_height < min_height:
                         adjusted_height = min_height
-                        log(f"⚠️ Height가 최소값({min_height})보다 작음. 조정함")
+                        log(f"Height가 최소값({min_height})보다 작음. 조정함")
                         
                     if adjusted_height > max_height:
                         adjusted_height = max_height
-                        log(f"⚠️ Height가 최대값({max_height})보다 큼. 조정함")
+                        log(f"Height가 최대값({max_height})보다 큼. 조정함")
                     
                     # Offset 고려
                     if offset_y + adjusted_height > max_height:
@@ -183,10 +183,10 @@ class BaslerCameraManager:
                         if adjusted_offset_x + current_width > max_width:
                             adjusted_offset_x = max_width - current_width
                             adjusted_offset_x = (adjusted_offset_x // offset_x_inc) * offset_x_inc
-                            log(f"⚠️ OffsetX 재조정: {adjusted_offset_x}")
+                            log(f"OffsetX 재조정: {adjusted_offset_x}")
                         
                         self.camera.OffsetX.SetValue(adjusted_offset_x)
-                        log(f"✓ OffsetX = {adjusted_offset_x}")
+                        log(f"OffsetX = {adjusted_offset_x}")
 
                     if hasattr(self.camera, 'OffsetY') and self.camera.OffsetY.GetAccessMode() == genicam.RW:
                         offset_y_inc = self.camera.OffsetY.GetInc()
@@ -197,7 +197,7 @@ class BaslerCameraManager:
                         if adjusted_offset_y + current_height > max_height:
                             adjusted_offset_y = max_height - current_height
                             adjusted_offset_y = (adjusted_offset_y // offset_y_inc) * offset_y_inc
-                            log(f"⚠️ OffsetY 재조정: {adjusted_offset_y}")
+                            log(f"OffsetY 재조정: {adjusted_offset_y}")
                         
                         self.camera.OffsetY.SetValue(adjusted_offset_y)
                         log(f"OffsetY = {adjusted_offset_y}")
@@ -224,7 +224,7 @@ class BaslerCameraManager:
                 # ROI 없으면 기본 해상도
                 self.camera.Width.SetValue(min(1280, max_width))
                 self.camera.Height.SetValue(min(720, max_height))
-                log(f"✓ 기본 해상도: {self.camera.Width.Value}x{self.camera.Height.Value}")
+                log(f"기본 해상도: {self.camera.Width.Value}x{self.camera.Height.Value}")
             
                 
             # 4) 자동 노출 끄기

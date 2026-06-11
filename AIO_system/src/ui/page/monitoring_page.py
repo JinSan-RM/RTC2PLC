@@ -97,6 +97,10 @@ class CameraView(QFrame):
             self.setMinimumSize(800, 720)
         else:
             self.setMinimumSize(320, 720)
+        if self.is_hyperspectral:
+            self.setMinimumSize(800, 720)
+        else:
+            self.setMinimumSize(320, 720)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -747,8 +751,7 @@ class MonitoringPage(QWidget):
                 app=self.app,
                 ai_manager=self.ai_manager
             )
-            cam.setFixedSize(160, 720)
-            cam.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             rgb_layout.addWidget(cam)
             self.rgb_cameras.append(cam)
 
@@ -848,18 +851,19 @@ class MonitoringPage(QWidget):
             """
             color: #000000;
             font-size: 16px;
-            font-weight: bold;
-            
+            font-weight: medium;
             """
         )
         stats_layout.addWidget(stats_title)
 
-        stats_layout.addSpacing(15)
+        stats_layout.addSpacing(10)
 
         self.stats_frame = QFrame()
         self.stats_frame.setObjectName("stats_frame")
-        self.stats_frame.setFixedSize(320, 320)
-        self.stats_frame.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        # self.stats_frame.setFixedSize(415, 422)
+        self.stats_frame.setMinimumSize(400, 400)   # setFixedSixe(415, 422)에서 수정
+
+        self.stats_frame.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정부분 - 축소 제한 해제
 
         stats_layout.addWidget(self.stats_frame)
 
