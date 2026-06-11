@@ -293,7 +293,7 @@ def _select_native_device(
         if ip_address:
             target_ip = ip_address.strip().lower()
             detected_ip = _device_ip_address(device)
-            if target_ip != str(detected_ip or "").lower():
+            if detected_ip and target_ip != str(detected_ip).lower():
                 return False
 
         if interface_name:
@@ -594,6 +594,7 @@ class NativeLumoFrameSource(FrameSource):
             if not ip_address
             else None
         )
+
         if target_mac_address and not ip_address and network_device is None:
             raise NativeLumoProviderError(
                 f"No valid network neighbor matched configured Lumo MAC {target_mac_address!r} "
@@ -1103,7 +1104,7 @@ class LumoCameraProvider(CameraProvider):
             raise ValueError("provider_mode must be 'native'.")
         self._serial_number = serial_number
         self._ip_address = ip_address
-        self._interface_name = interface_name
+        self._interface_name = _sanitize_interface_name(interface_name)
         self._mac_address = normalize_mac_address(mac_address) if mac_address else None
         self._device_index = device_index
         self._timeout_ms = timeout_ms
