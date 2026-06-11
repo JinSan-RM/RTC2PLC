@@ -1,9 +1,6 @@
 """
 Camera connection settings tab.
 """
-import sys
-from pathlib import Path
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QDoubleValidator, QIntValidator
 from PySide6.QtWidgets import (
@@ -17,6 +14,12 @@ from src.utils.config_util import (
     DEFAULT_LUMO_MAC_ADDRESS,
     ToggleButton,
     build_default_camera_connection_config,
+)
+from src.utils.lumo_camera_service import (
+    find_lumo_device_index,
+    find_lumo_network,
+    is_low_quality_lumo_device,
+    list_lumo_devices,
 )
 from src.utils.logger import log
 
@@ -599,117 +602,13 @@ class CameraTab(QWidget):
         return value
 
     def _list_lumo_devices(self):
-        self._ensure_lumo_module_path()
-        from specim_lumo_camera_kit import SpecimLumoCameraModule
-        devices = SpecimLumoCameraModule.list_devices()
-        return devices if isinstance(devices, list) else []
+        return list_lumo_devices()
 
     def _find_lumo_network(self, mac_address="", interface_name=None):
-        mac_address = str(mac_address or DEFAULT_LUMO_MAC_ADDRESS).strip()
-        self._ensure_lumo_module_path()
-        from specim_lumo_camera_kit import (
-            find_lumo_neighbor_by_mac,
-            list_local_network_adapters,
-            list_lumo_remote_neighbors,
-            normalize_mac_address,
-            select_lumo_local_adapter,
-        )
-
-        adapters = list_local_network_adapters(timeout_seconds=5.0)
-        selected_adapter = None
-        if interface_name:
-            selected_adapter = select_lumo_local_adapter(
-                adapters,
-                preferred_interface=interface_name,
-            )
-        elif self.lumo_auto_network.isChecked():
-            selected_adapter = select_lumo_local_adapter(adapters)
-
-        resolved_interface = interface_name
-        if selected_adapter is not None:
-            resolved_interface = selected_adapter.name
-
-        local_ips = [
-            ip
-            for adapter in adapters
-            for ip in adapter.ipv4_addresses
-            if adapter.media_connected and ip
-        ]
-
-        candidates = list_lumo_remote_neighbors(
-            interface_name=resolved_interface,
-            local_ipv4_addresses=local_ips,
-            timeout_seconds=5.0,
-        )
-
-        neighbor = None
-        if mac_address:
-            neighbor = find_lumo_neighbor_by_mac(
-                mac_address=mac_address,
-                interface_name=resolved_interface,
-                local_ipv4_addresses=local_ips,
-                timeout_seconds=5.0,
-            )
-            if neighbor is None and resolved_interface:
-                neighbor = find_lumo_neighbor_by_mac(
-                    mac_address=mac_address,
-                    interface_name=None,
-                    local_ipv4_addresses=local_ips,
-                    timeout_seconds=5.0,
-                )
-
-        if neighbor is None:
-            return None, [candidate.to_dict() for candidate in candidates]
-
-        adapter = next((item for item in adapters if item.name == neighbor.interface_alias), None)
-        network = {
-            "ip_address": neighbor.ip_address,
-            "interface_alias": neighbor.interface_alias,
-            "mac_address": normalize_mac_address(neighbor.link_layer_address or mac_address),
-            "neighbor_state": neighbor.state,
-            "local_ipv4_addresses": list(adapter.ipv4_addresses) if adapter else local_ips,
-        }
-        return network, [candidate.to_dict() for candidate in candidates]
+        return find_lumo_network(interface_name=interface_name)
 
     def _find_lumo_device_index(self, devices, *, mac_address="", ip_address=""):
-        if not isinstance(devices, list):
-            return None
-        target_mac = self._compact_mac(mac_address)
-        target_ip = str(ip_address or "").strip()
-        for fallback_index, device in enumerate(devices):
-            if not isinstance(device, dict):
-                continue
-            device_macs = [
-                device.get("mac_address"),
-                device.get("target_mac_address"),
-                device.get("link_layer_address"),
-                device.get("mac"),
-            ]
-            if target_mac and any(self._compact_mac(value) == target_mac for value in device_macs):
-                return self._device_index(device, fallback_index)
-
-        for fallback_index, device in enumerate(devices):
-            if not isinstance(device, dict):
-                continue
-            device_ips = [
-                device.get("ip_address"),
-                device.get("ip"),
-                device.get("camera_ip"),
-            ]
-            if target_ip and any(str(value or "").strip() == target_ip for value in device_ips):
-                return self._device_index(device, fallback_index)
-
-        if len(devices) == 1:
-            return self._device_index(devices[0], 0)
-        best_devices = [
-            (fallback_index, device)
-            for fallback_index, device in enumerate(devices)
-            if isinstance(device, dict) and not self._is_low_quality_lumo_device(device)
-        ]
-        if len(best_devices) == 1:
-            fallback_index, device = best_devices[0]
-            return self._device_index(device, fallback_index)
-        return None
+        return find_lumo_device_index(devices, mac_address=mac_address, ip_address=ip_address)
 
     def _build_lumo_search_message(self, network, devices, device_index, errors, network_candidates=None):
         lines = []
@@ -731,33 +630,9 @@ class CameraTab(QWidget):
             lines.extend(errors)
         return "\n".join(lines)
 
-    def _ensure_lumo_module_path(self):
-        module_root = Path(__file__).resolve().parents[3] / "module" / "specim_lumo_camera_kit"
-        module_path = str(module_root)
-        if module_root.exists() and module_path not in sys.path:
-            sys.path.insert(0, module_path)
-
-    @staticmethod
-    def _compact_mac(value):
-        return "".join(ch for ch in str(value or "") if ch.isalnum()).lower()
-
-    @staticmethod
-    def _device_index(device, fallback_index):
-        for key in ("device_index", "index", "id", "device_id"):
-            value = device.get(key) if isinstance(device, dict) else None
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                continue
-        return int(fallback_index)
-
     @staticmethod
     def _is_low_quality_lumo_device(device):
-        text = " ".join(
-            str(device.get(key, ""))
-            for key in ("model", "transport", "name", "device_id", "id")
-        ).lower()
-        return any(keyword in text for keyword in ("filereader", "mock", "with pleora", "pleora"))
+        return is_low_quality_lumo_device(device)
 
     def apply_styles(self):
         self.setStyleSheet(

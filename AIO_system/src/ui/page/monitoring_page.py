@@ -4,6 +4,7 @@
 import traceback
 import sys
 import time
+import copy
 
 from collections import deque
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QSizePolicy,
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QGraphicsRectItem
 )
-from PySide6.QtCore import Qt, QTimer, QRegularExpression
+from PySide6.QtCore import Qt, QTimer, QRegularExpression, QThread, Signal
 from PySide6.QtGui import (
     QPixmap, QImage, QRegularExpressionValidator, QPen, QColor
 )
@@ -30,6 +31,16 @@ from src.AI.AI_manager import BatchAIManager
 from src.utils.logger import log
 from src.utils.config_util import (
     UI_PATH, MAX_IMG_LINES, clear_layout, CAMERA_CONFIGS
+)
+from src.utils.lumo_camera_service import (
+    DEFAULT_LUMO_MAC_ADDRESS,
+    ensure_lumo_module_path,
+    find_lumo_device_index,
+    find_lumo_network,
+    list_lumo_devices,
+    lumo_camera_payload,
+    lumo_line_to_rgb_bytes,
+    lumo_status_snapshot,
 )
 
 
@@ -51,6 +62,116 @@ class HyperSpectralData:
     update_interval: float = 0.0
     overlay_items: list = None
     overlay_info: deque = None
+
+
+class LumoStatusWorker(QThread):
+    """Background status probe for Lumo camera network/native discovery."""
+
+    status_ready = Signal(object)
+    error_ready = Signal(str)
+
+    def __init__(self, app_config):
+        super().__init__()
+        self.app_config = copy.deepcopy(app_config or {})
+
+    def run(self):
+        try:
+            self.status_ready.emit(lumo_status_snapshot(self.app_config))
+        except Exception as exc:  # noqa: BLE001
+            self.error_ready.emit(str(exc))
+
+
+class LumoTestScanWorker(QThread):
+    """Open Lumo camera and stream a short scan into the monitoring view."""
+
+    line_ready = Signal(object)
+    status_ready = Signal(str)
+    scan_finished = Signal(object)
+    error_ready = Signal(str)
+
+    def __init__(self, app_config, frames=180):
+        super().__init__()
+        self.app_config = copy.deepcopy(app_config or {})
+        self.frames = int(frames)
+        self._stop_requested = False
+        self._camera = None
+
+    def stop(self):
+        self._stop_requested = True
+        camera = self._camera
+        if camera is not None:
+            try:
+                camera.disconnect()
+            except Exception:
+                pass
+
+    def run(self):
+        self.status_ready.emit("테스트 스캔 준비")
+        try:
+            ensure_lumo_module_path()
+            from specim_lumo_camera_kit import SpecimLumoCameraModule
+
+            payload = lumo_camera_payload(self.app_config)
+            lumo = payload.setdefault("lumo", {})
+            interface_name = str(lumo.get("interface_name") or "").strip() or None
+            network, _candidates = find_lumo_network(interface_name=interface_name)
+            if network:
+                lumo["interface_name"] = str(network.get("interface_alias") or "")
+                lumo["ip_address"] = str(network.get("ip_address") or "")
+
+            devices = list_lumo_devices()
+            device_index = find_lumo_device_index(
+                devices,
+                mac_address=DEFAULT_LUMO_MAC_ADDRESS,
+                ip_address=str(network.get("ip_address", "")) if network else "",
+            )
+            if device_index is not None:
+                lumo["device_index"] = int(device_index)
+
+            self.status_ready.emit("카메라 연결 중")
+            camera = SpecimLumoCameraModule.from_config_payload(payload)
+            self._camera = camera
+            if network:
+                camera.config.ip_address = str(network.get("ip_address") or "") or None
+
+            status = camera.connect()
+            source = camera.source
+            if source is None:
+                raise RuntimeError("Lumo camera source was not opened.")
+
+            self.status_ready.emit("테스트 스캔 중")
+            rgb_bands = tuple(getattr(source.settings, "rgb_bands", (32, 96, 160)))
+            frame_count = 0
+            for frame in source.frames(max_frames=self.frames):
+                if self._stop_requested:
+                    break
+                frame_count += 1
+                self.line_ready.emit(
+                    {
+                        "frame_number": int(getattr(frame, "index", frame_count)),
+                        "data_body": lumo_line_to_rgb_bytes(frame.data, rgb_bands),
+                    }
+                )
+
+            self.scan_finished.emit(
+                {
+                    "frame_count": frame_count,
+                    "status": dict(status) if isinstance(status, dict) else {},
+                    "stopped": bool(self._stop_requested),
+                    "network": network,
+                    "device_index": device_index,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.error_ready.emit(str(exc))
+        finally:
+            camera = self._camera
+            self._camera = None
+            if camera is not None:
+                try:
+                    camera.disconnect()
+                except Exception:
+                    pass
 
 
 class CameraView(QFrame):
@@ -532,6 +653,9 @@ class MonitoringPage(QWidget):
         self.app = app
         self.rgb_cameras = []
         self.hyper_camera = None
+        self.lumo_status_worker = None
+        self.lumo_scan_worker = None
+        self.lumo_status_timer = None
         self.ai_manager = BatchAIManager(
             num_cameras=2,
             confidence_threshold=0.1,
@@ -548,6 +672,7 @@ class MonitoringPage(QWidget):
             log("BatchAIManager 초기화 완료!")
 
         self._init_ui()
+        self._start_lumo_status_timer()
 
     def _init_ui(self):
         """UI 초기화"""
@@ -721,6 +846,167 @@ class MonitoringPage(QWidget):
         layout.addStretch()
 
         parent_layout.addWidget(control_box)
+        self._create_hyperspectral_control_panel(parent_layout)
+
+    def _create_hyperspectral_control_panel(self, parent_layout):
+        """초분광 연결 상태 및 테스트 스캔 제어"""
+        control_box = QFrame()
+        control_box.setObjectName("control_box")
+        layout = QHBoxLayout(control_box)
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 18, 30, 18)
+
+        title = QLabel("초분광 연결")
+        title.setObjectName("camera_title")
+        layout.addWidget(title)
+
+        self.lumo_status_label = QLabel("상태: 확인 중")
+        self.lumo_status_label.setObjectName("camera_status")
+        self.lumo_status_label.setMinimumWidth(170)
+        layout.addWidget(self.lumo_status_label)
+
+        self.lumo_ip_label = QLabel("IP: -")
+        self.lumo_ip_label.setObjectName("camera_status")
+        self.lumo_ip_label.setMinimumWidth(180)
+        layout.addWidget(self.lumo_ip_label)
+
+        self.lumo_device_label = QLabel("Device: -")
+        self.lumo_device_label.setObjectName("camera_status")
+        self.lumo_device_label.setMinimumWidth(120)
+        layout.addWidget(self.lumo_device_label)
+
+        self.lumo_check_btn = QPushButton("연결 확인")
+        self.lumo_check_btn.setObjectName("setting_btn")
+        self.lumo_check_btn.setFixedSize(140, 50)
+        self.lumo_check_btn.clicked.connect(self.on_lumo_check_now)
+        layout.addWidget(self.lumo_check_btn)
+
+        self.lumo_test_scan_btn = QPushButton("테스트 스캔")
+        self.lumo_test_scan_btn.setObjectName("control_btn_start")
+        self.lumo_test_scan_btn.setFixedSize(140, 50)
+        self.lumo_test_scan_btn.clicked.connect(self.on_lumo_test_scan)
+        layout.addWidget(self.lumo_test_scan_btn)
+
+        self.lumo_stop_scan_btn = QPushButton("스캔 정지")
+        self.lumo_stop_scan_btn.setObjectName("control_btn_stop")
+        self.lumo_stop_scan_btn.setFixedSize(140, 50)
+        self.lumo_stop_scan_btn.setEnabled(False)
+        self.lumo_stop_scan_btn.clicked.connect(self.on_lumo_stop_scan)
+        layout.addWidget(self.lumo_stop_scan_btn)
+
+        layout.addStretch()
+        parent_layout.addSpacing(12)
+        parent_layout.addWidget(control_box)
+
+    def _start_lumo_status_timer(self):
+        self.lumo_status_timer = QTimer(self)
+        self.lumo_status_timer.timeout.connect(self.on_lumo_status_tick)
+        self.lumo_status_timer.start(3000)
+        self.on_lumo_status_tick()
+
+    def on_lumo_status_tick(self):
+        if self.lumo_status_worker is not None and self.lumo_status_worker.isRunning():
+            return
+        self.lumo_status_worker = LumoStatusWorker(self.app.config)
+        self.lumo_status_worker.status_ready.connect(self.on_lumo_status_ready)
+        self.lumo_status_worker.error_ready.connect(self.on_lumo_status_error)
+        self.lumo_status_worker.finished.connect(self._on_lumo_status_worker_finished)
+        self.lumo_status_worker.finished.connect(self.lumo_status_worker.deleteLater)
+        self.lumo_status_worker.start()
+
+    def on_lumo_check_now(self):
+        self._set_lumo_status_text("상태: 확인 중", "#d29922")
+        self.on_lumo_status_tick()
+
+    def on_lumo_status_ready(self, payload):
+        network = payload.get("network") if isinstance(payload, dict) else None
+        devices = payload.get("devices", []) if isinstance(payload, dict) else []
+        device_index = payload.get("device_index") if isinstance(payload, dict) else None
+        connected = bool(payload.get("connected")) if isinstance(payload, dict) else False
+
+        if network and connected:
+            self._set_lumo_status_text("상태: 연결 가능", "#3fb950")
+        elif network:
+            self._set_lumo_status_text("상태: IP 확인됨", "#d29922")
+        else:
+            self._set_lumo_status_text("상태: 미확인", "#f85149")
+
+        ip_text = str(network.get("ip_address")) if isinstance(network, dict) else "-"
+        self.lumo_ip_label.setText(f"IP: {ip_text}")
+        self.lumo_device_label.setText(f"Device: {device_index if device_index is not None else '-'}")
+        scan_running = self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning()
+        if not scan_running:
+            self.lumo_test_scan_btn.setEnabled(bool(network) and device_index is not None)
+        log(
+            "[INFO] Lumo status: "
+            f"network={network}, device_index={device_index}, devices={len(devices) if isinstance(devices, list) else 0}"
+        )
+
+    def on_lumo_status_error(self, message):
+        self._set_lumo_status_text("상태: 확인 실패", "#f85149")
+        self.lumo_test_scan_btn.setEnabled(False)
+        log(f"[WARNING] Lumo status check failed: {message}")
+
+    def _set_lumo_status_text(self, text, color):
+        if not hasattr(self, "lumo_status_label"):
+            return
+        self.lumo_status_label.setText(text)
+        self.lumo_status_label.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
+
+    def on_lumo_test_scan(self):
+        if self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning():
+            return
+        if self.hyper_camera:
+            self.hyper_camera.start_camera()
+        self.lumo_test_scan_btn.setEnabled(False)
+        self.lumo_stop_scan_btn.setEnabled(True)
+        self._set_lumo_status_text("상태: 테스트 준비", "#d29922")
+
+        self.lumo_scan_worker = LumoTestScanWorker(self.app.config, frames=180)
+        self.lumo_scan_worker.status_ready.connect(self.on_lumo_scan_status)
+        self.lumo_scan_worker.line_ready.connect(self.on_lumo_scan_line)
+        self.lumo_scan_worker.scan_finished.connect(self.on_lumo_scan_finished)
+        self.lumo_scan_worker.error_ready.connect(self.on_lumo_scan_error)
+        self.lumo_scan_worker.finished.connect(self._on_lumo_scan_worker_finished)
+        self.lumo_scan_worker.finished.connect(self.lumo_scan_worker.deleteLater)
+        self.lumo_scan_worker.start()
+
+    def on_lumo_stop_scan(self):
+        worker = self.lumo_scan_worker
+        if worker is not None and worker.isRunning():
+            worker.stop()
+            self._set_lumo_status_text("상태: 정지 중", "#d29922")
+        self.lumo_stop_scan_btn.setEnabled(False)
+
+    def on_lumo_scan_status(self, message):
+        self._set_lumo_status_text(f"상태: {message}", "#d29922")
+        log(f"[INFO] Lumo test scan: {message}")
+
+    def on_lumo_scan_line(self, info):
+        if self.hyper_camera and self.hyper_camera.is_running:
+            self.hyper_camera.process_hyperspectral_line(info)
+
+    def on_lumo_scan_finished(self, payload):
+        frame_count = int(payload.get("frame_count", 0)) if isinstance(payload, dict) else 0
+        stopped = bool(payload.get("stopped")) if isinstance(payload, dict) else False
+        self._set_lumo_status_text("상태: 스캔 정지" if stopped else "상태: 스캔 완료", "#3fb950")
+        self.lumo_test_scan_btn.setEnabled(True)
+        self.lumo_stop_scan_btn.setEnabled(False)
+        self.on_lumo_status_tick()
+        self.app.on_popup("info", "테스트 스캔", f"수신 라인: {frame_count}")
+
+    def on_lumo_scan_error(self, message):
+        self._set_lumo_status_text("상태: 스캔 실패", "#f85149")
+        self.lumo_test_scan_btn.setEnabled(True)
+        self.lumo_stop_scan_btn.setEnabled(False)
+        log(f"[ERROR] Lumo test scan failed: {message}")
+        self.app.on_popup("warning", "테스트 스캔", f"테스트 스캔 실패: {message}")
+
+    def _on_lumo_status_worker_finished(self):
+        self.lumo_status_worker = None
+
+    def _on_lumo_scan_worker_finished(self):
+        self.lumo_scan_worker = None
 
     def _create_rgb_cameras(self, parent_layout):
         """RGB 카메라 그리드"""
