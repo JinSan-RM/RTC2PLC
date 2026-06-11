@@ -1,17 +1,21 @@
 """
 Camera connection settings tab.
 """
+import json
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QDoubleValidator, QIntValidator
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QLineEdit, QFrame, QScrollArea,
-    QComboBox,
+    QComboBox, QFileDialog,
 )
 
 from src.AI.cam.basler_manager import get_camera_count
 from src.utils.config_util import (
     DEFAULT_LUMO_MAC_ADDRESS,
+    DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH,
     ToggleButton,
     build_default_camera_connection_config,
 )
@@ -202,6 +206,7 @@ class CameraTab(QWidget):
         camera_config = self._hyper_section("camera")
         lumo_config = self._hyper_section("lumo")
         breeze_compat = self._hyper_section("breeze_compat")
+        inference_config = self._hyper_section("inference")
         contents_layout, self.hyper_status = self._create_section(
             parent_layout,
             "초분광 카메라 연결 (Spectral Runtime)",
@@ -345,9 +350,104 @@ class CameraTab(QWidget):
             bool(breeze_compat.get("mirror_line", False)),
         )
 
+        model_title = QLabel("초분광 추론 모델")
+        model_title.setObjectName("title_label")
+
+        model_layout = QGridLayout()
+        model_layout.setSpacing(10)
+        self.model_inference_enabled = self._add_toggle(
+            model_layout,
+            0,
+            "모델 추론",
+            bool(inference_config.get("enabled", True)),
+        )
+        self.model_bundle_path = self._add_text_input(
+            model_layout,
+            1,
+            "Model Bundle Path",
+            inference_config.get("model_bundle_path", DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH),
+            "model_bundle.json이 있는 폴더",
+        )
+        browse_btn = QPushButton("폴더 선택")
+        browse_btn.setObjectName("test_btn")
+        browse_btn.setFixedSize(160, 40)
+        browse_btn.clicked.connect(self.on_browse_model_bundle)
+        model_layout.addWidget(browse_btn, 1, 2)
+
+        self.model_use_bundle_params = self._add_toggle(
+            model_layout,
+            2,
+            "Bundle Params",
+            bool(inference_config.get("use_bundle_runtime_params", True)),
+        )
+        self.model_input_kind = self._add_combo(
+            model_layout,
+            3,
+            "Model Input Kind",
+            [
+                ("raw", "raw"),
+                ("reflectance", "reflectance"),
+                ("absorbance", "absorbance"),
+            ],
+            inference_config.get("model_input_kind", "raw"),
+        )
+        self.model_input_kind.currentIndexChanged.connect(self.on_model_input_kind_changed)
+
+        self.model_reference_mode = self._add_text_input(
+            model_layout,
+            4,
+            "Reference 사용",
+            "사용" if bool(inference_config.get("reference_required", False)) else "미사용",
+            "모델 종류에 따라 자동",
+        )
+        self.model_reference_mode.setReadOnly(True)
+
+        reference_paths = inference_config.get("reference_paths", {})
+        if not isinstance(reference_paths, dict):
+            reference_paths = {}
+        self.dark_reference_path = self._add_text_input(
+            model_layout,
+            5,
+            "Dark Reference Path",
+            reference_paths.get("dark_mean", ""),
+            "dark reference 폴더 또는 mean.npy",
+        )
+        self.dark_ref_btn = QPushButton("경로 선택")
+        self.dark_ref_btn.setObjectName("test_btn")
+        self.dark_ref_btn.setFixedSize(160, 40)
+        self.dark_ref_btn.clicked.connect(
+            lambda: self.on_browse_reference_path(self.dark_reference_path, "Dark reference 선택")
+        )
+        model_layout.addWidget(self.dark_ref_btn, 5, 2)
+
+        self.white_reference_path = self._add_text_input(
+            model_layout,
+            6,
+            "White Reference Path",
+            reference_paths.get("white_mean", ""),
+            "white reference 폴더 또는 mean.npy",
+        )
+        self.white_ref_btn = QPushButton("경로 선택")
+        self.white_ref_btn.setObjectName("test_btn")
+        self.white_ref_btn.setFixedSize(160, 40)
+        self.white_ref_btn.clicked.connect(
+            lambda: self.on_browse_reference_path(self.white_reference_path, "White reference 선택")
+        )
+        model_layout.addWidget(self.white_ref_btn, 6, 2)
+
+        model_check_btn = QPushButton("모델 확인")
+        model_check_btn.setObjectName("test_btn")
+        model_check_btn.setFixedSize(770, 50)
+        model_check_btn.clicked.connect(self.on_test_model_bundle)
+        model_layout.addWidget(model_check_btn, 7, 1, 1, 2)
+        self._pin_model_layout_left(model_layout)
+        self._sync_reference_controls()
+
         contents_layout.addLayout(input_layout)
         contents_layout.addWidget(camera_title)
         contents_layout.addLayout(acquisition_layout)
+        contents_layout.addWidget(model_title)
+        contents_layout.addLayout(model_layout)
         contents_layout.addLayout(
             self._button_layout(
                 test_text="MAC 기준 찾기",
@@ -415,6 +515,12 @@ class CameraTab(QWidget):
         parent_layout.setColumnStretch(2, 1)
         return combo
 
+    @staticmethod
+    def _pin_model_layout_left(layout):
+        for column in (0, 1, 2):
+            layout.setColumnStretch(column, 0)
+        layout.setColumnStretch(3, 1)
+
     def _button_layout(self, test_text, test_func, apply_func):
         layout = QHBoxLayout()
         layout.setAlignment(Qt.AlignLeft)
@@ -458,6 +564,7 @@ class CameraTab(QWidget):
             camera_config = self._hyper_section("camera")
             lumo_config = self._hyper_section("lumo")
             breeze_compat = self._hyper_section("breeze_compat")
+            inference_config = self._hyper_section("inference")
             config["enabled"] = bool(self.hyper_enabled.isChecked())
             config["connection_mode"] = str(self.hyper_mode.currentData() or "breeze")
 
@@ -484,6 +591,33 @@ class CameraTab(QWidget):
             camera_config["line_rate_hz"] = self._read_float_input(self.lumo_line_rate, "Line Rate", 100.0, minimum=0.0)
             camera_config["rgb_bands"] = self._parse_rgb_bands(self.lumo_rgb_bands.text())
             breeze_compat["mirror_line"] = bool(self.lumo_mirror_line.isChecked())
+
+            inference_enabled = bool(self.model_inference_enabled.isChecked())
+            inference_config["enabled"] = inference_enabled
+            inference_config["use_bundle_runtime_params"] = bool(self.model_use_bundle_params.isChecked())
+            bundle_path = self.model_bundle_path.text().strip()
+            if inference_enabled:
+                bundle_info = self._validate_model_bundle_path(
+                    bundle_path,
+                    model_input_kind=self._selected_model_input_kind(),
+                    dark_reference_path=self.dark_reference_path.text().strip(),
+                    white_reference_path=self.white_reference_path.text().strip(),
+                )
+                bundle_path = str(bundle_info["bundle_path"])
+                inference_config["model_path"] = str(bundle_info["model_path"])
+                inference_config["model_input_kind"] = str(bundle_info["input_kind"])
+                inference_config["reference_required"] = bool(bundle_info["reference_required"])
+                reference_paths = dict(bundle_info["reference_paths"]) or self._reference_input_values()
+                inference_config["reference_paths"] = reference_paths
+                self.model_reference_mode.setText("사용" if bundle_info["reference_required"] else "미사용")
+                self._set_reference_inputs(bundle_info["reference_paths"])
+            else:
+                inference_config["model_path"] = ""
+                inference_config["model_input_kind"] = self._selected_model_input_kind()
+                inference_config["reference_required"] = self._selected_model_input_kind() in {"reflectance", "absorbance"}
+                inference_config["reference_paths"] = self._reference_input_values()
+            inference_config["model_bundle_path"] = bundle_path
+            self.model_bundle_path.setText(bundle_path)
 
             self._save_app_config()
             self.hyper_status.setText("적용됨")
@@ -569,6 +703,68 @@ class CameraTab(QWidget):
             self.app.on_popup("warning", "Lumo MAC 검색", message)
         log(f"[INFO] Lumo network: {network}, candidates: {network_candidates}, devices: {devices}")
 
+    def on_browse_model_bundle(self):
+        current = self.model_bundle_path.text().strip() or DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH
+        current_path = self._resolve_path(current)
+        if current_path.is_file():
+            current_path = current_path.parent
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "초분광 모델 번들 선택",
+            str(current_path if current_path.exists() else Path(DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH)),
+        )
+        if selected:
+            self.model_bundle_path.setText(selected)
+
+    def on_browse_reference_path(self, input_field, title):
+        current = input_field.text().strip()
+        if current:
+            current_path = self._resolve_path(current)
+            if current_path.is_file():
+                current_path = current_path.parent
+        else:
+            bundle_path = self._resolve_path(self.model_bundle_path.text().strip() or DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH)
+            current_path = bundle_path if bundle_path.exists() else Path(DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH)
+
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            title,
+            str(current_path if current_path.exists() else Path(DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH)),
+        )
+        if selected:
+            input_field.setText(selected)
+
+    def on_model_input_kind_changed(self, *_args):
+        self._sync_reference_controls()
+
+    def on_test_model_bundle(self):
+        try:
+            bundle_info = self._validate_model_bundle_path(
+                self.model_bundle_path.text().strip(),
+                model_input_kind=self._selected_model_input_kind(),
+                dark_reference_path=self.dark_reference_path.text().strip(),
+                white_reference_path=self.white_reference_path.text().strip(),
+            )
+        except ValueError as e:
+            self.hyper_status.setText("모델 확인 실패")
+            self.app.on_popup("warning", "초분광 모델", str(e))
+            return
+
+        self.model_bundle_path.setText(str(bundle_info["bundle_path"]))
+        self.model_reference_mode.setText("사용" if bundle_info["reference_required"] else "미사용")
+        self._set_reference_inputs(bundle_info["reference_paths"])
+        self._sync_reference_controls()
+        self.hyper_status.setText("모델 확인됨")
+        self.app.on_popup(
+            "info",
+            "초분광 모델",
+            f"Bundle: {bundle_info['bundle_id']}\n"
+            f"Model: {bundle_info['model_path'].name}\n"
+            f"Input: {bundle_info['input_kind']}\n"
+            f"Reference: {'required' if bundle_info['reference_required'] else 'not required'}",
+        )
+        log(f"[INFO] spectral model bundle verified: {bundle_info}")
+
     def _parse_rgb_bands(self, text):
         try:
             values = [int(item.strip()) for item in str(text).split(",") if item.strip()]
@@ -605,6 +801,158 @@ class CameraTab(QWidget):
         if minimum is not None and value < minimum:
             raise ValueError(f"{label} 값은 {minimum} 이상이어야 합니다.")
         return value
+
+    def _validate_model_bundle_path(
+        self,
+        value,
+        *,
+        model_input_kind=None,
+        dark_reference_path="",
+        white_reference_path="",
+    ):
+        if not value:
+            raise ValueError("Model Bundle Path를 입력해주세요.")
+
+        bundle_path = self._resolve_path(value)
+        if bundle_path.is_file() and bundle_path.name == "model_bundle.json":
+            bundle_path = bundle_path.parent
+        manifest_path = bundle_path / "model_bundle.json"
+        if not manifest_path.exists():
+            raise ValueError(f"model_bundle.json을 찾을 수 없습니다.\n{manifest_path}")
+
+        try:
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except Exception as exc:
+            raise ValueError(f"model_bundle.json을 읽을 수 없습니다.\n{exc}") from exc
+
+        model_section = manifest.get("model", {}) if isinstance(manifest, dict) else {}
+        model_relpath = model_section.get("path") if isinstance(model_section, dict) else None
+        if not model_relpath:
+            raise ValueError("model_bundle.json에 model.path가 없습니다.")
+        model_path = (bundle_path / str(model_relpath)).resolve()
+        if not model_path.exists():
+            raise ValueError(f"모델 파일을 찾을 수 없습니다.\n{model_path}")
+
+        training_metadata = manifest.get("training_metadata", {}) if isinstance(manifest, dict) else {}
+        if not isinstance(training_metadata, dict):
+            training_metadata = {}
+        manifest_input_kind = str(
+            training_metadata.get(
+                "model_input_kind",
+                training_metadata.get("input_kind", training_metadata.get("training_input_kind", "raw")),
+            )
+            or "raw"
+        ).strip().lower()
+        input_kind = self._normalize_model_input_kind(model_input_kind or manifest_input_kind)
+        if input_kind not in {"raw", "reflectance", "absorbance"}:
+            raise ValueError(f"지원하지 않는 model input kind입니다: {input_kind}")
+
+        bundle_reference_paths = self._bundle_reference_paths(bundle_path, manifest)
+        reference_paths = {}
+        if input_kind in {"reflectance", "absorbance"}:
+            reference_paths["dark_mean"] = str(
+                self._resolve_reference_mean_path(
+                    dark_reference_path,
+                    fallback=bundle_reference_paths.get("dark_mean", ""),
+                    side="dark",
+                )
+            )
+            reference_paths["white_mean"] = str(
+                self._resolve_reference_mean_path(
+                    white_reference_path,
+                    fallback=bundle_reference_paths.get("white_mean", ""),
+                    side="white",
+                )
+            )
+
+        return {
+            "bundle_path": bundle_path.resolve(),
+            "manifest_path": manifest_path.resolve(),
+            "model_path": model_path,
+            "bundle_id": str(manifest.get("bundle_id", bundle_path.name)),
+            "input_kind": input_kind,
+            "manifest_input_kind": manifest_input_kind,
+            "reference_required": input_kind in {"reflectance", "absorbance"},
+            "reference_paths": reference_paths,
+            "bundle_reference_paths": bundle_reference_paths,
+        }
+
+    def _selected_model_input_kind(self):
+        value = self.model_input_kind.currentData()
+        return self._normalize_model_input_kind(value)
+
+    def _normalize_model_input_kind(self, value):
+        kind = str(value or "raw").strip().lower()
+        if kind not in {"raw", "reflectance", "absorbance"}:
+            return "raw"
+        return kind
+
+    def _sync_reference_controls(self):
+        reference_required = self._selected_model_input_kind() in {"reflectance", "absorbance"}
+        self.model_reference_mode.setText("사용" if reference_required else "미사용")
+        for widget in (
+            self.dark_reference_path,
+            self.white_reference_path,
+            self.dark_ref_btn,
+            self.white_ref_btn,
+        ):
+            widget.setEnabled(reference_required)
+
+    def _set_reference_inputs(self, reference_paths):
+        if not isinstance(reference_paths, dict):
+            reference_paths = {}
+        if reference_paths.get("dark_mean"):
+            self.dark_reference_path.setText(str(reference_paths["dark_mean"]))
+        if reference_paths.get("white_mean"):
+            self.white_reference_path.setText(str(reference_paths["white_mean"]))
+
+    def _reference_input_values(self):
+        paths = {}
+        dark_path = self.dark_reference_path.text().strip()
+        white_path = self.white_reference_path.text().strip()
+        if dark_path:
+            paths["dark_mean"] = dark_path
+        if white_path:
+            paths["white_mean"] = white_path
+        return paths
+
+    def _bundle_reference_paths(self, bundle_path, manifest):
+        calibration = manifest.get("calibration", {}) if isinstance(manifest, dict) else {}
+        if not isinstance(calibration, dict):
+            return {}
+        reference_paths = {}
+        for side in ("dark", "white"):
+            side_section = calibration.get(side, {})
+            mean_section = side_section.get("mean", {}) if isinstance(side_section, dict) else {}
+            mean_relpath = mean_section.get("path") if isinstance(mean_section, dict) else None
+            if not mean_relpath:
+                continue
+            mean_path = (bundle_path / str(mean_relpath)).resolve()
+            if mean_path.exists():
+                reference_paths[f"{side}_mean"] = str(mean_path)
+        return reference_paths
+
+    def _resolve_reference_mean_path(self, value, *, fallback="", side="reference"):
+        raw_value = str(value or "").strip() or str(fallback or "").strip()
+        if not raw_value:
+            raise ValueError(f"{side} reference 경로를 입력해주세요.")
+
+        path = self._resolve_path(raw_value)
+        if path.is_dir():
+            path = path / "mean.npy"
+        if not path.exists():
+            raise ValueError(f"{side} reference mean 파일을 찾을 수 없습니다.\n{path}")
+        if path.suffix.lower() != ".npy":
+            raise ValueError(f"{side} reference는 mean.npy 파일이거나 mean.npy가 있는 폴더여야 합니다.\n{path}")
+        return path.resolve()
+
+    @staticmethod
+    def _resolve_path(value):
+        path = Path(str(value)).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        return path.resolve()
 
     def _list_lumo_devices(self):
         return list_lumo_devices()

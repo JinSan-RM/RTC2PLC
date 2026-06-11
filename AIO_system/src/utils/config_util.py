@@ -620,6 +620,18 @@ CAMERA_CONFIGS = {
 
 
 DEFAULT_LUMO_MAC_ADDRESS = "70-F8-E7-B0-11-1B"
+DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH = str(
+    Path(__file__).resolve().parents[1]
+    / "module"
+    / "spectral_runtime_full_kit"
+    / "model_bundles"
+    / "20260602T005958Z-default-runtime-bundle-20260521T063330Z-plsda-model"
+)
+DEFAULT_SPECTRAL_MODEL_PATH = str(
+    Path(DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH)
+    / "model"
+    / "20260521T063330Z-plsda-model.pkl"
+)
 
 
 def build_default_camera_connection_config():
@@ -668,6 +680,15 @@ def build_default_camera_connection_config():
             },
             "breeze_compat": {
                 "mirror_line": False,
+            },
+            "inference": {
+                "enabled": True,
+                "model_bundle_path": DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH,
+                "model_path": DEFAULT_SPECTRAL_MODEL_PATH,
+                "model_input_kind": "raw",
+                "reference_required": False,
+                "reference_paths": {},
+                "use_bundle_runtime_params": True,
             },
         },
     }

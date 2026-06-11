@@ -82,19 +82,18 @@ class LumoStatusWorker(QThread):
             self.error_ready.emit(str(exc))
 
 
-class LumoTestScanWorker(QThread):
-    """Open Lumo camera and stream a short scan into the monitoring view."""
+class LumoStreamWorker(QThread):
+    """Open Lumo camera and stream lines into the monitoring view."""
 
     line_ready = Signal(object)
     status_ready = Signal(str)
     scan_finished = Signal(object)
     error_ready = Signal(str)
 
-    def __init__(self, app_config, frames=180, mode="test"):
+    def __init__(self, app_config, frames=None):
         super().__init__()
         self.app_config = copy.deepcopy(app_config or {})
         self.frames = None if frames is None else int(frames)
-        self.mode = str(mode or "test")
         self._stop_requested = False
         self._camera = None
 
@@ -108,8 +107,7 @@ class LumoTestScanWorker(QThread):
                 pass
 
     def run(self):
-        is_live = self.mode == "live"
-        self.status_ready.emit("연결 준비" if is_live else "테스트 스캔 준비")
+        self.status_ready.emit("스트리밍 준비")
         try:
             ensure_lumo_module_path()
             from specim_lumo_camera_kit import SpecimLumoCameraModule
@@ -142,7 +140,7 @@ class LumoTestScanWorker(QThread):
             if source is None:
                 raise RuntimeError("Lumo camera source was not opened.")
 
-            self.status_ready.emit("스트리밍 중" if is_live else "테스트 스캔 중")
+            self.status_ready.emit("스트리밍 중")
             rgb_bands = tuple(getattr(source.settings, "rgb_bands", (32, 96, 160)))
             frame_count = 0
             for frame in source.frames(max_frames=self.frames):
@@ -163,7 +161,6 @@ class LumoTestScanWorker(QThread):
                     "stopped": bool(self._stop_requested),
                     "network": network,
                     "device_index": device_index,
-                    "mode": self.mode,
                 }
             )
         except Exception as exc:  # noqa: BLE001
@@ -867,7 +864,7 @@ class MonitoringPage(QWidget):
         self._create_hyperspectral_control_panel(parent_layout)
 
     def _create_hyperspectral_control_panel(self, parent_layout):
-        """초분광 연결 상태 및 테스트 스캔 제어"""
+        """초분광 연결 상태 및 스트리밍 제어"""
         control_box = QFrame()
         control_box.setObjectName("control_box")
         layout = QHBoxLayout(control_box)
@@ -899,19 +896,13 @@ class MonitoringPage(QWidget):
         self.lumo_check_btn.clicked.connect(self.on_lumo_check_now)
         layout.addWidget(self.lumo_check_btn)
 
-        self.lumo_connect_btn = QPushButton("연결 시작")
+        self.lumo_connect_btn = QPushButton("스트리밍 시작")
         self.lumo_connect_btn.setObjectName("control_btn_start")
         self.lumo_connect_btn.setFixedSize(140, 50)
         self.lumo_connect_btn.clicked.connect(self.on_lumo_connect)
         layout.addWidget(self.lumo_connect_btn)
 
-        self.lumo_test_scan_btn = QPushButton("테스트 스캔")
-        self.lumo_test_scan_btn.setObjectName("control_btn_start")
-        self.lumo_test_scan_btn.setFixedSize(140, 50)
-        self.lumo_test_scan_btn.clicked.connect(self.on_lumo_test_scan)
-        layout.addWidget(self.lumo_test_scan_btn)
-
-        self.lumo_stop_scan_btn = QPushButton("연결 정지")
+        self.lumo_stop_scan_btn = QPushButton("스트리밍 정지")
         self.lumo_stop_scan_btn.setObjectName("control_btn_stop")
         self.lumo_stop_scan_btn.setFixedSize(140, 50)
         self.lumo_stop_scan_btn.setEnabled(False)
@@ -972,7 +963,6 @@ class MonitoringPage(QWidget):
         scan_running = self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning()
         if not scan_running:
             self.lumo_connect_btn.setEnabled(bool(network) and device_index is not None)
-            self.lumo_test_scan_btn.setEnabled(bool(network) and device_index is not None)
         log(
             "[INFO] Lumo status: "
             f"network={network}, device_index={device_index}, devices={len(devices) if isinstance(devices, list) else 0}"
@@ -983,7 +973,6 @@ class MonitoringPage(QWidget):
             return
         self._set_lumo_status_text("상태: 확인 실패", "#f85149")
         self.lumo_connect_btn.setEnabled(False)
-        self.lumo_test_scan_btn.setEnabled(False)
         log(f"[WARNING] Lumo status check failed: {message}")
 
     def _set_lumo_status_text(self, text, color):
@@ -992,21 +981,19 @@ class MonitoringPage(QWidget):
         self.lumo_status_label.setText(text)
         self.lumo_status_label.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
 
-    def _start_lumo_scan_worker(self, *, frames, mode):
+    def _start_lumo_scan_worker(self, *, frames=None):
         if self._lumo_shutting_down:
             return False
         if self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning():
             return False
         if self.hyper_camera:
             self.hyper_camera.start_camera()
-        is_live = mode == "live"
         self.lumo_connect_btn.setEnabled(False)
-        self.lumo_test_scan_btn.setEnabled(False)
         self.lumo_stop_scan_btn.setEnabled(True)
-        self.lumo_stop_scan_btn.setText("연결 정지" if is_live else "스캔 정지")
-        self._set_lumo_status_text("상태: 연결 준비" if is_live else "상태: 테스트 준비", "#d29922")
+        self.lumo_stop_scan_btn.setText("스트리밍 정지")
+        self._set_lumo_status_text("상태: 스트리밍 준비", "#d29922")
 
-        self.lumo_scan_worker = LumoTestScanWorker(self.app.config, frames=frames, mode=mode)
+        self.lumo_scan_worker = LumoStreamWorker(self.app.config, frames=frames)
         self.lumo_scan_worker.status_ready.connect(self.on_lumo_scan_status)
         self.lumo_scan_worker.line_ready.connect(self.on_lumo_scan_line)
         self.lumo_scan_worker.scan_finished.connect(self.on_lumo_scan_finished)
@@ -1017,10 +1004,7 @@ class MonitoringPage(QWidget):
         return True
 
     def on_lumo_connect(self):
-        self._start_lumo_scan_worker(frames=None, mode="live")
-
-    def on_lumo_test_scan(self):
-        self._start_lumo_scan_worker(frames=180, mode="test")
+        self._start_lumo_scan_worker()
 
     def on_lumo_stop_scan(self):
         worker = self.lumo_scan_worker
@@ -1033,7 +1017,7 @@ class MonitoringPage(QWidget):
         if self._lumo_shutting_down:
             return
         self._set_lumo_status_text(f"상태: {message}", "#d29922")
-        log(f"[INFO] Lumo test scan: {message}")
+        log(f"[INFO] Lumo stream: {message}")
 
     def on_lumo_scan_line(self, info):
         if self._lumo_shutting_down:
@@ -1044,42 +1028,27 @@ class MonitoringPage(QWidget):
     def on_lumo_scan_finished(self, payload):
         if self._lumo_shutting_down:
             return
-        frame_count = int(payload.get("frame_count", 0)) if isinstance(payload, dict) else 0
         stopped = bool(payload.get("stopped")) if isinstance(payload, dict) else False
-        mode = str(payload.get("mode", "test")) if isinstance(payload, dict) else "test"
-        is_live = mode == "live"
-        if is_live:
-            self._set_lumo_status_text("상태: 연결 정지" if stopped else "상태: 연결 종료", "#3fb950")
-        else:
-            self._set_lumo_status_text("상태: 스캔 정지" if stopped else "상태: 스캔 완료", "#3fb950")
+        self._set_lumo_status_text("상태: 스트리밍 정지" if stopped else "상태: 스트리밍 종료", "#3fb950")
         self.lumo_connect_btn.setEnabled(True)
-        self.lumo_test_scan_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
-        self.lumo_stop_scan_btn.setText("연결 정지")
+        self.lumo_stop_scan_btn.setText("스트리밍 정지")
         if isinstance(payload, dict):
             network = payload.get("network")
             device_index = payload.get("device_index")
             ip_text = str(network.get("ip_address")) if isinstance(network, dict) else "-"
             self.lumo_ip_label.setText(f"IP: {ip_text}")
             self.lumo_device_label.setText(f"Device: {device_index if device_index is not None else '-'}")
-        if not is_live:
-            self.app.on_popup("info", "테스트 스캔", f"수신 라인: {frame_count}")
 
     def on_lumo_scan_error(self, message):
         if self._lumo_shutting_down:
             return
-        worker_mode = "live"
-        worker = self.lumo_scan_worker
-        if worker is not None:
-            worker_mode = getattr(worker, "mode", "test")
-        is_live = worker_mode == "live"
-        self._set_lumo_status_text("상태: 연결 실패" if is_live else "상태: 스캔 실패", "#f85149")
+        self._set_lumo_status_text("상태: 스트리밍 실패", "#f85149")
         self.lumo_connect_btn.setEnabled(True)
-        self.lumo_test_scan_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
-        self.lumo_stop_scan_btn.setText("연결 정지")
-        log(f"[ERROR] Lumo {'connection' if is_live else 'test scan'} failed: {message}")
-        title = "초분광 연결" if is_live else "테스트 스캔"
+        self.lumo_stop_scan_btn.setText("스트리밍 정지")
+        log(f"[ERROR] Lumo stream failed: {message}")
+        title = "초분광 스트리밍"
         self.app.on_popup("warning", title, f"{title} 실패: {message}")
 
     def _on_lumo_status_worker_finished(self):
@@ -1272,7 +1241,7 @@ class MonitoringPage(QWidget):
         if self.hyper_camera:
             self.hyper_camera.start_camera()
         if self._is_lumo_runtime_mode():
-            self._start_lumo_scan_worker(frames=None, mode="live")
+            self._start_lumo_scan_worker()
 
     def on_stop_all(self):
         """전체 정지"""
