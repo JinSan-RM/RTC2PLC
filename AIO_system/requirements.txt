@@ -23,6 +23,7 @@ Pillow
 numpy==1.26.4
 scipy==1.14.1
 pandas==2.2.3
+scikit-learn==1.5.2
 
 # Image Processing
 scikit-image==0.24.0
