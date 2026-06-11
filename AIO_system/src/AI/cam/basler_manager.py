@@ -301,7 +301,8 @@ class BaslerCameraManager:
                 else:
                     grabResult.Release()
         except Exception as e:
-            log(f"프레임 캡처 오류: {e}")
+            # log(f"프레임 캡처 오류: {e}")
+            pass
         return None
     
     def start_grabbing(self):
