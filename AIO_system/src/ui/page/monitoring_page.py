@@ -41,6 +41,7 @@ from src.utils.lumo_camera_service import (
     lumo_camera_payload,
     lumo_line_to_rgb_bytes,
     lumo_status_snapshot,
+    sanitize_lumo_interface_name,
 )
 
 
@@ -113,7 +114,7 @@ class LumoTestScanWorker(QThread):
 
             payload = lumo_camera_payload(self.app_config)
             lumo = payload.setdefault("lumo", {})
-            interface_name = str(lumo.get("interface_name") or "").strip() or None
+            interface_name = sanitize_lumo_interface_name(lumo.get("interface_name"))
             network, _candidates = find_lumo_network(interface_name=interface_name)
             if network:
                 lumo["interface_name"] = str(network.get("interface_alias") or "")
@@ -655,7 +656,7 @@ class MonitoringPage(QWidget):
         self.hyper_camera = None
         self.lumo_status_worker = None
         self.lumo_scan_worker = None
-        self.lumo_status_timer = None
+        self._lumo_shutting_down = False
         self.ai_manager = BatchAIManager(
             num_cameras=2,
             confidence_threshold=0.1,
@@ -672,7 +673,21 @@ class MonitoringPage(QWidget):
             log("BatchAIManager 초기화 완료!")
 
         self._init_ui()
-        self._start_lumo_status_timer()
+        self._set_lumo_status_text("상태: 대기", "#8b949e")
+
+    def shutdown(self):
+        self._lumo_shutting_down = True
+
+        scan_worker = self.lumo_scan_worker
+        if scan_worker is not None and scan_worker.isRunning():
+            scan_worker.stop()
+            if not scan_worker.wait(5000):
+                log("[WARNING] Lumo test scan worker did not stop before shutdown")
+
+        status_worker = self.lumo_status_worker
+        if status_worker is not None and status_worker.isRunning():
+            if not status_worker.wait(6000):
+                log("[WARNING] Lumo status worker did not stop before shutdown")
 
     def _init_ui(self):
         """UI 초기화"""
@@ -898,13 +913,9 @@ class MonitoringPage(QWidget):
         parent_layout.addSpacing(12)
         parent_layout.addWidget(control_box)
 
-    def _start_lumo_status_timer(self):
-        self.lumo_status_timer = QTimer(self)
-        self.lumo_status_timer.timeout.connect(self.on_lumo_status_tick)
-        self.lumo_status_timer.start(3000)
-        self.on_lumo_status_tick()
-
-    def on_lumo_status_tick(self):
+    def _run_lumo_status_check_once(self):
+        if self._lumo_shutting_down:
+            return
         if self.lumo_status_worker is not None and self.lumo_status_worker.isRunning():
             return
         self.lumo_status_worker = LumoStatusWorker(self.app.config)
@@ -916,9 +927,11 @@ class MonitoringPage(QWidget):
 
     def on_lumo_check_now(self):
         self._set_lumo_status_text("상태: 확인 중", "#d29922")
-        self.on_lumo_status_tick()
+        self._run_lumo_status_check_once()
 
     def on_lumo_status_ready(self, payload):
+        if self._lumo_shutting_down:
+            return
         network = payload.get("network") if isinstance(payload, dict) else None
         devices = payload.get("devices", []) if isinstance(payload, dict) else []
         device_index = payload.get("device_index") if isinstance(payload, dict) else None
@@ -943,6 +956,8 @@ class MonitoringPage(QWidget):
         )
 
     def on_lumo_status_error(self, message):
+        if self._lumo_shutting_down:
+            return
         self._set_lumo_status_text("상태: 확인 실패", "#f85149")
         self.lumo_test_scan_btn.setEnabled(False)
         log(f"[WARNING] Lumo status check failed: {message}")
@@ -954,6 +969,8 @@ class MonitoringPage(QWidget):
         self.lumo_status_label.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
 
     def on_lumo_test_scan(self):
+        if self._lumo_shutting_down:
+            return
         if self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning():
             return
         if self.hyper_camera:
@@ -979,23 +996,36 @@ class MonitoringPage(QWidget):
         self.lumo_stop_scan_btn.setEnabled(False)
 
     def on_lumo_scan_status(self, message):
+        if self._lumo_shutting_down:
+            return
         self._set_lumo_status_text(f"상태: {message}", "#d29922")
         log(f"[INFO] Lumo test scan: {message}")
 
     def on_lumo_scan_line(self, info):
+        if self._lumo_shutting_down:
+            return
         if self.hyper_camera and self.hyper_camera.is_running:
             self.hyper_camera.process_hyperspectral_line(info)
 
     def on_lumo_scan_finished(self, payload):
+        if self._lumo_shutting_down:
+            return
         frame_count = int(payload.get("frame_count", 0)) if isinstance(payload, dict) else 0
         stopped = bool(payload.get("stopped")) if isinstance(payload, dict) else False
         self._set_lumo_status_text("상태: 스캔 정지" if stopped else "상태: 스캔 완료", "#3fb950")
         self.lumo_test_scan_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
-        self.on_lumo_status_tick()
+        if isinstance(payload, dict):
+            network = payload.get("network")
+            device_index = payload.get("device_index")
+            ip_text = str(network.get("ip_address")) if isinstance(network, dict) else "-"
+            self.lumo_ip_label.setText(f"IP: {ip_text}")
+            self.lumo_device_label.setText(f"Device: {device_index if device_index is not None else '-'}")
         self.app.on_popup("info", "테스트 스캔", f"수신 라인: {frame_count}")
 
     def on_lumo_scan_error(self, message):
+        if self._lumo_shutting_down:
+            return
         self._set_lumo_status_text("상태: 스캔 실패", "#f85149")
         self.lumo_test_scan_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)

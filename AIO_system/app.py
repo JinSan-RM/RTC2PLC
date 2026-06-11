@@ -32,6 +32,7 @@ from src.utils.config_util import (
     PRCS_HTH_CHECK_TERM, MAX_PRCS_DEAD_COUNT,
     ProcessCheckVars,
     USE_FEEDER_CAM, FEEDER_AIR_TERM,
+    DEFAULT_LUMO_MAC_ADDRESS,
     build_default_camera_connection_config,
 )
 from src.utils.logger import log
@@ -727,7 +728,9 @@ class App():
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     self.config = json.load(f)
 
-                if self._merge_default_config(self.config, self._build_default_config()):
+                changed = self._merge_default_config(self.config, self._build_default_config())
+                changed = self._normalize_camera_connection_config(self.config) or changed
+                if changed:
                     self._save_config()
                 log("[INFO] config loaded")
                 return
@@ -764,6 +767,40 @@ class App():
                 changed = True
             elif isinstance(dst[key], dict) and isinstance(value, dict):
                 changed = self._merge_default_config(dst[key], value) or changed
+        return changed
+
+    def _normalize_camera_connection_config(self, config):
+        if not isinstance(config, dict):
+            return False
+
+        changed = False
+        camera_config = config.setdefault("camera_connection_config", {})
+        if not isinstance(camera_config, dict):
+            camera_config = {}
+            config["camera_connection_config"] = camera_config
+            changed = True
+
+        hyper_config = camera_config.setdefault("hyperspectral", {})
+        if not isinstance(hyper_config, dict):
+            hyper_config = {}
+            camera_config["hyperspectral"] = hyper_config
+            changed = True
+
+        lumo_config = hyper_config.setdefault("lumo", {})
+        if not isinstance(lumo_config, dict):
+            lumo_config = {}
+            hyper_config["lumo"] = lumo_config
+            changed = True
+
+        if lumo_config.get("mac_address") != DEFAULT_LUMO_MAC_ADDRESS:
+            lumo_config["mac_address"] = DEFAULT_LUMO_MAC_ADDRESS
+            changed = True
+
+        interface_name = str(lumo_config.get("interface_name") or "").strip()
+        if "\ufffd" in interface_name or interface_name.count("?") >= 2:
+            lumo_config["interface_name"] = ""
+            changed = True
+
         return changed
 
     def set_air_sequence_index(self):
@@ -826,6 +863,13 @@ class App():
 
     def quit(self):
         """애플리케이션 종료"""
+        camera_manager = self.camera_manager
+        if camera_manager is not None and hasattr(camera_manager, "shutdown"):
+            try:
+                camera_manager.shutdown()
+            except Exception as e:
+                log(f"[WARNING] camera manager shutdown failed: {e}")
+
         self._save_config()
 
         if self.managers.comm_manager is not None:

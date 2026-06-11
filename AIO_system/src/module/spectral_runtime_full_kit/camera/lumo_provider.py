@@ -187,12 +187,20 @@ def _device_ip_address(device: dict[str, Any]) -> str | None:
     return None
 
 
+def _sanitize_interface_name(value: str | None) -> str | None:
+    text = _to_string(value, "").strip()
+    if not text or "\ufffd" in text or text.count("?") >= 2:
+        return None
+    return text
+
+
 def _network_device_from_interface(
     interface_name: str | None,
     device_index: int,
     *,
     mac_address: str | None = None,
 ) -> dict[str, Any] | None:
+    interface_name = _sanitize_interface_name(interface_name)
     if not interface_name and not mac_address:
         return None
     try:
@@ -209,6 +217,13 @@ def _network_device_from_interface(
                 local_ipv4_addresses=local_ips,
                 timeout_seconds=5.0,
             )
+            if neighbor is None and interface_name:
+                neighbor = find_lumo_neighbor_by_mac(
+                    mac_address=mac_address,
+                    interface_name=None,
+                    local_ipv4_addresses=local_ips,
+                    timeout_seconds=5.0,
+                )
             neighbors = [neighbor] if neighbor is not None else []
         else:
             neighbors = list_lumo_remote_neighbors(
@@ -556,6 +571,7 @@ class NativeLumoFrameSource(FrameSource):
             "rgb_bands": settings.rgb_bands,
         }
         target_mac_address = normalize_mac_address(mac_address) if mac_address else None
+        interface_name = _sanitize_interface_name(interface_name)
         if ip_address:
             native_settings["ip_address"] = ip_address
         if interface_name:

@@ -91,14 +91,18 @@ def list_ipv4_neighbors(
     if interface_name:
         command += f" -InterfaceAlias {_powershell_quote(interface_name)}"
     command += " | Select-Object IPAddress,LinkLayerAddress,State,InterfaceAlias | ConvertTo-Json -Compress"
-    output = subprocess.check_output(
+    result = subprocess.run(
         ["powershell", "-NoProfile", "-Command", command],
+        stdout=subprocess.PIPE,
         encoding="utf-8",
         errors="replace",
         stderr=subprocess.STDOUT,
         timeout=float(timeout_seconds),
+        check=False,
     )
-    return parse_net_neighbor_json(output)
+    if result.returncode != 0:
+        return []
+    return parse_net_neighbor_json(result.stdout)
 
 
 def parse_net_neighbor_json(output: str) -> list[LocalNetworkNeighbor]:

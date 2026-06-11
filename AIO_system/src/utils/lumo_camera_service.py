@@ -33,10 +33,20 @@ def lumo_camera_payload(app_config: dict[str, Any] | None) -> dict[str, Any]:
         "breeze_compat": dict(breeze_compat) if isinstance(breeze_compat, dict) else {},
     }
     payload["lumo"]["mac_address"] = DEFAULT_LUMO_MAC_ADDRESS
+    payload["lumo"]["interface_name"] = sanitize_lumo_interface_name(
+        payload["lumo"].get("interface_name")
+    ) or ""
     payload["lumo"].setdefault("provider_mode", "native")
     payload["lumo"].setdefault("grab_timeout_ms", 5000)
     payload["lumo"].setdefault("device_index", 0)
     return payload
+
+
+def sanitize_lumo_interface_name(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text or "\ufffd" in text or text.count("?") >= 2:
+        return None
+    return text
 
 
 def list_lumo_devices() -> list[dict[str, Any]]:
@@ -57,12 +67,13 @@ def find_lumo_network(interface_name: str | None = None) -> tuple[dict[str, Any]
         select_lumo_local_adapter,
     )
 
+    requested_interface = sanitize_lumo_interface_name(interface_name)
     adapters = list_local_network_adapters(timeout_seconds=5.0)
     selected_adapter = None
-    if interface_name:
-        selected_adapter = select_lumo_local_adapter(adapters, preferred_interface=interface_name)
+    if requested_interface:
+        selected_adapter = select_lumo_local_adapter(adapters, preferred_interface=requested_interface)
 
-    resolved_interface = selected_adapter.name if selected_adapter is not None else interface_name
+    resolved_interface = selected_adapter.name if selected_adapter is not None else None
     local_ips = [
         ip
         for adapter in adapters
@@ -154,7 +165,7 @@ def find_lumo_device_index(
 
 def lumo_status_snapshot(app_config: dict[str, Any] | None) -> dict[str, Any]:
     payload = lumo_camera_payload(app_config)
-    interface_name = str(payload.get("lumo", {}).get("interface_name") or "").strip() or None
+    interface_name = sanitize_lumo_interface_name(payload.get("lumo", {}).get("interface_name"))
     network, candidates = find_lumo_network(interface_name=interface_name)
     devices = list_lumo_devices()
     device_index = find_lumo_device_index(
