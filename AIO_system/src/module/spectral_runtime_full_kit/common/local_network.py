@@ -92,7 +92,7 @@ def list_ipv4_neighbors(
         command += f" -InterfaceAlias {_powershell_quote(interface_name)}"
     command += " | Select-Object IPAddress,LinkLayerAddress,State,InterfaceAlias | ConvertTo-Json -Compress"
     result = subprocess.run(
-        ["powershell", "-NoProfile", "-Command", command],
+        ["powershell", "-NoProfile", "-Command", _powershell_utf8_command(command)],
         stdout=subprocess.PIPE,
         encoding="utf-8",
         errors="replace",
@@ -103,6 +103,14 @@ def list_ipv4_neighbors(
     if result.returncode != 0:
         return []
     return parse_net_neighbor_json(result.stdout)
+
+
+def _powershell_utf8_command(command: str) -> str:
+    return (
+        "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
+        "$OutputEncoding = [Console]::OutputEncoding; "
+        + command
+    )
 
 
 def parse_net_neighbor_json(output: str) -> list[LocalNetworkNeighbor]:

@@ -463,7 +463,9 @@ class CameraTab(QWidget):
 
             lumo_config["provider_mode"] = str(self.lumo_provider_mode.currentData() or "native")
             lumo_config["auto_from_local_network"] = bool(self.lumo_auto_network.isChecked())
-            lumo_config["interface_name"] = sanitize_lumo_interface_name(self.lumo_interface.text()) or ""
+            interface_name = sanitize_lumo_interface_name(self.lumo_interface.text()) or ""
+            lumo_config["interface_name"] = interface_name
+            self.lumo_interface.setText(interface_name)
             lumo_config["mac_address"] = DEFAULT_LUMO_MAC_ADDRESS
             lumo_config["ip_address"] = self.lumo_ip.text().strip()
             lumo_config["serial_number"] = self.lumo_serial.text().strip()
@@ -522,6 +524,8 @@ class CameraTab(QWidget):
         mac_address = DEFAULT_LUMO_MAC_ADDRESS
         self.lumo_mac.setText(DEFAULT_LUMO_MAC_ADDRESS)
         interface_name = sanitize_lumo_interface_name(self.lumo_interface.text())
+        if self.lumo_interface.text().strip() and interface_name is None:
+            self.lumo_interface.setText("")
         network = None
         network_candidates = []
         devices = []
@@ -541,7 +545,7 @@ class CameraTab(QWidget):
 
         if network:
             self.lumo_ip.setText(str(network.get("ip_address", "")))
-            self.lumo_interface.setText(str(network.get("interface_alias", "")))
+            self.lumo_interface.setText(sanitize_lumo_interface_name(network.get("interface_alias")) or "")
             self.lumo_mac.setText(DEFAULT_LUMO_MAC_ADDRESS)
             self.lumo_auto_network.setChecked(True)
 
