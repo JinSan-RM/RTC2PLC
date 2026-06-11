@@ -93,7 +93,10 @@ class CameraView(QFrame):
     def _init_ui(self):
         """UI 초기화"""
         self.setObjectName("camera_view")
-        self.setMinimumSize(350, 1000)
+        if self.is_hyperspectral:
+            self.setMinimumSize(800, 720)
+        else:
+            self.setMinimumSize(320, 720)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -111,7 +114,7 @@ class CameraView(QFrame):
         header_layout.addSpacing(15)
 
         # 상태 표시
-        self.status = QLabel("🟢 연결됨")
+        self.status = QLabel("연결됨")
         self.status.setObjectName("camera_status")
         header_layout.addWidget(self.status)
 
@@ -152,18 +155,19 @@ class CameraView(QFrame):
             self.image_label.setObjectName("camera_frame")
             self.image_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
             self.image_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            self.image_label.setText("📷 카메라 대기 중...")
+            self.image_label.setText("카메라 대기 중...")
             self.image_label.setStyleSheet(
                 """
                 background-color: #FAFAFA;
                 color: #B9B9B9;
                 font-size: 14px;
-                font-weight: medium;
+                font-weight: 500;
                 """
             )
 
             scroll_area.setWidget(self.image_label)
-            layout.addWidget(scroll_area)
+            scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            layout.addWidget(scroll_area, 1)
         else:
             self.hyper_widget = HyperSpectralWidget()
             self.hyper_widget.scene = QGraphicsScene(0, 0, 640, 480, self)
@@ -174,7 +178,7 @@ class CameraView(QFrame):
             self.hyper_widget.view.setObjectName("camera_frame")
             self.hyper_widget.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             self.hyper_widget.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            layout.addWidget(self.hyper_widget.view)
+            layout.addWidget(self.hyper_widget.view, 1)
 
         # 하단 정보
         info_layout = QHBoxLayout()
@@ -206,8 +210,6 @@ class CameraView(QFrame):
         info_layout.addWidget(self.resolution)
 
         layout.addLayout(info_layout)
-
-        layout.addStretch()
 
     def start_camera(self):
         """카메라 시작"""
@@ -287,7 +289,7 @@ class CameraView(QFrame):
                     self.img_data.overlay_info.clear()
                     self.img_data.line_buffer.clear()
             else:
-                self.image_label.setText("📷 카메라 대기 중...")
+                self.image_label.setText("카메라 대기 중...")
                 self.image_label.setPixmap(QPixmap())
 
             self.is_running = False
@@ -301,6 +303,8 @@ class CameraView(QFrame):
         """프레임 업데이트 (시그널로 호출됨)"""
         try:
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) 
+            if not self.is_hyperspectral:
+                rgb_frame = cv2.rotate(rgb_frame, cv2.ROTATE_90_CLOCKWISE)
 
             h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
@@ -309,6 +313,7 @@ class CameraView(QFrame):
 
             if not self.is_hyperspectral:
                 # RGB 카메라: 부모 영역에 맞춰 fit
+
                 parent_size = self.image_label.parent().size()
                 available_width = parent_size.width() - 20   # 여백
                 available_height = parent_size.height() - 20
@@ -343,10 +348,10 @@ class CameraView(QFrame):
     def update_status(self, connected):
         """상태 업데이트"""
         if connected:
-            self.status.setText("🟢 연결됨")
+            self.status.setText("연결됨")
             self.status.setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold;")
         else:
-            self.status.setText("🔴 연결 끊김")
+            self.status.setText("연결 끊김")
             self.status.setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold;")
 
     def on_error(self, error_msg):  
@@ -391,10 +396,10 @@ class CameraView(QFrame):
                 # RGB 640*3픽셀
                 line_rgb = line_array.reshape(640, 3)
             else:
-                log(f"⚠️ 잘못된 라인 크기: {len(line_array)} (예상: 640 또는 1920)")
+                log(f"잘못된 라인 크기: {len(line_array)} (예상: 640 또는 1920)")
                 return
 
-            # ✓ 수정: deque에 라인 추가 (자동으로 오래된 라인 제거)
+            # deque에 라인 추가 (자동으로 오래된 라인 제거)
             self.img_data.line_buffer.append(line_rgb)
             self.img_data.current_line = cur_line
 
@@ -459,6 +464,12 @@ class CameraView(QFrame):
             elif getattr(self, "hyper_widget", None) and self.hyper_widget.img_item is not None:
                 # QGraphicsScene 기반 렌더 경로
                 self.hyper_widget.img_item.setPixmap(pixmap)
+                # 비율 맞춰 늘리기
+                self.hyper_widget.scene.setSceneRect(pixmap.rect())
+                self.hyper_widget.view.fitInView(
+                    self.hyper_widget.img_item,
+                    Qt.KeepAspectRatio
+                )
 
         except Exception as e:
             log(f"이미지 업데이트 오류: {str(e)}")
@@ -519,12 +530,13 @@ class MonitoringPage(QWidget):
         self.hyper_camera = None
         self.ai_manager = BatchAIManager(
             num_cameras=2,
-            confidence_threshold=0.4,
-            img_size=480,
+            confidence_threshold=0.1,
+            img_size=640,
             max_det=50
         )
-        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\260323_best.pt"
+        # model_path = sys.path[0] + "\\src\\AI\\model\\weights\\260323_best.pt"
         # model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
+        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best_new.engine"
         if not self.ai_manager.initialize(model_path):
             log("AI 매니저 초기화 실패")
             # 초기화 실패해도 UI는 표시
@@ -572,14 +584,17 @@ class MonitoringPage(QWidget):
         scroll_layout.addSpacing(30)
 
         camera_layout = QHBoxLayout()
+        camera_layout.setSpacing(12)
+        camera_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
 
-        # 중단: RGB 카메라 (2x2)
+        # 왼쪽: Specim FX17
+        self._create_hyperspectral_camera(camera_layout)
+
+        # 가운데: RGB 카메라
         self._create_rgb_cameras(camera_layout)
 
-        camera_layout.addSpacing(30)
-
-        # 하단: 초분광 카메라
-        self._create_hyperspectral_camera(camera_layout)
+        # 오른쪽: 실시간 분류 통계
+        self._create_statistics_panel(camera_layout)
 
         scroll_layout.addLayout(camera_layout)
 
@@ -588,7 +603,6 @@ class MonitoringPage(QWidget):
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
 
-        # 스타일 적용
         self.apply_styles()
 
     def _create_side_bar(self, parent_layout):
@@ -623,20 +637,20 @@ class MonitoringPage(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
 
         # 전체 시작/정지
-        self.start_all_btn = QPushButton("▶️전체 시작")
+        self.start_all_btn = QPushButton("전체 시작")
         self.start_all_btn.setObjectName("control_btn_start")
         self.start_all_btn.setFixedSize(199, 60)
         self.start_all_btn.clicked.connect(self.on_start_all)
         layout.addWidget(self.start_all_btn)
 
-        self.stop_all_btn = QPushButton("⏹️전체 정지")
+        self.stop_all_btn = QPushButton("전체 정지")
         self.stop_all_btn.setObjectName("control_btn_stop")
         self.stop_all_btn.setFixedSize(199, 60)
         self.stop_all_btn.clicked.connect(self.on_stop_all)
         layout.addWidget(self.stop_all_btn)
 
         # 녹화
-        self.record_btn = QPushButton("▶️녹화 시작")
+        self.record_btn = QPushButton("녹화 시작")
         self.record_btn.setObjectName("control_btn_record")
         self.record_btn.setCheckable(True)
         self.record_btn.setFixedSize(199, 60)
@@ -644,7 +658,7 @@ class MonitoringPage(QWidget):
         layout.addWidget(self.record_btn)
 
         # 스냅샷
-        self.snapshot_btn = QPushButton("📸스냅샷")
+        self.snapshot_btn = QPushButton("스냅샷")
         self.snapshot_btn.setObjectName("control_btn_snapshot")
         self.snapshot_btn.setFixedSize(199, 60)
         self.snapshot_btn.clicked.connect(self.on_snapshot)
@@ -708,7 +722,8 @@ class MonitoringPage(QWidget):
         """RGB 카메라 그리드"""
         rgb_layout = QVBoxLayout()
         rgb_layout.setContentsMargins(0, 0, 0, 0)
-        rgb_layout.setSpacing(20)
+        rgb_layout.setSpacing(10)
+        rgb_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
 
         # rgb_layout.setMinimumHeight(0, 800)
         # rgb_layout.setStretch(0, 1)
@@ -732,11 +747,13 @@ class MonitoringPage(QWidget):
                 app=self.app,
                 ai_manager=self.ai_manager
             )
-            cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            cam.setFixedSize(160, 720)
+            cam.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             rgb_layout.addWidget(cam)
             self.rgb_cameras.append(cam)
 
         parent_layout.addLayout(rgb_layout)
+        parent_layout.setAlignment(rgb_layout, Qt.AlignLeft | Qt.AlignTop)
 
     def _create_statistics_box(self, legend_info_list):
         if not self.stats_frame:
@@ -762,7 +779,7 @@ class MonitoringPage(QWidget):
                 f"""
                 color: {color};
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
                 """
             )
             count_layout.addWidget(label)
@@ -774,7 +791,7 @@ class MonitoringPage(QWidget):
                 f"""
                 color: {color};
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
                 """
             )
             self.plastic_counts[name] = count
@@ -791,7 +808,7 @@ class MonitoringPage(QWidget):
             """
             color: #000000;
             font-size: 16px;
-            font-weight: medium;
+            font-weight: 500;
             """
         )
         total_layout.addWidget(total_label)
@@ -803,7 +820,7 @@ class MonitoringPage(QWidget):
             """
             color: #000000;
             font-size: 20px;
-            font-weight: medium;
+            font-weight: 500;
             """
         )
         total_layout.addWidget(self.total_count)
@@ -821,36 +838,18 @@ class MonitoringPage(QWidget):
 
         self.stats_frame.setLayout(stats_frame_layout)
 
-    def _create_hyperspectral_camera(self, parent_layout):
-        """초분광 카메라"""
-        hyper_layout = QVBoxLayout()
-
-        self.hyper_camera = CameraView(
-            "hyperspectral",
-            "Specim FX17",
-            camera_index=0,
-            app=self.app,
-            ai_manager=None,
-            is_hyperspectral=True
-        )
-        self.hyper_camera.setMinimumSize(400, 400)  # setFixedSixe(415, 422)에서 수정
-
-        self.hyper_camera.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정 부분 - 축소 제한 해제
-
-        hyper_layout.addWidget(self.hyper_camera)
-
-        hyper_layout.addSpacing(10)
-
-        # 우측: 분류 통계
+    def _create_statistics_panel(self, parent_layout):
         stats_layout = QVBoxLayout()
         stats_layout.setSpacing(0)
         stats_layout.setContentsMargins(0, 0, 0, 0)
+
         stats_title = QLabel("실시간 분류 통계")
         stats_title.setStyleSheet(
             """
             color: #000000;
             font-size: 16px;
-            font-weight: medium;
+            font-weight: bold;
+            
             """
         )
         stats_layout.addWidget(stats_title)
@@ -859,16 +858,31 @@ class MonitoringPage(QWidget):
 
         self.stats_frame = QFrame()
         self.stats_frame.setObjectName("stats_frame")
-        # self.stats_frame.setFixedSize(415, 422)
-        self.stats_frame.setMinimumSize(400, 400)   # setFixedSixe(415, 422)에서 수정
-
-        self.stats_frame.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정부분 - 축소 제한 해제
+        self.stats_frame.setFixedSize(320, 320)
+        self.stats_frame.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         stats_layout.addWidget(self.stats_frame)
 
-        stats_layout.addStretch()
+        parent_layout.addLayout(stats_layout)
+        parent_layout.setAlignment(stats_layout, Qt.AlignLeft | Qt.AlignTop)
 
-        hyper_layout.addLayout(stats_layout)
+    def _create_hyperspectral_camera(self, parent_layout):
+        """초분광 카메라"""
+        hyper_layout = QVBoxLayout()
+        hyper_layout.setContentsMargins(0, 0, 0, 0)
+        hyper_layout.setSpacing(0)
+        self.hyper_camera = CameraView(
+            "hyperspectral",
+            "Specim FX17",
+            camera_index=0,
+            app=self.app,
+            ai_manager=None,
+            is_hyperspectral=True
+        )
+        self.hyper_camera.setFixedSize(800, 720)
+        self.hyper_camera.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        hyper_layout.addWidget(self.hyper_camera)
 
         parent_layout.addLayout(hyper_layout)
 
@@ -940,12 +954,12 @@ class MonitoringPage(QWidget):
         """녹화"""
         if not self.start_all_btn.isEnabled():
             if checked:
-                self.record_btn.setText("⏹ 녹화 중지")
+                self.record_btn.setText("녹화 중지")
                 log("녹화 시작")
                 # TODO: 녹화 시작
                 self.app.on_popup("info", "녹화 시작", "녹화가 시작되었습니다.")
             else:
-                self.record_btn.setText("⏺ 녹화 시작")
+                self.record_btn.setText("녹화 시작")
                 log("녹화 중지")
                 # TODO: 녹화 중지
                 self.app.on_popup("info", "녹화 중지", "녹화가 중지되었습니다.")
@@ -1035,7 +1049,7 @@ class MonitoringPage(QWidget):
             #side_title_label {
                 color: #000000;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
             """
         )
@@ -1082,7 +1096,7 @@ class MonitoringPage(QWidget):
             #camera_title {
                 color: #000000;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #camera_status {
@@ -1127,7 +1141,7 @@ class MonitoringPage(QWidget):
                 border: none;
                 border-radius: 4px;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #control_btn_start:hover {
@@ -1140,7 +1154,7 @@ class MonitoringPage(QWidget):
                 border: none;
                 border-radius: 4px;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #control_btn_stop:hover {
@@ -1153,7 +1167,7 @@ class MonitoringPage(QWidget):
                 border: none;
                 border-radius: 4px;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #control_btn_record:hover {
@@ -1170,7 +1184,7 @@ class MonitoringPage(QWidget):
                 border: none;
                 border-radius: 4px;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #control_btn_snapshot:hover {
@@ -1183,7 +1197,7 @@ class MonitoringPage(QWidget):
                 border-radius: 4px;
                 color: #000000;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #reset_btn:hover {
@@ -1210,7 +1224,7 @@ class MonitoringPage(QWidget):
                 border: 2px solid #30363d;
                 border-radius: 4px;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #setting_btn:hover {
@@ -1224,7 +1238,7 @@ class MonitoringPage(QWidget):
                 border-radius: 4px;
                 color: #FFFFFF;
                 font-size: 16px;
-                font-weight: medium;
+                font-weight: 500;
             }
 
             #toggle_btn:checked {
@@ -1242,3 +1256,4 @@ class MonitoringPage(QWidget):
             }
             """
         )
+

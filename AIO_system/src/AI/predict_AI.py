@@ -118,15 +118,15 @@ class AIPlasticDetectionSystem:
     def __init__(
         self,
         model_path: str = None,
-        confidence_threshold: float = 0.4,
-        img_size: int = 480,
+        confidence_threshold: float = 0.1,
+        img_size: int = 640,
         airknife_callback=None,
         app=None,
         camera_index: int = 0
     ):
         self.app = app
         self.camera_index = camera_index
-        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.pt"
+        self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best_new.engine"
         # self.model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best.engine"
         log(f"모델 경로: {self.model_path}")
         self.model, self.device = load_yolov11(self.model_path)
@@ -431,7 +431,7 @@ class AIPlasticDetectionSystem:
 if __name__ == "__main__":
     log("AI Hub 폐플라스틱 감지 시스템 v4.0 (YOLOv11 + GPU)")
 
-    model_path = sys.path[0] + "\\model\\weights\\best.pt"
+    model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best_new.engine"
 
     if not os.path.exists(model_path):
         log(f"\n❌ 모델 파일을 찾을 수 없습니다: {model_path}")
@@ -440,7 +440,7 @@ if __name__ == "__main__":
     try:
         detector = AIPlasticDetectionSystem(
             model_path=model_path,
-            confidence_threshold=0.5,
+            confidence_threshold=0.1,
             img_size=320  # 더 빠르게: 640
         )
         detector.run()
