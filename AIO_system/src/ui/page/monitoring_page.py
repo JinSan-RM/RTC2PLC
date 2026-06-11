@@ -97,6 +97,10 @@ class CameraView(QFrame):
             self.setMinimumSize(800, 720)
         else:
             self.setMinimumSize(320, 720)
+        if self.is_hyperspectral:
+            self.setMinimumSize(800, 720)
+        else:
+            self.setMinimumSize(320, 720)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -530,12 +534,13 @@ class MonitoringPage(QWidget):
         self.hyper_camera = None
         self.ai_manager = BatchAIManager(
             num_cameras=2,
-            confidence_threshold=0.4,
-            img_size=480,
+            confidence_threshold=0.1,
+            img_size=640,
             max_det=50
         )
-        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\260323_best.pt"
+        # model_path = sys.path[0] + "\\src\\AI\\model\\weights\\260323_best.pt"
         # model_path = sys.path[0] + "\\src\\AI\\model\\best.engine"
+        model_path = sys.path[0] + "\\src\\AI\\model\\weights\\best_new.engine"
         if not self.ai_manager.initialize(model_path):
             log("AI 매니저 초기화 실패")
             # 초기화 실패해도 UI는 표시
@@ -746,8 +751,7 @@ class MonitoringPage(QWidget):
                 app=self.app,
                 ai_manager=self.ai_manager
             )
-            cam.setFixedSize(320, 720)
-            cam.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            cam.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             rgb_layout.addWidget(cam)
             self.rgb_cameras.append(cam)
 
@@ -847,7 +851,7 @@ class MonitoringPage(QWidget):
             """
             color: #000000;
             font-size: 16px;
-            font-weight: 500;
+            font-weight: medium;
             """
         )
         stats_layout.addWidget(stats_title)
@@ -856,8 +860,10 @@ class MonitoringPage(QWidget):
 
         self.stats_frame = QFrame()
         self.stats_frame.setObjectName("stats_frame")
-        self.stats_frame.setFixedSize(320, 520)
-        self.stats_frame.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        # self.stats_frame.setFixedSize(415, 422)
+        self.stats_frame.setMinimumSize(400, 400)   # setFixedSixe(415, 422)에서 수정
+
+        self.stats_frame.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정부분 - 축소 제한 해제
 
         stats_layout.addWidget(self.stats_frame)
 
