@@ -619,6 +619,9 @@ CAMERA_CONFIGS = {
 }
 
 
+DEFAULT_LUMO_MAC_ADDRESS = "70-F8-E7-B0-11-1B"
+
+
 def build_default_camera_connection_config():
     """Return editable camera connection defaults for the settings UI."""
     return {
@@ -656,7 +659,7 @@ def build_default_camera_connection_config():
                 "auto_from_local_network": False,
                 "serial_number": "",
                 "interface_name": "",
-                "mac_address": "",
+                "mac_address": DEFAULT_LUMO_MAC_ADDRESS,
                 "ip_address": "",
                 "device_index": 0,
                 "grab_timeout_ms": 5000,

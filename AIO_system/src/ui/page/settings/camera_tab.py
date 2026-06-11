@@ -13,7 +13,11 @@ from PySide6.QtWidgets import (
 )
 
 from src.AI.cam.basler_manager import get_camera_count
-from src.utils.config_util import ToggleButton, build_default_camera_connection_config
+from src.utils.config_util import (
+    DEFAULT_LUMO_MAC_ADDRESS,
+    ToggleButton,
+    build_default_camera_connection_config,
+)
 from src.utils.logger import log
 
 
@@ -239,10 +243,12 @@ class CameraTab(QWidget):
         self.lumo_mac = self._add_text_input(
             input_layout,
             5,
-            "MAC Address",
-            lumo_config.get("mac_address", ""),
-            "예: 70-F8-E7-B0-11-1B",
+            "MAC Address (고정)",
+            DEFAULT_LUMO_MAC_ADDRESS,
+            DEFAULT_LUMO_MAC_ADDRESS,
         )
+        self.lumo_mac.setReadOnly(True)
+        self.lumo_mac.setToolTip("고정된 Lumo 카메라 MAC 주소입니다.")
         self.lumo_ip = self._add_text_input(
             input_layout,
             6,
@@ -454,7 +460,7 @@ class CameraTab(QWidget):
             lumo_config["provider_mode"] = str(self.lumo_provider_mode.currentData() or "native")
             lumo_config["auto_from_local_network"] = bool(self.lumo_auto_network.isChecked())
             lumo_config["interface_name"] = self.lumo_interface.text().strip()
-            lumo_config["mac_address"] = self.lumo_mac.text().strip()
+            lumo_config["mac_address"] = DEFAULT_LUMO_MAC_ADDRESS
             lumo_config["ip_address"] = self.lumo_ip.text().strip()
             lumo_config["serial_number"] = self.lumo_serial.text().strip()
             lumo_config["device_index"] = self._read_int_input(self.lumo_device_index, "Device Index", 0, minimum=0)
@@ -509,18 +515,19 @@ class CameraTab(QWidget):
             self.app.on_popup("warning", "Lumo 장치 확인", str(e))
             return
 
-        mac_address = self.lumo_mac.text().strip()
+        mac_address = DEFAULT_LUMO_MAC_ADDRESS
+        self.lumo_mac.setText(DEFAULT_LUMO_MAC_ADDRESS)
         interface_name = self.lumo_interface.text().strip() or None
         network = None
+        network_candidates = []
         devices = []
         errors = []
 
-        if mac_address:
-            try:
-                network = self._find_lumo_network_by_mac(mac_address, interface_name)
-            except Exception as e:
-                errors.append(f"네트워크 검색 실패: {e}")
-                log(f"[WARNING] Lumo network search failed: {e}")
+        try:
+            network, network_candidates = self._find_lumo_network(mac_address, interface_name)
+        except Exception as e:
+            errors.append(f"네트워크 검색 실패: {e}")
+            log(f"[WARNING] Lumo network search failed: {e}")
 
         try:
             devices = self._list_lumo_devices()
@@ -531,6 +538,7 @@ class CameraTab(QWidget):
         if network:
             self.lumo_ip.setText(str(network.get("ip_address", "")))
             self.lumo_interface.setText(str(network.get("interface_alias", "")))
+            self.lumo_mac.setText(DEFAULT_LUMO_MAC_ADDRESS)
             self.lumo_auto_network.setChecked(True)
 
         device_index = self._find_lumo_device_index(
@@ -543,7 +551,7 @@ class CameraTab(QWidget):
 
         if network or devices:
             self.hyper_status.setText("확인됨")
-            message = self._build_lumo_search_message(network, devices, device_index, errors)
+            message = self._build_lumo_search_message(network, devices, device_index, errors, network_candidates)
             self.app.on_popup("info", "Lumo MAC 검색", message)
         else:
             self.hyper_status.setText("확인 필요")
@@ -551,7 +559,7 @@ class CameraTab(QWidget):
             if errors:
                 message += "\n" + "\n".join(errors)
             self.app.on_popup("warning", "Lumo MAC 검색", message)
-        log(f"[INFO] Lumo network: {network}, devices: {devices}")
+        log(f"[INFO] Lumo network: {network}, candidates: {network_candidates}, devices: {devices}")
 
     def _parse_rgb_bands(self, text):
         try:
@@ -596,45 +604,72 @@ class CameraTab(QWidget):
         devices = SpecimLumoCameraModule.list_devices()
         return devices if isinstance(devices, list) else []
 
-    def _find_lumo_network_by_mac(self, mac_address, interface_name=None):
+    def _find_lumo_network(self, mac_address="", interface_name=None):
+        mac_address = str(mac_address or DEFAULT_LUMO_MAC_ADDRESS).strip()
         self._ensure_lumo_module_path()
         from specim_lumo_camera_kit import (
             find_lumo_neighbor_by_mac,
             list_local_network_adapters,
+            list_lumo_remote_neighbors,
             normalize_mac_address,
+            select_lumo_local_adapter,
         )
 
         adapters = list_local_network_adapters(timeout_seconds=5.0)
+        selected_adapter = None
+        if interface_name:
+            selected_adapter = select_lumo_local_adapter(
+                adapters,
+                preferred_interface=interface_name,
+            )
+        elif self.lumo_auto_network.isChecked():
+            selected_adapter = select_lumo_local_adapter(adapters)
+
+        resolved_interface = interface_name
+        if selected_adapter is not None:
+            resolved_interface = selected_adapter.name
+
         local_ips = [
             ip
             for adapter in adapters
             for ip in adapter.ipv4_addresses
             if adapter.media_connected and ip
         ]
-        neighbor = find_lumo_neighbor_by_mac(
-            mac_address=mac_address,
-            interface_name=interface_name,
+
+        candidates = list_lumo_remote_neighbors(
+            interface_name=resolved_interface,
             local_ipv4_addresses=local_ips,
             timeout_seconds=5.0,
         )
-        if neighbor is None and interface_name:
+
+        neighbor = None
+        if mac_address:
             neighbor = find_lumo_neighbor_by_mac(
                 mac_address=mac_address,
-                interface_name=None,
+                interface_name=resolved_interface,
                 local_ipv4_addresses=local_ips,
                 timeout_seconds=5.0,
             )
+            if neighbor is None and resolved_interface:
+                neighbor = find_lumo_neighbor_by_mac(
+                    mac_address=mac_address,
+                    interface_name=None,
+                    local_ipv4_addresses=local_ips,
+                    timeout_seconds=5.0,
+                )
+
         if neighbor is None:
-            return None
+            return None, [candidate.to_dict() for candidate in candidates]
 
         adapter = next((item for item in adapters if item.name == neighbor.interface_alias), None)
-        return {
+        network = {
             "ip_address": neighbor.ip_address,
             "interface_alias": neighbor.interface_alias,
-            "mac_address": normalize_mac_address(mac_address),
+            "mac_address": normalize_mac_address(neighbor.link_layer_address or mac_address),
             "neighbor_state": neighbor.state,
             "local_ipv4_addresses": list(adapter.ipv4_addresses) if adapter else local_ips,
         }
+        return network, [candidate.to_dict() for candidate in candidates]
 
     def _find_lumo_device_index(self, devices, *, mac_address="", ip_address=""):
         if not isinstance(devices, list):
@@ -666,14 +701,29 @@ class CameraTab(QWidget):
 
         if len(devices) == 1:
             return self._device_index(devices[0], 0)
+        best_devices = [
+            (fallback_index, device)
+            for fallback_index, device in enumerate(devices)
+            if isinstance(device, dict) and not self._is_low_quality_lumo_device(device)
+        ]
+        if len(best_devices) == 1:
+            fallback_index, device = best_devices[0]
+            return self._device_index(device, fallback_index)
         return None
 
-    def _build_lumo_search_message(self, network, devices, device_index, errors):
+    def _build_lumo_search_message(self, network, devices, device_index, errors, network_candidates=None):
         lines = []
         if network:
             lines.append(f"IP: {network.get('ip_address')}")
             lines.append(f"이더넷: {network.get('interface_alias')}")
             lines.append(f"MAC: {network.get('mac_address')}")
+        elif network_candidates:
+            lines.append(f"네트워크 후보: {len(network_candidates)}개")
+            for candidate in network_candidates[:3]:
+                lines.append(
+                    f"- {candidate.get('ip_address')} / {candidate.get('link_layer_address')} / "
+                    f"{candidate.get('interface_alias')}"
+                )
         if device_index is not None:
             lines.append(f"Device Index: {device_index}")
         lines.append(f"Native 장치: {len(devices) if isinstance(devices, list) else 0}대")
@@ -700,6 +750,14 @@ class CameraTab(QWidget):
             except (TypeError, ValueError):
                 continue
         return int(fallback_index)
+
+    @staticmethod
+    def _is_low_quality_lumo_device(device):
+        text = " ".join(
+            str(device.get(key, ""))
+            for key in ("model", "transport", "name", "device_id", "id")
+        ).lower()
+        return any(keyword in text for keyword in ("filereader", "mock", "with pleora", "pleora"))
 
     def apply_styles(self):
         self.setStyleSheet(

@@ -93,7 +93,8 @@ def list_ipv4_neighbors(
     command += " | Select-Object IPAddress,LinkLayerAddress,State,InterfaceAlias | ConvertTo-Json -Compress"
     output = subprocess.check_output(
         ["powershell", "-NoProfile", "-Command", command],
-        text=True,
+        encoding="utf-8",
+        errors="replace",
         stderr=subprocess.STDOUT,
         timeout=float(timeout_seconds),
     )
