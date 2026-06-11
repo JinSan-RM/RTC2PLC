@@ -313,11 +313,13 @@ class XGTTester:
         """헬스 체크용 패킷을 생성해서 보냄"""
         packet = self._create_status_packet()
         ret, response = self.send_packet_to_plc(packet)
-        if ret and len(response) > 36:
+        if ret and response is not None and len(response) > 36:
             sys_state = response[28:36]
             # log(f"시스템 상태: {sys_state}")
+        elif response is None:
+            log("[WARNING] PLC 상태 체크 응답 없음")
         else:
-            log(f"[WARNING] ❌ 응답이 충분하지 않음, {len(response)}")
+            log(f"[WARNING] PLC 상태 체크 응답이 충분하지 않음, {len(response)}")
 
     def read_bit_packet(self, address: int) -> Optional[int]:
         """해당 주소에 저장된 비트 값 읽기"""

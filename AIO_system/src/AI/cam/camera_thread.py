@@ -53,12 +53,23 @@ class CameraThread(QThread):
         self.running = False
 
         # 카메라 설정 로드
-        self.config = CAMERA_CONFIGS.get(camera_index, {})
+        self.config = dict(CAMERA_CONFIGS.get(camera_index, {}))
+        connection_config = self._load_connection_config(camera_index)
+        self.connection_enabled = bool(connection_config.get("enabled", True))
+        self.device_index = self._resolve_int(
+            connection_config.get("camera_index"),
+            camera_index,
+        )
+        self.camera_ip = str(
+            connection_config.get("camera_ip", "")
+            or ""
+        ).strip()
+        self.fallback_webcam = bool(connection_config.get("fallback_webcam", True))
         roi = self.config.get('roi', None)
 
         # Basler 카메라 초기화
         self.camera_manager = BaslerCameraManager(
-            camera_index=camera_index,
+            camera_index=self.device_index,
             roi=roi
         )
 
@@ -84,6 +95,23 @@ class CameraThread(QThread):
         self.current_fps = 0
 
         self.frame_offset = camera_index * 8
+
+    def _load_connection_config(self, camera_index: int):
+        app_config = getattr(self.app, "config", {}) or {}
+        camera_config = app_config.get("camera_connection_config", {})
+        if not isinstance(camera_config, dict):
+            return {}
+        rgb_cameras = camera_config.get("rgb_cameras", {})
+        if not isinstance(rgb_cameras, dict):
+            return {}
+        config = rgb_cameras.get(str(camera_index), {})
+        return config if isinstance(config, dict) else {}
+
+    def _resolve_int(self, value, default: int):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
 
     def _create_box_manager(self):
         """카메라별 박스 생성"""
@@ -140,13 +168,25 @@ class CameraThread(QThread):
         log(f"📷 카메라 {self.camera_index + 1} 스레드 시작")
         self.running = True
 
+        if not self.connection_enabled:
+            error_msg = f"카메라 {self.camera_index + 1} 연결이 비활성화되어 있습니다."
+            log(error_msg)
+            self.error_occurred.emit(error_msg)
+            return
+
         # 카메라 초기화
-        camera_ip = None
+        camera_ip = self.camera_ip or None
         if not self.camera_manager.initialize(camera_ip=camera_ip):
             log(f"카메라 {self.camera_index + 1} Basler 실패, 웹캠 시도")
 
+            if not self.fallback_webcam:
+                error_msg = f"카메라 {self.camera_index + 1} Basler 초기화 실패"
+                log(error_msg)
+                self.error_occurred.emit(error_msg)
+                return
+
             # 웹캠 폴백
-            cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+            cap = cv2.VideoCapture(self.device_index, cv2.CAP_DSHOW)
             if not cap.isOpened():
                 error_msg = f"카메라 {self.camera_index + 1} 초기화 실패"
                 log(error_msg)

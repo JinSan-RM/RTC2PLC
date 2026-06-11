@@ -12,6 +12,7 @@ from src.ui.page.settings.servo_tab import ServoTab
 from src.ui.page.settings.feeder_tab import FeederTab
 from src.ui.page.settings.conveyor_tab import ConveyorTab
 from src.ui.page.settings.airknife_tab import AirKnifeTab
+from src.ui.page.settings.camera_tab import CameraTab
 
 from src.utils.config_util import UI_PATH
 
@@ -55,11 +56,13 @@ class SettingsPage(QWidget):
         self.feeder_tab = FeederTab(self.app)
         self.conveyor_tab = ConveyorTab(self.app)
         self.airknife_tab = AirKnifeTab(self.app)
+        self.camera_tab = CameraTab(self.app)
 
         self.pages.addWidget(self.servo_tab)
         self.pages.addWidget(self.feeder_tab)
         self.pages.addWidget(self.conveyor_tab)
         self.pages.addWidget(self.airknife_tab)
+        self.pages.addWidget(self.camera_tab)
 
         main_layout.addWidget(self.pages)
 
@@ -94,6 +97,7 @@ class SettingsPage(QWidget):
         "피더 제어",
         "컨베이어 제어",
         "에어나이프 제어",
+        "카메라 제어",
     ]
 
     def _create_side_tab(self, parent_layout):
@@ -121,6 +125,8 @@ class SettingsPage(QWidget):
         # 에어나이프 탭일 때에만 설명 텍스트 업데이트
         if index == 3:
             self.explain.setText("에어나이프는 플라스틱 분류 신호를 받은 후 설정된 타이밍에 에어를 분사합니다.")
+        elif index == 4:
+            self.explain.setText("카메라 연결에 필요한 장치 인덱스, IP, 포트, workflow 경로를 설정합니다.")
         else:
             self.explain.setText("")
 

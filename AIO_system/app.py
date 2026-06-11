@@ -31,7 +31,8 @@ from src.utils.config_util import (
     CONFIG_PATH, FEEDER_TIME_1, FEEDER_TIME_2, UI_PATH, LOG_PATH, SHM_NAME,
     PRCS_HTH_CHECK_TERM, MAX_PRCS_DEAD_COUNT,
     ProcessCheckVars,
-    USE_FEEDER_CAM, FEEDER_AIR_TERM
+    USE_FEEDER_CAM, FEEDER_AIR_TERM,
+    build_default_camera_connection_config,
 )
 from src.utils.logger import log
 # from src.ui.popup.alert import PopUp
@@ -703,6 +704,7 @@ class App():
 
         return {
             "air_sequence": [],
+            "camera_connection_config": build_default_camera_connection_config(),
             "inverter_config": inverter_config,
             "servo_config": {
                 "servo_0": {
@@ -725,6 +727,8 @@ class App():
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     self.config = json.load(f)
 
+                if self._merge_default_config(self.config, self._build_default_config()):
+                    self._save_config()
                 log("[INFO] config loaded")
                 return
         except FileNotFoundError as fnfe:
@@ -751,6 +755,16 @@ class App():
             log(f"[ERROR] config file io error: {ioe}")
         except Exception as e:
             log(f"[ERROR] config file save failed: {e}")
+
+    def _merge_default_config(self, dst, defaults):
+        changed = False
+        for key, value in defaults.items():
+            if key not in dst:
+                dst[key] = value
+                changed = True
+            elif isinstance(dst[key], dict) and isinstance(value, dict):
+                changed = self._merge_default_config(dst[key], value) or changed
+        return changed
 
     def set_air_sequence_index(self):
         """제품 분류 순서 지정"""
