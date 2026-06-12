@@ -389,6 +389,14 @@ class LumoStreamWorker(QThread):
                     timestamp_chunk=runtime.timestamp_buffer[start_offset:end_offset],
                     frame_start=runtime.next_window_start,
                 )
+                log(
+                    "[INFO] live inference result: "
+                    f"window={runtime.window_index + 1}, "
+                    f"frames={payload['frame_start']}-{payload['frame_end']}, "
+                    f"objects={payload['total_objects']}, "
+                    f"classes={payload['objects_per_class']}, "
+                    f"boxes={payload['objects']}"
+                )
                 self.inference_ready.emit(payload)
                 self.inference_status_ready.emit(
                     f"추론: 객체 {payload['total_objects']} / window {runtime.window_index + 1}"
@@ -490,17 +498,33 @@ class LumoStreamWorker(QThread):
             y1 = max(0, min(output.shape[0] - 1, y0 + height - 1))
             x0 = max(0, min(output.shape[1] - 1, x0))
             y0 = max(0, min(output.shape[0] - 1, y0))
-            cv2.rectangle(output, (x0, y0), (x1, y1), color, 1)
+            shadow_color = (10, 10, 10)
+            cv2.rectangle(output, (x0, y0), (x1, y1), shadow_color, 5)
+            cv2.rectangle(output, (x0, y0), (x1, y1), color, 3)
             label = f"{item.class_name} {float(item.object_confidence):.2f}"
             label_y = y0 - 4 if y0 >= 12 else y0 + 12
+            text_scale = 0.42
+            text_thickness = 1
+            text_size, baseline = cv2.getTextSize(
+                label,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                text_scale,
+                text_thickness,
+            )
+            text_x = x0
+            text_y = max(text_size[1] + 2, label_y)
+            bg_x1 = min(output.shape[1] - 1, text_x + text_size[0] + 6)
+            bg_y0 = max(0, text_y - text_size[1] - baseline - 4)
+            bg_y1 = min(output.shape[0] - 1, text_y + baseline + 2)
+            cv2.rectangle(output, (text_x, bg_y0), (bg_x1, bg_y1), shadow_color, -1)
             cv2.putText(
                 output,
                 label,
-                (x0, label_y),
+                (text_x + 3, text_y),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.35,
+                text_scale,
                 color,
-                1,
+                text_thickness,
                 cv2.LINE_AA,
             )
         return output
