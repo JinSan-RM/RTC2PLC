@@ -46,6 +46,15 @@ from src.utils.lumo_camera_service import (
     sanitize_lumo_interface_name,
 )
 
+DEFAULT_PLASTIC_LEGEND_INFO = [
+    {"Name": "PET", "Color": "#258FD0"},
+    {"Name": "PE", "Color": "#1CB786"},
+    {"Name": "PP", "Color": "#E43C3C"},
+    {"Name": "PS", "Color": "#F5A50F"},
+    {"Name": "PVC", "Color": "#BE5EC3"},
+    {"Name": "Others", "Color": "#878787"},
+]
+
 
 @dataclass
 class HyperSpectralWidget:
@@ -1154,6 +1163,9 @@ class MonitoringPage(QWidget):
         self.app = app
         self.rgb_cameras = []
         self.hyper_camera = None
+        self.stats_frame = None
+        self.plastic_counts = {}
+        self.total_count = None
         self.lumo_status_worker = None
         self.lumo_scan_worker = None
         self._lumo_shutting_down = False
@@ -1825,6 +1837,7 @@ class MonitoringPage(QWidget):
         self.stats_frame.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored) # 수정부분 - 축소 제한 해제
 
         stats_layout.addWidget(self.stats_frame)
+        self._create_statistics_box(DEFAULT_PLASTIC_LEGEND_INFO)
 
         parent_layout.addLayout(stats_layout)
         parent_layout.setAlignment(stats_layout, Qt.AlignLeft | Qt.AlignTop)
@@ -1898,11 +1911,22 @@ class MonitoringPage(QWidget):
             payload["classification"] = classification
             self.hyper_camera.img_data.overlay_info.append(payload)
 
-            cur_count = int(self.plastic_counts[classification].text())
-            self.plastic_counts[classification].setText(f"{cur_count+1}")
+            count_label = self.plastic_counts.get(classification)
+            if count_label is None and classification in {"HDPE", "LDPE"}:
+                count_label = self.plastic_counts.get("PE")
+            if count_label is None:
+                self._log_lumo_plc_ui_skip(
+                    f"missing_counter:{classification}",
+                    f"[WARNING] classification counter unavailable: {classification}",
+                    interval_s=5.0,
+                )
+            else:
+                cur_count = int(count_label.text())
+                count_label.setText(f"{cur_count+1}")
 
-            total_count = int(self.total_count.text())
-            self.total_count.setText(f"{total_count+1}")
+            if self.total_count is not None:
+                total_count = int(self.total_count.text())
+                self.total_count.setText(f"{total_count+1}")
 
     # def update_cameras(self):
     #     """카메라 프레임 업데이트"""
@@ -1935,9 +1959,10 @@ class MonitoringPage(QWidget):
     def on_reset_counter(self):
         """카운터 리셋"""
         log("분류 카운터 리셋")
-        for count_label in self.plastic_counts.values():
+        for count_label in getattr(self, "plastic_counts", {}).values():
             count_label.setText("0")
-        self.total_count.setText("0")
+        if self.total_count is not None:
+            self.total_count.setText("0")
         # TODO: 실제 카운터 리셋
         self.app.on_popup("info", "카운터 리셋", "카운터가 리셋되었습니다.")
 

@@ -29,6 +29,9 @@ SMALL_EVENT_FALLBACK_WINDOW = 0.8
 LUMO_EVENT_TTL = 1.0
 LUMO_EVENT_CENTER_X_TOLERANCE = 80
 LUMO_EVENT_FRAME_TOLERANCE = 96
+PLC_BIT_OFF_PUMP_INTERVAL = 0.005
+PLC_STATUS_CHECK_INTERVAL = 1.0
+LUMO_FORCE_LARGE_OUTPUT = True
 
 
 # region data classes
@@ -109,6 +112,8 @@ class CommManager(threading.Thread):
         self._lumo_event_lock = threading.Lock()
         self._lumo_recent_events = deque(maxlen=256)
         self._lumo_last_plc_log = {}
+        self._xgt_lock = threading.Lock()
+        self._last_plc_bit_off_error_at = 0.0
 
         self.xgt_tester = XGTTester(ip="192.168.1.3", port=2004)
 
@@ -328,6 +333,22 @@ class CommManager(threading.Thread):
                 del self.trackings.tracked_objects[obj_id]
                 log(f"객체 제거: ID={obj_id}")
 
+    def _process_plc_bit_off(self):
+        try:
+            with self._xgt_lock:
+                pending_tasks = getattr(self.xgt_tester, "pending_tasks", {}) or {}
+                pending_before = set(pending_tasks.keys())
+                self.xgt_tester.process_bit_off()
+                pending_tasks = getattr(self.xgt_tester, "pending_tasks", {}) or {}
+                processed_addresses = pending_before - set(pending_tasks.keys())
+            for address in sorted(processed_addresses):
+                log(f"[PLC비트OFF] 주소=P{int(address):03X}")
+        except Exception as exc:
+            now = time.time()
+            if now - self._last_plc_bit_off_error_at >= 2.0:
+                self._last_plc_bit_off_error_at = now
+                log(f"[ERROR] PLC bit-off processing failed: {exc}")
+
     def _cleanup_small_events_locked(self, now: float):
         while self.trackings.small_events:
             event = self.trackings.small_events[0]
@@ -400,24 +421,26 @@ class CommManager(threading.Thread):
             f"재질={_info.classification}, size={_info.size}, "
             f"재질주소=P{_info.plc_value:03X}, 사이즈주소=P{_info.size_addr:03X}"
         )
-        success1 = self.xgt_tester.write_bit_packet(
-            address=_info.plc_value,
-            onoff=1
-        )
-        success2 = self.xgt_tester.write_bit_packet(
-            address=_info.size_addr,
-            onoff=1
-        )
-        if success1 and success2:
-            # 재질 on-off 사이에 사이즈 on-off가 들어가도록 처리
-            self.xgt_tester.schedule_bit_off(
-                address=_info.size_addr,
-                delay=MIN_PULSE_WIDTH
-            )
-            self.xgt_tester.schedule_bit_off(
+        with self._xgt_lock:
+            success1 = self.xgt_tester.write_bit_packet(
                 address=_info.plc_value,
-                delay=MIN_PULSE_WIDTH
+                onoff=1
             )
+            success2 = self.xgt_tester.write_bit_packet(
+                address=_info.size_addr,
+                onoff=1
+            )
+            if success2:
+                self.xgt_tester.schedule_bit_off(
+                    address=_info.size_addr,
+                    delay=MIN_PULSE_WIDTH
+                )
+            if success1:
+                self.xgt_tester.schedule_bit_off(
+                    address=_info.plc_value,
+                    delay=MIN_PULSE_WIDTH
+                )
+        if success1 and success2:
             log(
                 f"[PLC펄스] ID={_info.obj_id}, Y={_info.y_position}, "
                 f"재질={_info.classification}, size={_info.size}, "
@@ -485,7 +508,7 @@ class CommManager(threading.Thread):
                 self._process_interval()
 
             # 생성된 비트 off 처리 - 매 루프마다 실행되어야 함
-            self.xgt_tester.process_bit_off()
+            self._process_plc_bit_off()
 
             self.comm_sockets.event_socket.settimeout(1)
             try:
@@ -871,6 +894,14 @@ class CommManager(threading.Thread):
                     f"[가이드라인] Lumo PLC skip: x={center_x}, class={classification}",
                 )
                 continue
+            original_size = size
+            if LUMO_FORCE_LARGE_OUTPUT and size == "small":
+                size = "large"
+                self._log_lumo_plc_skip(
+                    f"force_large:{classification}:{center_x // 20}",
+                    f"[INFO] Lumo PLC force large output: class={classification}, x={center_x}, original_size={original_size}",
+                    interval_s=1.0,
+                )
 
             if size == "large":
                 plc_value = PLASTIC_VALUE_MAPPING_LARGE.get(classification)
@@ -944,24 +975,26 @@ class CommManager(threading.Thread):
         # 대체 주소 예시: size=0x81, sol=0x8F
         size_addr = 0x80
         sol_addr = 0x8B
-        success1 = self.xgt_tester.write_bit_packet(
-            address=sol_addr,
-            onoff=1
-        )
-        success2 = self.xgt_tester.write_bit_packet(
-            address=size_addr,
-            onoff=1
-        )
-        if success1 and success2:
-            # 재질 on-off 사이에 사이즈 on-off가 들어가도록 처리
-            self.xgt_tester.schedule_bit_off(
-                address=size_addr,
-                delay=MIN_PULSE_WIDTH
-            )
-            self.xgt_tester.schedule_bit_off(
+        with self._xgt_lock:
+            success1 = self.xgt_tester.write_bit_packet(
                 address=sol_addr,
-                delay=MIN_PULSE_WIDTH
+                onoff=1
             )
+            success2 = self.xgt_tester.write_bit_packet(
+                address=size_addr,
+                onoff=1
+            )
+            if success2:
+                self.xgt_tester.schedule_bit_off(
+                    address=size_addr,
+                    delay=MIN_PULSE_WIDTH
+                )
+            if success1:
+                self.xgt_tester.schedule_bit_off(
+                    address=sol_addr,
+                    delay=MIN_PULSE_WIDTH
+                )
+        if success1 and success2:
             log("블로우 배출구 air 동작 성공")
         else:
             log("블로우 배출구 air 동작 실패")
@@ -984,16 +1017,24 @@ class CommManager(threading.Thread):
     def run(self):
         """Main loop started by start()."""
         log("Starting comm manager")
+        last_status_check = 0.0
 
         try:
             while not self.threads.main_stop_event.is_set():
-                # PLC 상태 통신 점검
-                self.xgt_tester.status_check()
+                self._process_plc_bit_off()
 
-                # 오래된 객체 정리
-                self._cleanup_old_objects()
+                current_time = time.monotonic()
+                if current_time - last_status_check >= PLC_STATUS_CHECK_INTERVAL:
+                    last_status_check = current_time
 
-                time.sleep(1)
+                    # PLC 상태 통신 점검
+                    with self._xgt_lock:
+                        self.xgt_tester.status_check()
+
+                    # 오래된 객체 정리
+                    self._cleanup_old_objects()
+
+                time.sleep(PLC_BIT_OFF_PUMP_INTERVAL)
 
         except Exception as e:
             log(f"[ERROR] Main function error: {str(e)}")
