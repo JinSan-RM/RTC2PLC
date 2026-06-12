@@ -322,6 +322,7 @@ class LumoStreamWorker(QThread):
             params = module.default_params()
             if not bool(inference_config.get("use_bundle_runtime_params", False)):
                 params = InferenceRuntimeParams(calibration_context=params.calibration_context)
+            params = InferenceRuntimeParams.from_mapping(inference_config, base=params)
             model_path = module.model_path
             calibration_context = params.calibration_context
         else:
@@ -350,7 +351,10 @@ class LumoStreamWorker(QThread):
                 )
             else:
                 calibration_context = RuntimeCalibrationContext(input_kind="raw")
-            params = InferenceRuntimeParams(calibration_context=calibration_context)
+            params = InferenceRuntimeParams.from_mapping(
+                inference_config,
+                base=InferenceRuntimeParams(calibration_context=calibration_context),
+            )
 
         model = load_model(model_path)
         self.inference_status_ready.emit(f"추론: 준비 ({Path(model_path).name})")
@@ -434,9 +438,12 @@ class LumoStreamWorker(QThread):
             timestamps_s=np.asarray(timestamp_chunk, dtype=np.float64),
         )
         preview = build_pseudo_rgb_preview(cube_window, rgb_bands=runtime.rgb_bands)
+        display_class_map = np.full_like(pixel_result.class_map, int(pixel_result.unknown_index))
+        for item in object_result.objects:
+            display_class_map[object_result.object_map == int(item.object_id)] = int(item.class_index)
         overlay = build_pixel_overlay(
             preview=preview,
-            class_map=pixel_result.class_map,
+            class_map=display_class_map,
             confidence_map=pixel_result.confidence_map,
             alpha=0.65,
             unknown_index=pixel_result.unknown_index,
@@ -469,6 +476,7 @@ class LumoStreamWorker(QThread):
             "objects": objects,
             "calibration": calibration_result.summary,
             "pixel_summary": summarize_pixel_map(pixel_result),
+            "object_summary": object_result.to_dict(),
         }
 
     def _draw_live_inference_boxes(self, image, objects):

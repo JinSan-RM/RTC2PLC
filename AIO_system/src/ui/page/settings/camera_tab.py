@@ -66,7 +66,7 @@ class SpectralInferenceTestWorker(QThread):
                 sys.path.insert(0, kit_path)
 
             from runtime.calibration import RuntimeCalibrationContext
-            from runtime_module import SpectralRuntimeModule
+            from runtime_module import InferenceRuntimeParams, SpectralRuntimeModule
 
             model_path = Path(self.model_info["model_path"]).resolve()
             input_kind = str(self.model_info.get("input_kind") or "raw").strip().lower()
@@ -95,7 +95,17 @@ class SpectralInferenceTestWorker(QThread):
                 output_root=output_root,
                 calibration_context=calibration_context,
             )
-            params = module.default_params().with_updates(max_frames=max(1, self.max_frames), dashboard=False)
+            inference_config = (
+                self.app_config.get("camera_connection_config", {})
+                .get("hyperspectral", {})
+                .get("inference", {})
+            )
+            if not isinstance(inference_config, dict):
+                inference_config = {}
+            params = InferenceRuntimeParams.from_mapping(
+                inference_config,
+                base=module.default_params(),
+            ).with_updates(max_frames=max(1, self.max_frames), dashboard=False)
             result = module.run_replay(
                 session_dir=self.session_dir,
                 params=params,
@@ -523,17 +533,49 @@ class CameraTab(QWidget):
         )
         model_layout.addWidget(self.white_ref_btn, 6, 2)
 
+        confidence_value = inference_config.get(
+            "object_confidence_threshold",
+            inference_config.get("threshold", 0.5),
+        )
+        self.model_confidence_threshold = self._add_float_input(
+            model_layout,
+            7,
+            "Confidence Threshold",
+            confidence_value,
+            0.0,
+            1.0,
+            3,
+        )
+        self.model_min_bbox_width = self._add_int_input(
+            model_layout,
+            8,
+            "Min Box Width",
+            inference_config.get("min_bbox_width", 1),
+            1,
+            8192,
+            unit="px",
+        )
+        self.model_min_bbox_height = self._add_int_input(
+            model_layout,
+            9,
+            "Min Box Height",
+            inference_config.get("min_bbox_height", 1),
+            1,
+            8192,
+            unit="px",
+        )
+
         model_check_btn = QPushButton("모델 확인")
         model_check_btn.setObjectName("test_btn")
         model_check_btn.setFixedSize(375, 50)
         model_check_btn.clicked.connect(self.on_test_model_bundle)
-        model_layout.addWidget(model_check_btn, 7, 1)
+        model_layout.addWidget(model_check_btn, 10, 1)
 
         self.inference_test_btn = QPushButton("추론 테스트")
         self.inference_test_btn.setObjectName("test_btn")
         self.inference_test_btn.setFixedSize(375, 50)
         self.inference_test_btn.clicked.connect(self.on_test_model_inference)
-        model_layout.addWidget(self.inference_test_btn, 7, 2)
+        model_layout.addWidget(self.inference_test_btn, 10, 2)
         self._pin_model_layout_left(model_layout)
         self._sync_reference_controls()
 
@@ -688,6 +730,28 @@ class CameraTab(QWidget):
 
             inference_enabled = bool(self.model_inference_enabled.isChecked())
             inference_config["enabled"] = inference_enabled
+            confidence_threshold = self._read_float_input(
+                self.model_confidence_threshold,
+                "Confidence Threshold",
+                0.5,
+                minimum=0.0,
+            )
+            if confidence_threshold > 1.0:
+                raise ValueError("Confidence Threshold 값은 0.0 ~ 1.0 사이여야 합니다.")
+            inference_config["threshold"] = float(confidence_threshold)
+            inference_config["object_confidence_threshold"] = float(confidence_threshold)
+            inference_config["min_bbox_width"] = self._read_int_input(
+                self.model_min_bbox_width,
+                "Min Box Width",
+                1,
+                minimum=1,
+            )
+            inference_config["min_bbox_height"] = self._read_int_input(
+                self.model_min_bbox_height,
+                "Min Box Height",
+                1,
+                minimum=1,
+            )
             model_value = self.model_bundle_path.text().strip()
             if inference_enabled:
                 model_info = self._validate_model_input_path(

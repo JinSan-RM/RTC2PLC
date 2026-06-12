@@ -691,6 +691,10 @@ def build_default_camera_connection_config():
                 "reference_required": False,
                 "reference_paths": {},
                 "use_bundle_runtime_params": False,
+                "threshold": 0.5,
+                "object_confidence_threshold": 0.5,
+                "min_bbox_width": 1,
+                "min_bbox_height": 1,
             },
         },
     }
