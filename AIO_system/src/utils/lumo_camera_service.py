@@ -177,7 +177,8 @@ def lumo_status_snapshot(app_config: dict[str, Any] | None) -> dict[str, Any]:
         "network_candidates": candidates,
         "devices": devices,
         "device_index": device_index,
-        "connected": bool(network) and device_index is not None,
+        "connected": device_index is not None,
+        "network_connected": bool(network),
     }
 
 

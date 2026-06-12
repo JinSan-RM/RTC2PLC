@@ -1346,9 +1346,12 @@ class MonitoringPage(QWidget):
         devices = payload.get("devices", []) if isinstance(payload, dict) else []
         device_index = payload.get("device_index") if isinstance(payload, dict) else None
         connected = bool(payload.get("connected")) if isinstance(payload, dict) else False
+        device_found = device_index is not None
 
-        if network and connected:
+        if network and device_found:
             self._set_lumo_status_text("상태: 장치 확인됨", "#3fb950")
+        elif device_found:
+            self._set_lumo_status_text("상태: 장치 확인됨(IP 미확인)", "#3fb950")
         elif network:
             self._set_lumo_status_text("상태: IP 확인됨", "#d29922")
         else:
@@ -1359,7 +1362,7 @@ class MonitoringPage(QWidget):
         self.lumo_device_label.setText(f"Device: {device_index if device_index is not None else '-'}")
         scan_running = self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning()
         if not scan_running:
-            self.lumo_connect_btn.setEnabled(bool(network) and device_index is not None)
+            self.lumo_connect_btn.setEnabled(connected or device_found)
         log(
             "[INFO] Lumo status: "
             f"network={network}, device_index={device_index}, devices={len(devices) if isinstance(devices, list) else 0}"
