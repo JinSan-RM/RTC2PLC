@@ -359,7 +359,8 @@ class CommManager(threading.Thread):
             self.trackings.small_events.append(event)
             log(
                 f"[SMALL인식] ID={obj_info.obj_id}, 재질={obj_info.classification}, "
-                f"size={obj_info.size}, 주소=P{obj_info.plc_value:03X}/P{obj_info.size_addr:03X}"
+                f"size={obj_info.size}, "
+                f"재질주소=P{obj_info.plc_value:03X}, 사이즈주소=P{obj_info.size_addr:03X}"
             )
 
     def _pop_best_small_event(self, cross_time: float):
@@ -397,7 +398,7 @@ class CommManager(threading.Thread):
         log(
             f"[PLC전송시도] ID={_info.obj_id}, Y={_info.y_position}, "
             f"재질={_info.classification}, size={_info.size}, "
-            f"주소=P{_info.plc_value:03X}/P{_info.size_addr:03X}"
+            f"재질주소=P{_info.plc_value:03X}, 사이즈주소=P{_info.size_addr:03X}"
         )
         success1 = self.xgt_tester.write_bit_packet(
             address=_info.plc_value,
@@ -417,7 +418,11 @@ class CommManager(threading.Thread):
                 address=_info.plc_value,
                 delay=MIN_PULSE_WIDTH
             )
-            log(f"[PLC펄스] ID={_info.obj_id}, Y={_info.y_position}, 재질={_info.classification}, size={_info.size}, 주소=P{_info.plc_value:03X}/P{_info.size_addr:03X}")
+            log(
+                f"[PLC펄스] ID={_info.obj_id}, Y={_info.y_position}, "
+                f"재질={_info.classification}, size={_info.size}, "
+                f"재질주소=P{_info.plc_value:03X}, 사이즈주소=P{_info.size_addr:03X}"
+            )
         else:
             log(f"[WARNING] [PLC펄스] ID={_info.obj_id} - 전송 실패")
 
@@ -778,12 +783,6 @@ class CommManager(threading.Thread):
             log(message)
 
     def process_lumo_inference_payload(self, payload):
-        if not getattr(self.app, "monitoring_enabled", True):
-            self._log_lumo_plc_skip(
-                "monitoring_disabled",
-                "[INFO] Lumo PLC skip: monitoring_enabled=False",
-            )
-            return
         if not isinstance(payload, dict):
             self._log_lumo_plc_skip(
                 "invalid_payload",
@@ -806,9 +805,12 @@ class CommManager(threading.Thread):
             )
             return
         if not objects:
+            return
+
+        if not getattr(self.app, "monitoring_enabled", True):
             self._log_lumo_plc_skip(
-                "empty_objects",
-                f"[INFO] Lumo PLC skip: no objects frames={frame_start}-{frame_end}",
+                "monitoring_disabled",
+                f"[INFO] Lumo PLC skip: monitoring_enabled=False, objects={len(objects)}, frames={frame_start}-{frame_end}",
             )
             return
 
@@ -822,6 +824,8 @@ class CommManager(threading.Thread):
                 )
                 continue
             classification = str(obj.get("class", "")).strip()
+            if classification:
+                classification = classification.upper()
             bbox = obj.get("bbox", [])
             if not classification or not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                 self._log_lumo_plc_skip(
@@ -928,7 +932,8 @@ class CommManager(threading.Thread):
                 self._queue_small_event(obj_info, detection_time, delay)
             log(
                 f"[Lumo PLC예약] ID={obj_id}, 재질={classification}, size={size}, "
-                f"Y={y_position}, delay={delay:.3f}s, 주소=P{plc_value:03X}/P{size_addr:03X}"
+                f"Y={y_position}, delay={delay:.3f}s, "
+                f"재질주소=P{plc_value:03X}, 사이즈주소=P{size_addr:03X}"
             )
 # endregion data stream listener
 
