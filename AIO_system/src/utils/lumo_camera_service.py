@@ -38,6 +38,7 @@ def lumo_camera_payload(app_config: dict[str, Any] | None) -> dict[str, Any]:
     ) or ""
     payload["lumo"].setdefault("provider_mode", "native")
     payload["lumo"].setdefault("grab_timeout_ms", 5000)
+    payload["lumo"].setdefault("initialize_timeout_s", 60.0)
     payload["lumo"].setdefault("device_index", 0)
     return payload
 

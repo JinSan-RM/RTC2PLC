@@ -27,6 +27,7 @@ class SpecimLumoModuleConfig:
     device_index: int = 0
     timeout_ms: int = 5000
     skip_scan: bool = False
+    open_timeout_s: float = 60.0
 
     def build_provider(self) -> LumoCameraProvider:
         return LumoCameraProvider(
@@ -38,6 +39,7 @@ class SpecimLumoModuleConfig:
             device_index=int(self.device_index),
             timeout_ms=int(self.timeout_ms),
             skip_scan=bool(self.skip_scan),
+            open_timeout_s=float(self.open_timeout_s),
         )
 
 
@@ -285,6 +287,7 @@ def build_lumo_module_config(
         device_index=int(lumo_section.get("device_index", 0)),
         timeout_ms=int(lumo_section.get("grab_timeout_ms", 5000)),
         skip_scan=bool(lumo_section.get("skip_scan", False)),
+        open_timeout_s=float(lumo_section.get("open_timeout_s", lumo_section.get("initialize_timeout_s", 60.0)) or 60.0),
     )
 
 

@@ -22,7 +22,7 @@ from common.local_network import (
 )
 
 LOGGER = get_logger(__name__)
-_NATIVE_OPEN_TIMEOUT_SECONDS = 20.0
+_NATIVE_OPEN_TIMEOUT_SECONDS = 60.0
 
 _NATIVE_MODULE_CANDIDATES = (
     "specim_lumo_native",
@@ -689,6 +689,12 @@ class NativeLumoFrameSource(FrameSource):
         self._open_native_settings = dict(native_settings)
         self._settings = self._resolve_runtime_settings(self._module, self._handle, settings)
         self._camera_info = self._build_camera_info(selected, self._module, self._handle)
+        pre_start_status = self.get_status()
+        LOGGER.info(
+            "Native open step4b: pre-start status profile=%s acquisition=%s",
+            pre_start_status.get("profile"),
+            pre_start_status.get("applied_acquisition_settings"),
+        )
 
         try:
             LOGGER.info("Native open step5: start stream")
@@ -1092,6 +1098,7 @@ class LumoCameraProvider(CameraProvider):
         device_index: int = 0,
         timeout_ms: int = 5000,
         skip_scan: bool = False,
+        open_timeout_s: float | None = None,
     ) -> None:
         normalized_mode = str(provider_mode).lower()
         # 현재 구현은 native 모드만 지원한다.
@@ -1105,6 +1112,7 @@ class LumoCameraProvider(CameraProvider):
         self._timeout_ms = timeout_ms
         self._skip_scan = skip_scan
         self._provider_mode = normalized_mode
+        self._open_timeout_s = max(1.0, _coerce_float(open_timeout_s, _NATIVE_OPEN_TIMEOUT_SECONDS) or _NATIVE_OPEN_TIMEOUT_SECONDS)
         self._native_import_error: str | None = None  # native import/open 실패 메시지 저장용
 
     # 카메라 연결이 오래 걸리는 경우를 대비한 강제 timeout 처리
@@ -1155,8 +1163,8 @@ class LumoCameraProvider(CameraProvider):
         try:
             return self._with_timeout(
                 lambda: self._open_native(resolved_settings),
-                timeout_seconds=_NATIVE_OPEN_TIMEOUT_SECONDS,
-                label="Native Lumo open",
+                timeout_seconds=self._open_timeout_s,
+                label="Native Lumo open/start",
             )
         except Exception as exc:
             # selector 정보를 포함한 힌트 메시지로 변환한다.

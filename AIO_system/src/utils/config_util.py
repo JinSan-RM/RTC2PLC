@@ -675,6 +675,7 @@ def build_default_camera_connection_config():
                 "ip_address": "",
                 "device_index": 0,
                 "grab_timeout_ms": 5000,
+                "initialize_timeout_s": 60.0,
                 "skip_scan": False,
                 "provider_mode": "native",
             },

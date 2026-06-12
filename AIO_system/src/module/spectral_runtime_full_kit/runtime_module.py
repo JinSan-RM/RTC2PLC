@@ -126,6 +126,7 @@ class LumoLiveConfig:
     device_index: int = 0
     timeout_ms: int = 5000
     skip_scan: bool = False
+    open_timeout_s: float = 60.0
     provider_mode: str = "native"
 
     @classmethod
@@ -161,6 +162,11 @@ class LumoLiveConfig:
             device_index=_resolve_int(lumo.get("device_index"), 0, minimum=0),
             timeout_ms=_resolve_int(lumo.get("grab_timeout_ms"), 5000, minimum=1),
             skip_scan=bool(lumo.get("skip_scan", False)),
+            open_timeout_s=_resolve_float(
+                lumo.get("open_timeout_s", lumo.get("initialize_timeout_s")),
+                60.0,
+                minimum=1.0,
+            ),
             provider_mode=str(lumo.get("provider_mode", "native") or "native").lower(),
         )
 
@@ -186,6 +192,7 @@ class LumoLiveConfig:
             device_index=int(self.device_index),
             timeout_ms=int(self.timeout_ms),
             skip_scan=bool(self.skip_scan),
+            open_timeout_s=float(self.open_timeout_s),
         )
 
     def with_updates(self, **updates: object) -> "LumoLiveConfig":
