@@ -155,7 +155,7 @@ class LumoLiveConfig:
             rgb_bands=rgb_bands,
             mirror_line=bool(breeze.get("mirror_line", False)),
             serial_number=_optional_text(lumo.get("serial_number")),
-            ip_address=None,
+            ip_address=_optional_text(lumo.get("ip_address")),
             interface_name=_optional_text(lumo.get("interface_name")),
             mac_address=_optional_text(lumo.get("mac_address") or lumo.get("target_mac_address")),
             device_index=_resolve_int(lumo.get("device_index"), 0, minimum=0),

@@ -135,6 +135,7 @@ class LumoStreamWorker(QThread):
 
             payload = lumo_camera_payload(self.app_config)
             lumo = payload.setdefault("lumo", {})
+            manual_ip = str(lumo.get("ip_address") or "").strip()
             interface_name = sanitize_lumo_interface_name(lumo.get("interface_name"))
             network, _candidates = find_lumo_network(interface_name=interface_name)
             if network:
@@ -149,18 +150,35 @@ class LumoStreamWorker(QThread):
             )
             if device_index is not None:
                 lumo["device_index"] = int(device_index)
-            if network is None and device_index is not None:
+            if network is None and manual_ip:
+                lumo["auto_from_local_network"] = False
                 lumo["interface_name"] = ""
-                lumo["ip_address"] = ""
                 lumo["mac_address"] = ""
                 lumo["target_mac_address"] = ""
                 lumo["skip_scan"] = False
+            elif network is None:
+                raise RuntimeError(
+                    "Lumo 카메라 네트워크를 찾을 수 없습니다. "
+                    "이더넷 연결/어댑터 이름을 확인하거나 Camera IP를 수동 입력해주세요."
+                )
 
             self.status_ready.emit("카메라 연결 중")
             camera = SpecimLumoCameraModule.from_config_payload(payload)
             self._camera = camera
             if network:
                 camera.config.ip_address = str(network.get("ip_address") or "") or None
+            elif manual_ip:
+                camera.config.interface_name = None
+                camera.config.ip_address = manual_ip
+                camera.config.mac_address = None
+                camera.config.device_index = int(device_index or lumo.get("device_index", 0))
+                camera.config.skip_scan = False
+            elif device_index is not None:
+                camera.config.interface_name = None
+                camera.config.ip_address = None
+                camera.config.mac_address = None
+                camera.config.device_index = int(device_index)
+                camera.config.skip_scan = False
 
             status = camera.connect()
             source = camera.source
@@ -1359,23 +1377,26 @@ class MonitoringPage(QWidget):
         devices = payload.get("devices", []) if isinstance(payload, dict) else []
         device_index = payload.get("device_index") if isinstance(payload, dict) else None
         connected = bool(payload.get("connected")) if isinstance(payload, dict) else False
+        manual_ip = str(payload.get("manual_ip") or "").strip() if isinstance(payload, dict) else ""
         device_found = device_index is not None
 
         if network and device_found:
             self._set_lumo_status_text("상태: 장치 확인됨", "#3fb950")
+        elif manual_ip:
+            self._set_lumo_status_text("상태: 수동 IP 사용", "#d29922")
         elif device_found:
-            self._set_lumo_status_text("상태: 장치 확인됨(IP 미확인)", "#3fb950")
+            self._set_lumo_status_text("상태: 네트워크 미확인", "#f85149")
         elif network:
             self._set_lumo_status_text("상태: IP 확인됨", "#d29922")
         else:
             self._set_lumo_status_text("상태: 미확인", "#f85149")
 
-        ip_text = str(network.get("ip_address")) if isinstance(network, dict) else "-"
+        ip_text = str(network.get("ip_address")) if isinstance(network, dict) else (manual_ip or "-")
         self.lumo_ip_label.setText(f"IP: {ip_text}")
         self.lumo_device_label.setText(f"Device: {device_index if device_index is not None else '-'}")
         scan_running = self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning()
         if not scan_running:
-            can_start = connected or device_found
+            can_start = connected
             self.lumo_connect_btn.setEnabled(can_start)
             self.lumo_inference_btn.setEnabled(can_start)
         log(

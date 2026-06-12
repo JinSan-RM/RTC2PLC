@@ -279,7 +279,7 @@ def build_lumo_module_config(
     return SpecimLumoModuleConfig(
         provider_mode=str(lumo_section.get("provider_mode", "native")).lower(),
         serial_number=_optional_text(lumo_section.get("serial_number")),
-        ip_address=None,
+        ip_address=_optional_text(lumo_section.get("ip_address")),
         interface_name=_optional_text(lumo_section.get("interface_name")),
         mac_address=_optional_text(lumo_section.get("mac_address") or lumo_section.get("target_mac_address")),
         device_index=int(lumo_section.get("device_index", 0)),

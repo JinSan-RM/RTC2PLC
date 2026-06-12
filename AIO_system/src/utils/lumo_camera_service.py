@@ -166,6 +166,7 @@ def find_lumo_device_index(
 def lumo_status_snapshot(app_config: dict[str, Any] | None) -> dict[str, Any]:
     payload = lumo_camera_payload(app_config)
     interface_name = sanitize_lumo_interface_name(payload.get("lumo", {}).get("interface_name"))
+    manual_ip = str(payload.get("lumo", {}).get("ip_address") or "").strip()
     network, candidates = find_lumo_network(interface_name=interface_name)
     devices = list_lumo_devices()
     device_index = find_lumo_device_index(
@@ -177,8 +178,9 @@ def lumo_status_snapshot(app_config: dict[str, Any] | None) -> dict[str, Any]:
         "network_candidates": candidates,
         "devices": devices,
         "device_index": device_index,
-        "connected": device_index is not None,
+        "connected": bool(network) or bool(manual_ip),
         "network_connected": bool(network),
+        "manual_ip": manual_ip,
     }
 
 
