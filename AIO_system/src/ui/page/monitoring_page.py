@@ -1158,6 +1158,7 @@ class MonitoringPage(QWidget):
         self.lumo_scan_worker = None
         self._lumo_shutting_down = False
         self._lumo_last_plc_ui_log = {}
+        self._lumo_inference_monitoring_override = False
         self.ai_manager = BatchAIManager(
             num_cameras=2,
             confidence_threshold=0.1,
@@ -1505,6 +1506,25 @@ class MonitoringPage(QWidget):
         self._lumo_last_plc_ui_log[key] = now
         log(message)
 
+    def _enable_lumo_inference_monitoring_gate(self):
+        if getattr(self.app, "monitoring_enabled", False):
+            self._lumo_inference_monitoring_override = False
+            return
+        self.app.monitoring_enabled = True
+        self._lumo_inference_monitoring_override = True
+        log("[INFO] Lumo inference temporarily enabled monitoring gate")
+
+    def _disable_lumo_inference_monitoring_gate(self):
+        if not self._lumo_inference_monitoring_override:
+            return
+        self._lumo_inference_monitoring_override = False
+        overall_running = hasattr(self, "start_all_btn") and not self.start_all_btn.isEnabled()
+        if overall_running:
+            log("[INFO] Lumo inference monitoring gate kept enabled by overall monitoring")
+            return
+        self.app.monitoring_enabled = False
+        log("[INFO] Lumo inference temporarily disabled monitoring gate")
+
     def _start_lumo_scan_worker(self, *, frames=None, enable_inference=False):
         if self._lumo_shutting_down:
             return False
@@ -1543,14 +1563,19 @@ class MonitoringPage(QWidget):
         self._start_lumo_scan_worker(enable_inference=False)
 
     def on_lumo_inference_connect(self):
-        self._start_lumo_scan_worker(enable_inference=True)
+        self._enable_lumo_inference_monitoring_gate()
+        if not self._start_lumo_scan_worker(enable_inference=True):
+            self._disable_lumo_inference_monitoring_gate()
 
     def on_lumo_stop_scan(self):
         worker = self.lumo_scan_worker
+        is_inference = bool(getattr(worker, "enable_inference", False))
         if worker is not None and worker.isRunning():
             worker.stop()
             self._set_lumo_status_text("상태: 정지 중", "#d29922")
         self.lumo_stop_scan_btn.setEnabled(False)
+        if is_inference:
+            self._disable_lumo_inference_monitoring_gate()
 
     def on_lumo_scan_status(self, message):
         if self._lumo_shutting_down:
@@ -1608,6 +1633,7 @@ class MonitoringPage(QWidget):
     def on_lumo_scan_finished(self, payload):
         if self._lumo_shutting_down:
             return
+        self._disable_lumo_inference_monitoring_gate()
         stopped = bool(payload.get("stopped")) if isinstance(payload, dict) else False
         self._set_lumo_status_text("상태: 스트리밍 정지" if stopped else "상태: 스트리밍 종료", "#3fb950")
         if self.hyper_camera and self.hyper_camera.is_running:
@@ -1634,6 +1660,7 @@ class MonitoringPage(QWidget):
     def on_lumo_scan_error(self, message):
         if self._lumo_shutting_down:
             return
+        self._disable_lumo_inference_monitoring_gate()
         self._set_lumo_status_text("상태: 스트리밍 실패", "#f85149")
         if self.hyper_camera and self.hyper_camera.is_running:
             self.hyper_camera.stop_camera()
@@ -1651,6 +1678,7 @@ class MonitoringPage(QWidget):
         self.lumo_status_worker = None
 
     def _on_lumo_scan_worker_finished(self):
+        self._disable_lumo_inference_monitoring_gate()
         self.lumo_scan_worker = None
 
     def _create_rgb_cameras(self, parent_layout):
