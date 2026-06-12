@@ -53,9 +53,6 @@ class HyperSpectralWidget:
     view: QGraphicsView = None
     img_item: QGraphicsPixmapItem = None
     scene: QGraphicsScene = None
-    inference_view: QGraphicsView = None
-    inference_img_item: QGraphicsPixmapItem = None
-    inference_scene: QGraphicsScene = None
 
 
 @dataclass
@@ -113,10 +110,11 @@ class LumoStreamWorker(QThread):
     scan_finished = Signal(object)
     error_ready = Signal(str)
 
-    def __init__(self, app_config, frames=None):
+    def __init__(self, app_config, frames=None, enable_inference=False):
         super().__init__()
         self.app_config = copy.deepcopy(app_config or {})
         self.frames = None if frames is None else int(frames)
+        self.enable_inference = bool(enable_inference)
         self._stop_requested = False
         self._camera = None
 
@@ -151,6 +149,12 @@ class LumoStreamWorker(QThread):
             )
             if device_index is not None:
                 lumo["device_index"] = int(device_index)
+            if network is None and device_index is not None:
+                lumo["interface_name"] = ""
+                lumo["ip_address"] = ""
+                lumo["mac_address"] = ""
+                lumo["target_mac_address"] = ""
+                lumo["skip_scan"] = True
 
             self.status_ready.emit("카메라 연결 중")
             camera = SpecimLumoCameraModule.from_config_payload(payload)
@@ -165,12 +169,13 @@ class LumoStreamWorker(QThread):
 
             self.status_ready.emit("스트리밍 중")
             rgb_bands = tuple(getattr(source.settings, "rgb_bands", (32, 96, 160)))
-            try:
-                inference_runtime = self._build_inference_runtime(rgb_bands)
-            except Exception as exc:  # noqa: BLE001
-                inference_runtime = None
-                self.inference_status_ready.emit(f"추론 준비 실패: {exc}")
-                log(f"[ERROR] live spectral inference setup failed: {exc}")
+            inference_runtime = None
+            if self.enable_inference:
+                try:
+                    inference_runtime = self._build_inference_runtime(rgb_bands)
+                except Exception as exc:  # noqa: BLE001
+                    self.inference_status_ready.emit(f"추론 준비 실패: {exc}")
+                    log(f"[ERROR] live spectral inference setup failed: {exc}")
 
             frame_count = 0
             for frame in source.frames(max_frames=self.frames):
@@ -185,12 +190,13 @@ class LumoStreamWorker(QThread):
                     }
                 )
                 timestamp_s = float(getattr(frame, "timestamp_monotonic_s", time.monotonic()))
-                self._process_live_inference_frame(
-                    inference_runtime,
-                    frame_data,
-                    timestamp_s,
-                    frame_count,
-                )
+                if self.enable_inference:
+                    self._process_live_inference_frame(
+                        inference_runtime,
+                        frame_data,
+                        timestamp_s,
+                        frame_count,
+                    )
 
             self.scan_finished.emit(
                 {
@@ -478,6 +484,7 @@ class CameraView(QFrame):
 
         self.image_label = None
         self.inference_status_label = None
+        self.hyperspectral_display_mode = "raw"
         self.detector = None
         self.detector_frame_generator = None
         self.timer = QTimer()
@@ -573,33 +580,12 @@ class CameraView(QFrame):
             layout.addWidget(scroll_area, 1)
         else:
             self.hyper_widget = HyperSpectralWidget()
-            stream_layout = QVBoxLayout()
-            stream_layout.setContentsMargins(0, 0, 0, 0)
-            stream_layout.setSpacing(8)
-
-            raw_title = QLabel("원본 스트리밍")
-            raw_title.setObjectName("camera_status")
-            stream_layout.addWidget(raw_title)
-
             (
                 self.hyper_widget.scene,
                 self.hyper_widget.img_item,
                 self.hyper_widget.view,
             ) = self._create_hyperspectral_graphics_view()
-            stream_layout.addWidget(self.hyper_widget.view, 1)
-
-            inference_title = QLabel("추론 스트리밍")
-            inference_title.setObjectName("camera_status")
-            stream_layout.addWidget(inference_title)
-
-            (
-                self.hyper_widget.inference_scene,
-                self.hyper_widget.inference_img_item,
-                self.hyper_widget.inference_view,
-            ) = self._create_hyperspectral_graphics_view()
-            stream_layout.addWidget(self.hyper_widget.inference_view, 1)
-
-            layout.addLayout(stream_layout, 1)
+            layout.addWidget(self.hyper_widget.view, 1)
 
         # 하단 정보
         info_layout = QHBoxLayout()
@@ -655,6 +641,25 @@ class CameraView(QFrame):
         view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         return scene, img_item, view
+
+    def set_hyperspectral_display_mode(self, mode):
+        normalized = str(mode or "raw").strip().lower()
+        if normalized not in {"raw", "inference"}:
+            normalized = "raw"
+        self.hyperspectral_display_mode = normalized
+        if self.img_data:
+            self.img_data.line_buffer.clear()
+            if self.img_data.inference_buffer:
+                self.img_data.inference_buffer.clear()
+            self.img_data.overlay_info.clear()
+            for item in self.img_data.overlay_items:
+                if self.hyper_widget and self.hyper_widget.scene:
+                    self.hyper_widget.scene.removeItem(item)
+            self.img_data.overlay_items.clear()
+        if self.hyper_widget and self.hyper_widget.img_item:
+            self.hyper_widget.img_item.setPixmap(QPixmap())
+        if self.inference_status_label:
+            self.inference_status_label.setText("화면: 추론" if normalized == "inference" else "화면: 원본")
 
     def start_camera(self):
         """카메라 시작"""
@@ -726,8 +731,6 @@ class CameraView(QFrame):
             if self.is_hyperspectral:
                 if self.hyper_widget and self.hyper_widget.img_item:
                     self.hyper_widget.img_item.setPixmap(QPixmap())
-                if self.hyper_widget and self.hyper_widget.inference_img_item:
-                    self.hyper_widget.inference_img_item.setPixmap(QPixmap())
                 if self.img_data:
                     for item in self.img_data.overlay_items:
                         if self.hyper_widget and self.hyper_widget.scene:
@@ -811,8 +814,6 @@ class CameraView(QFrame):
         if self.is_hyperspectral:
             if self.hyper_widget and self.hyper_widget.img_item:
                 self.hyper_widget.img_item.setPixmap(QPixmap())
-            if self.hyper_widget and self.hyper_widget.inference_img_item:
-                self.hyper_widget.inference_img_item.setPixmap(QPixmap())
         else:
             self.image_label.setText(f"오류:\n{error_msg}")
         self.is_running = False
@@ -821,7 +822,7 @@ class CameraView(QFrame):
     def process_hyperspectral_line(self, info):
         """라인 데이터 처리"""
         # pixel_format = self.format_var.get()
-        if self.img_data is None:
+        if self.img_data is None or self.hyperspectral_display_mode != "raw":
             return
 
         cur_line = info["frame_number"]
@@ -870,7 +871,11 @@ class CameraView(QFrame):
 
     def process_hyperspectral_inference(self, info):
         """추론 스트리밍 이미지 처리"""
-        if self.img_data is None or self.img_data.inference_buffer is None:
+        if (
+            self.img_data is None
+            or self.img_data.inference_buffer is None
+            or self.hyperspectral_display_mode != "inference"
+        ):
             return
 
         try:
@@ -985,13 +990,13 @@ class CameraView(QFrame):
 
             if (
                 getattr(self, "hyper_widget", None)
-                and self.hyper_widget.inference_img_item is not None
-                and self.hyper_widget.inference_view is not None
+                and self.hyper_widget.img_item is not None
+                and self.hyper_widget.view is not None
             ):
-                self.hyper_widget.inference_img_item.setPixmap(pixmap)
-                self.hyper_widget.inference_scene.setSceneRect(pixmap.rect())
-                self.hyper_widget.inference_view.fitInView(
-                    self.hyper_widget.inference_img_item,
+                self.hyper_widget.img_item.setPixmap(pixmap)
+                self.hyper_widget.scene.setSceneRect(pixmap.rect())
+                self.hyper_widget.view.fitInView(
+                    self.hyper_widget.img_item,
                     Qt.KeepAspectRatio
                 )
         except Exception as e:
@@ -1000,6 +1005,8 @@ class CameraView(QFrame):
 
     def update_hyperspectral_overlay(self):
         """물체 감지 오버레이"""
+        if self.hyperspectral_display_mode != "raw":
+            return
         # 현재 화면 범위를 벗어난 오래된 오버레이 정보 정리
         while self.img_data.overlay_info:
             oldest = self.img_data.overlay_info[0]
@@ -1299,6 +1306,12 @@ class MonitoringPage(QWidget):
         self.lumo_connect_btn.clicked.connect(self.on_lumo_connect)
         layout.addWidget(self.lumo_connect_btn)
 
+        self.lumo_inference_btn = QPushButton("추론 스트리밍")
+        self.lumo_inference_btn.setObjectName("control_btn_start")
+        self.lumo_inference_btn.setFixedSize(140, 50)
+        self.lumo_inference_btn.clicked.connect(self.on_lumo_inference_connect)
+        layout.addWidget(self.lumo_inference_btn)
+
         self.lumo_stop_scan_btn = QPushButton("스트리밍 정지")
         self.lumo_stop_scan_btn.setObjectName("control_btn_stop")
         self.lumo_stop_scan_btn.setFixedSize(140, 50)
@@ -1362,7 +1375,9 @@ class MonitoringPage(QWidget):
         self.lumo_device_label.setText(f"Device: {device_index if device_index is not None else '-'}")
         scan_running = self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning()
         if not scan_running:
-            self.lumo_connect_btn.setEnabled(connected or device_found)
+            can_start = connected or device_found
+            self.lumo_connect_btn.setEnabled(can_start)
+            self.lumo_inference_btn.setEnabled(can_start)
         log(
             "[INFO] Lumo status: "
             f"network={network}, device_index={device_index}, devices={len(devices) if isinstance(devices, list) else 0}"
@@ -1373,6 +1388,7 @@ class MonitoringPage(QWidget):
             return
         self._set_lumo_status_text("상태: 확인 실패", "#f85149")
         self.lumo_connect_btn.setEnabled(False)
+        self.lumo_inference_btn.setEnabled(False)
         log(f"[WARNING] Lumo status check failed: {message}")
 
     def _set_lumo_status_text(self, text, color):
@@ -1381,21 +1397,29 @@ class MonitoringPage(QWidget):
         self.lumo_status_label.setText(text)
         self.lumo_status_label.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
 
-    def _start_lumo_scan_worker(self, *, frames=None):
+    def _start_lumo_scan_worker(self, *, frames=None, enable_inference=False):
         if self._lumo_shutting_down:
             return False
         if self.lumo_scan_worker is not None and self.lumo_scan_worker.isRunning():
             return False
         if self.hyper_camera:
+            self.hyper_camera.set_hyperspectral_display_mode("inference" if enable_inference else "raw")
             self.hyper_camera.start_camera()
         self.lumo_connect_btn.setEnabled(False)
+        self.lumo_inference_btn.setEnabled(False)
         self.lumo_stop_scan_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setText("스트리밍 정지")
         self._set_lumo_status_text("상태: 스트리밍 준비", "#d29922")
         if self.hyper_camera and self.hyper_camera.inference_status_label:
-            self.hyper_camera.inference_status_label.setText("추론: 준비 중")
+            self.hyper_camera.inference_status_label.setText(
+                "추론: 준비 중" if enable_inference else "화면: 원본"
+            )
 
-        self.lumo_scan_worker = LumoStreamWorker(self.app.config, frames=frames)
+        self.lumo_scan_worker = LumoStreamWorker(
+            self.app.config,
+            frames=frames,
+            enable_inference=enable_inference,
+        )
         self.lumo_scan_worker.status_ready.connect(self.on_lumo_scan_status)
         self.lumo_scan_worker.line_ready.connect(self.on_lumo_scan_line)
         self.lumo_scan_worker.inference_ready.connect(self.on_lumo_inference_frame)
@@ -1408,7 +1432,10 @@ class MonitoringPage(QWidget):
         return True
 
     def on_lumo_connect(self):
-        self._start_lumo_scan_worker()
+        self._start_lumo_scan_worker(enable_inference=False)
+
+    def on_lumo_inference_connect(self):
+        self._start_lumo_scan_worker(enable_inference=True)
 
     def on_lumo_stop_scan(self):
         worker = self.lumo_scan_worker
@@ -1447,6 +1474,7 @@ class MonitoringPage(QWidget):
         stopped = bool(payload.get("stopped")) if isinstance(payload, dict) else False
         self._set_lumo_status_text("상태: 스트리밍 정지" if stopped else "상태: 스트리밍 종료", "#3fb950")
         self.lumo_connect_btn.setEnabled(True)
+        self.lumo_inference_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
         self.lumo_stop_scan_btn.setText("스트리밍 정지")
         if self.hyper_camera and self.hyper_camera.inference_status_label:
@@ -1463,6 +1491,7 @@ class MonitoringPage(QWidget):
             return
         self._set_lumo_status_text("상태: 스트리밍 실패", "#f85149")
         self.lumo_connect_btn.setEnabled(True)
+        self.lumo_inference_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
         self.lumo_stop_scan_btn.setText("스트리밍 정지")
         if self.hyper_camera and self.hyper_camera.inference_status_label:
