@@ -108,6 +108,7 @@ class CommManager(threading.Thread):
         self.trackings = Trackings()
         self._lumo_event_lock = threading.Lock()
         self._lumo_recent_events = deque(maxlen=256)
+        self._lumo_last_plc_log = {}
 
         self.xgt_tester = XGTTester(ip="192.168.1.3", port=2004)
 
@@ -393,6 +394,11 @@ class CommManager(threading.Thread):
     def _send_plc_pulse(self, _info: ObjectInfo):
         """10ms 펄스로 신호 전송 (PLC에서 상승엣지 감지)"""
         # 재질 신호 직후 사이즈 신호
+        log(
+            f"[PLC전송시도] ID={_info.obj_id}, Y={_info.y_position}, "
+            f"재질={_info.classification}, size={_info.size}, "
+            f"주소=P{_info.plc_value:03X}/P{_info.size_addr:03X}"
+        )
         success1 = self.xgt_tester.write_bit_packet(
             address=_info.plc_value,
             onoff=1
@@ -760,14 +766,29 @@ class CommManager(threading.Thread):
             )
             return False
 
+    def _log_lumo_plc_skip(self, key: str, message: str, *, interval_s: float = 2.0):
+        now = time.time()
+        should_log = False
+        with self._lumo_event_lock:
+            last_logged = float(self._lumo_last_plc_log.get(key, 0.0))
+            if now - last_logged >= float(interval_s):
+                self._lumo_last_plc_log[key] = now
+                should_log = True
+        if should_log:
+            log(message)
+
     def process_lumo_inference_payload(self, payload):
         if not getattr(self.app, "monitoring_enabled", True):
+            self._log_lumo_plc_skip(
+                "monitoring_disabled",
+                "[INFO] Lumo PLC skip: monitoring_enabled=False",
+            )
             return
         if not isinstance(payload, dict):
-            return
-
-        objects = payload.get("objects", [])
-        if not isinstance(objects, list):
+            self._log_lumo_plc_skip(
+                "invalid_payload",
+                f"[WARNING] Lumo PLC skip: invalid payload type={type(payload).__name__}",
+            )
             return
 
         try:
@@ -777,32 +798,74 @@ class CommManager(threading.Thread):
             frame_start = 0
             frame_end = 0
 
+        objects = payload.get("objects", [])
+        if not isinstance(objects, list):
+            self._log_lumo_plc_skip(
+                "invalid_objects",
+                f"[WARNING] Lumo PLC skip: invalid objects type={type(objects).__name__}",
+            )
+            return
+        if not objects:
+            self._log_lumo_plc_skip(
+                "empty_objects",
+                f"[INFO] Lumo PLC skip: no objects frames={frame_start}-{frame_end}",
+            )
+            return
+
+        log(f"[INFO] Lumo PLC payload received: objects={len(objects)}, frames={frame_start}-{frame_end}")
+
         for obj in objects:
             if not isinstance(obj, dict):
+                self._log_lumo_plc_skip(
+                    "invalid_object",
+                    f"[WARNING] Lumo PLC skip: invalid object type={type(obj).__name__}",
+                )
                 continue
             classification = str(obj.get("class", "")).strip()
             bbox = obj.get("bbox", [])
             if not classification or not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                self._log_lumo_plc_skip(
+                    "invalid_object_fields",
+                    f"[WARNING] Lumo PLC skip: invalid object fields={obj}",
+                )
                 continue
             try:
                 x, y, w, h = [int(value) for value in bbox]
             except (TypeError, ValueError):
+                self._log_lumo_plc_skip(
+                    "invalid_bbox",
+                    f"[WARNING] Lumo PLC skip: invalid bbox={bbox}",
+                )
                 continue
             if w <= 0 or h <= 0:
+                self._log_lumo_plc_skip(
+                    "invalid_box_size",
+                    f"[WARNING] Lumo PLC skip: invalid box size bbox={bbox}",
+                )
                 continue
             if abs(w) < 15:
-                log("[INFO] ignoring thin Lumo object")
+                self._log_lumo_plc_skip(
+                    "thin_object",
+                    f"[INFO] Lumo PLC skip: thin object width={w}, class={classification}",
+                )
                 continue
 
             center_x = int(x + (w // 2))
             y_position = int(y + (h // 2))
             frame_center = int(frame_start + y_position)
             if y_position >= 1000:
+                self._log_lumo_plc_skip(
+                    "y_out_of_range",
+                    f"[INFO] Lumo PLC skip: y_position out of range y={y_position}, class={classification}",
+                )
                 continue
 
             size = classify_object_size(center_x)
             if size is None:
-                log("[가이드라인] Lumo 객체 무시")
+                self._log_lumo_plc_skip(
+                    "guideline",
+                    f"[가이드라인] Lumo PLC skip: x={center_x}, class={classification}",
+                )
                 continue
 
             if size == "large":
@@ -821,7 +884,11 @@ class CommManager(threading.Thread):
                 center_x=center_x,
                 frame_center=frame_center,
             ):
-                log(f"[INFO] duplicate Lumo PLC event skipped: class={classification}, x={center_x}")
+                self._log_lumo_plc_skip(
+                    f"duplicate:{classification}:{center_x // 20}",
+                    f"[INFO] duplicate Lumo PLC event skipped: class={classification}, x={center_x}",
+                    interval_s=1.0,
+                )
                 continue
 
             delay = calc_delay(y_position)

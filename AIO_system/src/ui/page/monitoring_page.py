@@ -1157,6 +1157,7 @@ class MonitoringPage(QWidget):
         self.lumo_status_worker = None
         self.lumo_scan_worker = None
         self._lumo_shutting_down = False
+        self._lumo_last_plc_ui_log = {}
         self.ai_manager = BatchAIManager(
             num_cameras=2,
             confidence_threshold=0.1,
@@ -1496,6 +1497,14 @@ class MonitoringPage(QWidget):
         self.lumo_status_label.setText(text)
         self.lumo_status_label.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
 
+    def _log_lumo_plc_ui_skip(self, key: str, message: str, *, interval_s: float = 2.0):
+        now = time.time()
+        last_logged = float(self._lumo_last_plc_ui_log.get(key, 0.0))
+        if now - last_logged < float(interval_s):
+            return
+        self._lumo_last_plc_ui_log[key] = now
+        log(message)
+
     def _start_lumo_scan_worker(self, *, frames=None, enable_inference=False):
         if self._lumo_shutting_down:
             return False
@@ -1558,13 +1567,37 @@ class MonitoringPage(QWidget):
     def on_lumo_inference_frame(self, info):
         if self._lumo_shutting_down:
             return
-        if self.hyper_camera and self.hyper_camera.is_running:
+        if not self.hyper_camera:
+            self._log_lumo_plc_ui_skip(
+                "no_hyper_camera",
+                "[WARNING] Lumo PLC skip: hyper_camera unavailable",
+            )
+            return
+        if not self.hyper_camera.is_running:
+            self._log_lumo_plc_ui_skip(
+                "hyper_camera_not_running",
+                "[WARNING] Lumo PLC skip: hyper_camera is not running",
+            )
+            return
+
+        try:
             self.hyper_camera.process_hyperspectral_inference(info)
-            managers = getattr(self.app, "managers", None)
-            comm_manager = getattr(managers, "comm_manager", None)
-            processor = getattr(comm_manager, "process_lumo_inference_payload", None)
-            if callable(processor):
+        except Exception as exc:
+            log(f"[ERROR] Lumo inference display update failed: {exc}")
+
+        managers = getattr(self.app, "managers", None)
+        comm_manager = getattr(managers, "comm_manager", None)
+        processor = getattr(comm_manager, "process_lumo_inference_payload", None)
+        if callable(processor):
+            try:
                 processor(info)
+            except Exception as exc:
+                log(f"[ERROR] Lumo PLC payload processing failed: {exc}")
+        else:
+            self._log_lumo_plc_ui_skip(
+                "processor_unavailable",
+                "[WARNING] Lumo PLC processor unavailable",
+            )
 
     def on_lumo_inference_status(self, message):
         if self._lumo_shutting_down:
