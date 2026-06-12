@@ -154,7 +154,7 @@ class LumoStreamWorker(QThread):
                 lumo["ip_address"] = ""
                 lumo["mac_address"] = ""
                 lumo["target_mac_address"] = ""
-                lumo["skip_scan"] = True
+                lumo["skip_scan"] = False
 
             self.status_ready.emit("카메라 연결 중")
             camera = SpecimLumoCameraModule.from_config_payload(payload)
@@ -1473,6 +1473,8 @@ class MonitoringPage(QWidget):
             return
         stopped = bool(payload.get("stopped")) if isinstance(payload, dict) else False
         self._set_lumo_status_text("상태: 스트리밍 정지" if stopped else "상태: 스트리밍 종료", "#3fb950")
+        if self.hyper_camera and self.hyper_camera.is_running:
+            self.hyper_camera.stop_camera()
         self.lumo_connect_btn.setEnabled(True)
         self.lumo_inference_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
@@ -1490,6 +1492,8 @@ class MonitoringPage(QWidget):
         if self._lumo_shutting_down:
             return
         self._set_lumo_status_text("상태: 스트리밍 실패", "#f85149")
+        if self.hyper_camera and self.hyper_camera.is_running:
+            self.hyper_camera.stop_camera()
         self.lumo_connect_btn.setEnabled(True)
         self.lumo_inference_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
