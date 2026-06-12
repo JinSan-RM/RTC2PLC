@@ -117,9 +117,16 @@ class LumoStreamWorker(QThread):
         self.enable_inference = bool(enable_inference)
         self._stop_requested = False
         self._camera = None
+        self._stream_worker = None
 
     def stop(self):
         self._stop_requested = True
+        worker = self._stream_worker
+        if worker is not None:
+            try:
+                worker.stop(timeout_s=2.0)
+            except Exception:
+                pass
         camera = self._camera
         if camera is not None:
             try:
@@ -129,9 +136,11 @@ class LumoStreamWorker(QThread):
 
     def run(self):
         self.status_ready.emit("스트리밍 준비")
+        stream_worker = None
         try:
             ensure_lumo_module_path()
             from specim_lumo_camera_kit import SpecimLumoCameraModule
+            from specim_lumo_camera_kit.stream_worker import StreamWorker
 
             payload = lumo_camera_payload(self.app_config)
             lumo = payload.setdefault("lumo", {})
@@ -196,10 +205,32 @@ class LumoStreamWorker(QThread):
                     log(f"[ERROR] live spectral inference setup failed: {exc}")
 
             frame_count = 0
-            for frame in source.frames(max_frames=self.frames):
+            timeout_frames = 0
+            last_frame_received_at = time.monotonic()
+            frame_timeout_s = 0.5
+            max_idle_seconds = 30.0
+            stream_worker = StreamWorker(source, queue_maxsize=64)
+            self._stream_worker = stream_worker
+            stream_worker.start(max_frames=self.frames)
+
+            while not self._stop_requested:
+                frame = stream_worker.pop_frame(timeout_s=frame_timeout_s)
+                if frame is None:
+                    if stream_worker.stats.finished:
+                        break
+                    timeout_frames += 1
+                    idle_seconds = time.monotonic() - last_frame_received_at
+                    if idle_seconds > max_idle_seconds:
+                        raise RuntimeError(
+                            "live stream idle timeout exceeded: "
+                            f"idle={idle_seconds:.3f}s, max_idle={max_idle_seconds:.3f}s"
+                        )
+                    continue
+
                 if self._stop_requested:
                     break
                 frame_count += 1
+                last_frame_received_at = time.monotonic()
                 frame_data = np.asarray(frame.data)
                 self.line_ready.emit(
                     {
@@ -216,6 +247,10 @@ class LumoStreamWorker(QThread):
                         frame_count,
                     )
 
+            stream_worker.wait(timeout_s=2.0)
+            if stream_worker.stats.error and not self._stop_requested:
+                raise RuntimeError(str(stream_worker.stats.error))
+
             self.scan_finished.emit(
                 {
                     "frame_count": frame_count,
@@ -223,11 +258,20 @@ class LumoStreamWorker(QThread):
                     "stopped": bool(self._stop_requested),
                     "network": network,
                     "device_index": device_index,
+                    "timeout_frames": int(timeout_frames),
+                    "stream_stats": stream_worker.stats.to_dict(),
                 }
             )
         except Exception as exc:  # noqa: BLE001
             self.error_ready.emit(str(exc))
         finally:
+            worker = self._stream_worker
+            self._stream_worker = None
+            if worker is not None:
+                try:
+                    worker.stop(timeout_s=2.0)
+                except Exception:
+                    pass
             camera = self._camera
             self._camera = None
             if camera is not None:
@@ -358,13 +402,13 @@ class LumoStreamWorker(QThread):
         from features.bands import build_pseudo_rgb_preview
         from runtime.calibration import apply_runtime_calibration
         from runtime.objectizer import objectize_class_map
-        from runtime.pixel_inference import build_pixel_overlay, infer_pixel_map_from_probabilities
+        from runtime.pixel_inference import build_pixel_overlay, infer_pixel_map, summarize_pixel_map
 
         cube_window = np.stack([np.asarray(line) for line in line_chunk], axis=0)
         calibration_result = apply_runtime_calibration(cube_window, runtime.calibration_context)
         inference_cube = calibration_result.cube
         params = runtime.params
-        pixel_result = infer_pixel_map_from_probabilities(
+        pixel_result = infer_pixel_map(
             model=runtime.model,
             cube=inference_cube,
             confidence_threshold=float(getattr(params, "threshold", 0.5)),
@@ -424,6 +468,7 @@ class LumoStreamWorker(QThread):
             "objects_per_class": objects_per_class,
             "objects": objects,
             "calibration": calibration_result.summary,
+            "pixel_summary": summarize_pixel_map(pixel_result),
         }
 
     def _draw_live_inference_boxes(self, image, objects):
@@ -1503,6 +1548,12 @@ class MonitoringPage(QWidget):
         if self.hyper_camera and self.hyper_camera.inference_status_label:
             self.hyper_camera.inference_status_label.setText("추론: 정지" if stopped else "추론: 종료")
         if isinstance(payload, dict):
+            log(
+                "[INFO] Lumo stream finished: "
+                f"frames={payload.get('frame_count')}, "
+                f"timeouts={payload.get('timeout_frames')}, "
+                f"stats={payload.get('stream_stats')}"
+            )
             network = payload.get("network")
             device_index = payload.get("device_index")
             ip_text = str(network.get("ip_address")) if isinstance(network, dict) else "-"

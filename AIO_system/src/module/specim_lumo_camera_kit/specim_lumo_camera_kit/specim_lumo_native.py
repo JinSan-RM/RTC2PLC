@@ -1247,10 +1247,16 @@ def _si_apply_profile_settings(lib: ctypes.CDLL, handle: int, device_index: int 
         setup_file_candidates.append(env_setup_file)
     if profile_dir:
         profile_root = Path(profile_dir)
-        for name in normalized_preferred:
-            setup_file_candidates.append(str(profile_root / f"{name}.ssp"))
-        setup_file_candidates.append(str(profile_root / "FX17e.ssp"))
-        setup_file_candidates.append(str(profile_root / "FX17e with Pleora.ssp"))
+        if has_network_selector:
+            setup_file_candidates.append(str(profile_root / "FX17e with Pleora.ssp"))
+            setup_file_candidates.append(str(profile_root / "FX17e.ssp"))
+            for name in normalized_preferred:
+                setup_file_candidates.append(str(profile_root / f"{name}.ssp"))
+        else:
+            for name in normalized_preferred:
+                setup_file_candidates.append(str(profile_root / f"{name}.ssp"))
+            setup_file_candidates.append(str(profile_root / "FX17e.ssp"))
+            setup_file_candidates.append(str(profile_root / "FX17e with Pleora.ssp"))
 
     chosen_setup_file: str | None = None
     for raw_path in setup_file_candidates:
@@ -1269,6 +1275,13 @@ def _si_apply_profile_settings(lib: ctypes.CDLL, handle: int, device_index: int 
         "Grabber.Channel": env_grabber_channel.strip() if env_grabber_channel and env_grabber_channel.strip() else None,
         "Shutter.Channel": env_shutter_channel.strip() if env_shutter_channel and env_shutter_channel.strip() else None,
     }
+
+    # When using GigE FX17e, some deployments use the camera IP as Grabber.Channel.
+    # Keep this only as a fallback; SDK profile defaults such as Pleora "ui" are closer
+    # to the vendor startup flow and should not be overwritten automatically.
+    grabber_ip_fallback = str(open_settings.get("ip_address") or open_settings.get("ip") or "").strip()
+    if grabber_ip_fallback:
+        preferred_channel_values.append(grabber_ip_fallback)
 
     module_channels: dict[str, str] = {}
     ssp_channel_defaults: dict[str, str] = {}
@@ -1289,13 +1302,15 @@ def _si_apply_profile_settings(lib: ctypes.CDLL, handle: int, device_index: int 
             _si_set_string(lib, handle, "Acquisition.SetupFilePath", env_setup_file or chosen_setup_file)
 
     # Channels are mandatory inputs for Initialize.
-    # Set explicit values first: env override > SSP default.
+    # Set explicit values first: env override > IP selector > SSP default.
     applied_channels: dict[str, str] = {}
     channel_errors: dict[str, str] = {}
     for feature_name in ("Camera.Channel", "Grabber.Channel", "Shutter.Channel"):
         if ssp_feature_names and feature_name not in ssp_feature_names:
             continue
         explicit_value = channel_env_overrides.get(feature_name)
+        if not explicit_value and feature_name == "Grabber.Channel" and grabber_ip_fallback:
+            explicit_value = grabber_ip_fallback
         if not explicit_value:
             explicit_value = ssp_channel_defaults.get(feature_name)
         if explicit_value:
