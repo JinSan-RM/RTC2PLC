@@ -8,6 +8,8 @@ import copy
 
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import cv2
@@ -51,6 +53,9 @@ class HyperSpectralWidget:
     view: QGraphicsView = None
     img_item: QGraphicsPixmapItem = None
     scene: QGraphicsScene = None
+    inference_view: QGraphicsView = None
+    inference_img_item: QGraphicsPixmapItem = None
+    inference_scene: QGraphicsScene = None
 
 
 @dataclass
@@ -63,6 +68,22 @@ class HyperSpectralData:
     update_interval: float = 0.0
     overlay_items: list = None
     overlay_info: deque = None
+    inference_buffer: deque = None
+    inference_last_update_time: float = 0.0
+
+
+@dataclass
+class LiveInferenceRuntime:
+    """Runtime objects and rolling buffers for live UI inference preview."""
+    model: Any
+    params: Any
+    calibration_context: Any
+    rgb_bands: tuple[int, int, int]
+    line_buffer: list
+    timestamp_buffer: list
+    buffer_start_index: int = 0
+    next_window_start: int = 0
+    window_index: int = 0
 
 
 class LumoStatusWorker(QThread):
@@ -86,6 +107,8 @@ class LumoStreamWorker(QThread):
     """Open Lumo camera and stream lines into the monitoring view."""
 
     line_ready = Signal(object)
+    inference_ready = Signal(object)
+    inference_status_ready = Signal(str)
     status_ready = Signal(str)
     scan_finished = Signal(object)
     error_ready = Signal(str)
@@ -142,16 +165,31 @@ class LumoStreamWorker(QThread):
 
             self.status_ready.emit("스트리밍 중")
             rgb_bands = tuple(getattr(source.settings, "rgb_bands", (32, 96, 160)))
+            try:
+                inference_runtime = self._build_inference_runtime(rgb_bands)
+            except Exception as exc:  # noqa: BLE001
+                inference_runtime = None
+                self.inference_status_ready.emit(f"추론 준비 실패: {exc}")
+                log(f"[ERROR] live spectral inference setup failed: {exc}")
+
             frame_count = 0
             for frame in source.frames(max_frames=self.frames):
                 if self._stop_requested:
                     break
                 frame_count += 1
+                frame_data = np.asarray(frame.data)
                 self.line_ready.emit(
                     {
                         "frame_number": int(getattr(frame, "index", frame_count)),
-                        "data_body": lumo_line_to_rgb_bytes(frame.data, rgb_bands),
+                        "data_body": lumo_line_to_rgb_bytes(frame_data, rgb_bands),
                     }
+                )
+                timestamp_s = float(getattr(frame, "timestamp_monotonic_s", time.monotonic()))
+                self._process_live_inference_frame(
+                    inference_runtime,
+                    frame_data,
+                    timestamp_s,
+                    frame_count,
                 )
 
             self.scan_finished.emit(
@@ -174,6 +212,243 @@ class LumoStreamWorker(QThread):
                 except Exception:
                     pass
 
+    def _ensure_spectral_runtime_path(self):
+        runtime_root = Path(__file__).resolve().parents[2] / "module" / "spectral_runtime_full_kit"
+        runtime_path = str(runtime_root)
+        if runtime_root.exists() and runtime_path not in sys.path:
+            sys.path.insert(0, runtime_path)
+
+    def _hyperspectral_inference_config(self):
+        app_config = self.app_config if isinstance(self.app_config, dict) else {}
+        camera_config = app_config.get("camera_connection_config", {})
+        if not isinstance(camera_config, dict):
+            return {}
+        hyper_config = camera_config.get("hyperspectral", {})
+        if not isinstance(hyper_config, dict):
+            return {}
+        inference_config = hyper_config.get("inference", {})
+        return dict(inference_config) if isinstance(inference_config, dict) else {}
+
+    def _build_inference_runtime(self, rgb_bands):
+        inference_config = self._hyperspectral_inference_config()
+        if not bool(inference_config.get("enabled", False)):
+            self.inference_status_ready.emit("추론: 미사용")
+            return None
+
+        self._ensure_spectral_runtime_path()
+        from models.infer import load_model
+        from runtime.calibration import RuntimeCalibrationContext
+        from runtime_module import InferenceRuntimeParams, SpectralRuntimeModule
+
+        model_source = str(inference_config.get("model_source") or "model_file").strip().lower()
+        bundle_value = str(inference_config.get("model_bundle_path") or "").strip()
+        model_value = str(inference_config.get("model_path") or "").strip()
+        calibration_context = None
+
+        if model_source == "bundle" and bundle_value:
+            module = SpectralRuntimeModule.from_bundle(
+                Path(bundle_value),
+                app_config=self.app_config,
+                verify_bundle=False,
+            )
+            params = module.default_params()
+            if not bool(inference_config.get("use_bundle_runtime_params", False)):
+                params = InferenceRuntimeParams(calibration_context=params.calibration_context)
+            model_path = module.model_path
+            calibration_context = params.calibration_context
+        else:
+            if not model_value:
+                self.inference_status_ready.emit("추론: 모델 없음")
+                return None
+            model_path = Path(model_value).resolve()
+            input_kind = str(inference_config.get("model_input_kind") or "raw").strip().lower()
+            if input_kind not in {"raw", "reflectance", "absorbance"}:
+                input_kind = "raw"
+            reference_paths = inference_config.get("reference_paths", {})
+            reference_paths = dict(reference_paths) if isinstance(reference_paths, dict) else {}
+            if input_kind in {"reflectance", "absorbance"}:
+                dark_path = Path(str(reference_paths.get("dark_mean") or "")).resolve()
+                white_path = Path(str(reference_paths.get("white_mean") or "")).resolve()
+                dark = np.load(dark_path, allow_pickle=False).astype(np.float32, copy=False)
+                white = np.load(white_path, allow_pickle=False).astype(np.float32, copy=False)
+                calibration_context = RuntimeCalibrationContext(
+                    input_kind=input_kind,
+                    dark_reference=np.ascontiguousarray(dark),
+                    white_reference=np.ascontiguousarray(white),
+                    reference_paths={
+                        "dark_mean": str(dark_path),
+                        "white_mean": str(white_path),
+                    },
+                )
+            else:
+                calibration_context = RuntimeCalibrationContext(input_kind="raw")
+            params = InferenceRuntimeParams(calibration_context=calibration_context)
+
+        model = load_model(model_path)
+        self.inference_status_ready.emit(f"추론: 준비 ({Path(model_path).name})")
+        return LiveInferenceRuntime(
+            model=model,
+            params=params,
+            calibration_context=calibration_context,
+            rgb_bands=tuple(int(item) for item in rgb_bands),
+            line_buffer=[],
+            timestamp_buffer=[],
+        )
+
+    def _process_live_inference_frame(self, runtime, frame_data, timestamp_s, frame_counter):
+        if runtime is None or runtime.model is None:
+            return
+
+        runtime.line_buffer.append(np.asarray(frame_data))
+        runtime.timestamp_buffer.append(float(timestamp_s))
+
+        window_size = max(1, int(getattr(runtime.params, "window_size", 32)))
+        stride = max(1, int(getattr(runtime.params, "stride", window_size)))
+        while (runtime.next_window_start + window_size) <= int(frame_counter):
+            start_offset = runtime.next_window_start - runtime.buffer_start_index
+            end_offset = start_offset + window_size
+            if start_offset < 0 or end_offset > len(runtime.line_buffer):
+                break
+
+            try:
+                payload = self._build_live_inference_payload(
+                    runtime=runtime,
+                    line_chunk=runtime.line_buffer[start_offset:end_offset],
+                    timestamp_chunk=runtime.timestamp_buffer[start_offset:end_offset],
+                    frame_start=runtime.next_window_start,
+                )
+                self.inference_ready.emit(payload)
+                self.inference_status_ready.emit(
+                    f"추론: 객체 {payload['total_objects']} / window {runtime.window_index + 1}"
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.inference_status_ready.emit(f"추론 오류: {exc}")
+                log(f"[ERROR] live spectral inference failed: {exc}")
+
+            runtime.window_index += 1
+            runtime.next_window_start += stride
+            self._prune_inference_buffers(runtime, frame_counter)
+
+    def _build_live_inference_payload(self, *, runtime, line_chunk, timestamp_chunk, frame_start):
+        self._ensure_spectral_runtime_path()
+        from features.bands import build_pseudo_rgb_preview
+        from runtime.calibration import apply_runtime_calibration
+        from runtime.objectizer import objectize_class_map
+        from runtime.pixel_inference import build_pixel_overlay, infer_pixel_map_from_probabilities
+
+        cube_window = np.stack([np.asarray(line) for line in line_chunk], axis=0)
+        calibration_result = apply_runtime_calibration(cube_window, runtime.calibration_context)
+        inference_cube = calibration_result.cube
+        params = runtime.params
+        pixel_result = infer_pixel_map_from_probabilities(
+            model=runtime.model,
+            cube=inference_cube,
+            confidence_threshold=float(getattr(params, "threshold", 0.5)),
+            valid_x_min=getattr(params, "valid_x_min", None),
+            valid_x_max=getattr(params, "valid_x_max", None),
+        )
+        object_result = objectize_class_map(
+            class_map=pixel_result.class_map,
+            confidence_map=pixel_result.confidence_map,
+            class_names=pixel_result.class_names,
+            min_area=max(1, int(getattr(params, "min_area", 25))),
+            connectivity=int(getattr(params, "connectivity", 8)),
+            opening_size=max(0, int(getattr(params, "opening_size", 0))),
+            closing_size=max(0, int(getattr(params, "closing_size", 0))),
+            min_bbox_width=max(1, int(getattr(params, "min_bbox_width", 1))),
+            min_bbox_height=max(1, int(getattr(params, "min_bbox_height", 1))),
+            max_bbox_aspect_ratio=getattr(params, "max_bbox_aspect_ratio", None),
+            min_class_fraction=float(getattr(params, "min_class_fraction", 0.0)),
+            object_confidence_threshold=float(getattr(params, "object_confidence_threshold", 0.0)),
+            suppress_iou_threshold=getattr(params, "suppress_iou_threshold", None),
+            suppress_containment_threshold=getattr(params, "suppress_containment_threshold", None),
+            suppress_across_classes=bool(getattr(params, "suppress_across_classes", False)),
+            timestamps_s=np.asarray(timestamp_chunk, dtype=np.float64),
+        )
+        preview = build_pseudo_rgb_preview(cube_window, rgb_bands=runtime.rgb_bands)
+        overlay = build_pixel_overlay(
+            preview=preview,
+            class_map=pixel_result.class_map,
+            confidence_map=pixel_result.confidence_map,
+            alpha=0.65,
+            unknown_index=pixel_result.unknown_index,
+        )
+        overlay = self._draw_live_inference_boxes(overlay, object_result.objects)
+        overlay = np.ascontiguousarray(overlay.astype(np.uint8, copy=False))
+
+        objects_per_class = {}
+        objects = []
+        for item in object_result.objects:
+            class_name = str(item.class_name)
+            objects_per_class[class_name] = objects_per_class.get(class_name, 0) + 1
+            objects.append(
+                {
+                    "class": class_name,
+                    "confidence": float(item.object_confidence),
+                    "bbox": [int(value) for value in item.bbox_xywh],
+                }
+            )
+
+        height, width = overlay.shape[:2]
+        return {
+            "frame_start": int(frame_start),
+            "frame_end": int(frame_start) + int(height) - 1,
+            "width": int(width),
+            "height": int(height),
+            "data_body": overlay.tobytes(),
+            "total_objects": int(len(objects)),
+            "objects_per_class": objects_per_class,
+            "objects": objects,
+            "calibration": calibration_result.summary,
+        }
+
+    def _draw_live_inference_boxes(self, image, objects):
+        output = np.asarray(image, dtype=np.uint8).copy()
+        for item in objects:
+            x0, y0, width, height = [int(value) for value in item.bbox_xywh]
+            if width <= 0 or height <= 0:
+                continue
+            color = self._class_color(int(item.class_index))
+            x1 = max(0, min(output.shape[1] - 1, x0 + width - 1))
+            y1 = max(0, min(output.shape[0] - 1, y0 + height - 1))
+            x0 = max(0, min(output.shape[1] - 1, x0))
+            y0 = max(0, min(output.shape[0] - 1, y0))
+            cv2.rectangle(output, (x0, y0), (x1, y1), color, 1)
+            label = f"{item.class_name} {float(item.object_confidence):.2f}"
+            label_y = y0 - 4 if y0 >= 12 else y0 + 12
+            cv2.putText(
+                output,
+                label,
+                (x0, label_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.35,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+        return output
+
+    def _class_color(self, class_index):
+        colors = (
+            (230, 57, 70),
+            (29, 53, 87),
+            (69, 123, 157),
+            (42, 157, 143),
+            (233, 196, 106),
+            (244, 162, 97),
+            (38, 70, 83),
+        )
+        return colors[int(class_index) % len(colors)]
+
+    def _prune_inference_buffers(self, runtime, frame_counter):
+        prune_until = min(int(frame_counter), int(runtime.next_window_start))
+        drop_count = prune_until - int(runtime.buffer_start_index)
+        if drop_count <= 0:
+            return
+        del runtime.line_buffer[:drop_count]
+        del runtime.timestamp_buffer[:drop_count]
+        runtime.buffer_start_index += drop_count
+
 
 class CameraView(QFrame):
     """카메라 뷰 위젯"""
@@ -192,6 +467,7 @@ class CameraView(QFrame):
         if self.is_hyperspectral:
             self.img_data = HyperSpectralData(max_lines=MAX_IMG_LINES)
             self.img_data.line_buffer = deque(maxlen=self.img_data.max_lines)
+            self.img_data.inference_buffer = deque(maxlen=self.img_data.max_lines)
             self.img_data.overlay_info = deque(maxlen=self.img_data.max_lines * 10)
             self.img_data.overlay_items = []
             self.img_data.update_interval = 0.033
@@ -201,6 +477,7 @@ class CameraView(QFrame):
             self.config = CAMERA_CONFIGS.get(camera_index, {})
 
         self.image_label = None
+        self.inference_status_label = None
         self.detector = None
         self.detector_frame_generator = None
         self.timer = QTimer()
@@ -296,15 +573,33 @@ class CameraView(QFrame):
             layout.addWidget(scroll_area, 1)
         else:
             self.hyper_widget = HyperSpectralWidget()
-            self.hyper_widget.scene = QGraphicsScene(0, 0, 640, 480, self)
-            self.hyper_widget.img_item = QGraphicsPixmapItem()
-            self.hyper_widget.scene.addItem(self.hyper_widget.img_item)
+            stream_layout = QVBoxLayout()
+            stream_layout.setContentsMargins(0, 0, 0, 0)
+            stream_layout.setSpacing(8)
 
-            self.hyper_widget.view = QGraphicsView(self.hyper_widget.scene, self)
-            self.hyper_widget.view.setObjectName("camera_frame")
-            self.hyper_widget.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-            self.hyper_widget.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            layout.addWidget(self.hyper_widget.view, 1)
+            raw_title = QLabel("원본 스트리밍")
+            raw_title.setObjectName("camera_status")
+            stream_layout.addWidget(raw_title)
+
+            (
+                self.hyper_widget.scene,
+                self.hyper_widget.img_item,
+                self.hyper_widget.view,
+            ) = self._create_hyperspectral_graphics_view()
+            stream_layout.addWidget(self.hyper_widget.view, 1)
+
+            inference_title = QLabel("추론 스트리밍")
+            inference_title.setObjectName("camera_status")
+            stream_layout.addWidget(inference_title)
+
+            (
+                self.hyper_widget.inference_scene,
+                self.hyper_widget.inference_img_item,
+                self.hyper_widget.inference_view,
+            ) = self._create_hyperspectral_graphics_view()
+            stream_layout.addWidget(self.hyper_widget.inference_view, 1)
+
+            layout.addLayout(stream_layout, 1)
 
         # 하단 정보
         info_layout = QHBoxLayout()
@@ -321,6 +616,19 @@ class CameraView(QFrame):
         )
         info_layout.addWidget(self.fps_label)
 
+        if self.is_hyperspectral:
+            self.inference_status_label = QLabel("추론: 대기")
+            self.inference_status_label.setStyleSheet(
+                """
+                color: #989898;
+                font-size: 12px;
+                font-weight: normal;
+                margin-left: 16px;
+                margin-bottom: 25px;
+                """
+            )
+            info_layout.addWidget(self.inference_status_label)
+
         info_layout.addStretch()
 
         self.resolution = QLabel("해상도: 1920x1080")
@@ -336,6 +644,17 @@ class CameraView(QFrame):
         info_layout.addWidget(self.resolution)
 
         layout.addLayout(info_layout)
+
+    def _create_hyperspectral_graphics_view(self):
+        scene = QGraphicsScene(0, 0, 640, 480, self)
+        img_item = QGraphicsPixmapItem()
+        scene.addItem(img_item)
+
+        view = QGraphicsView(scene, self)
+        view.setObjectName("camera_frame")
+        view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        return scene, img_item, view
 
     def start_camera(self):
         """카메라 시작"""
@@ -407,6 +726,8 @@ class CameraView(QFrame):
             if self.is_hyperspectral:
                 if self.hyper_widget and self.hyper_widget.img_item:
                     self.hyper_widget.img_item.setPixmap(QPixmap())
+                if self.hyper_widget and self.hyper_widget.inference_img_item:
+                    self.hyper_widget.inference_img_item.setPixmap(QPixmap())
                 if self.img_data:
                     for item in self.img_data.overlay_items:
                         if self.hyper_widget and self.hyper_widget.scene:
@@ -414,6 +735,10 @@ class CameraView(QFrame):
                     self.img_data.overlay_items.clear()
                     self.img_data.overlay_info.clear()
                     self.img_data.line_buffer.clear()
+                    if self.img_data.inference_buffer:
+                        self.img_data.inference_buffer.clear()
+                if self.inference_status_label:
+                    self.inference_status_label.setText("추론: 대기")
             else:
                 self.image_label.setText("카메라 대기 중...")
                 self.image_label.setPixmap(QPixmap())
@@ -486,6 +811,8 @@ class CameraView(QFrame):
         if self.is_hyperspectral:
             if self.hyper_widget and self.hyper_widget.img_item:
                 self.hyper_widget.img_item.setPixmap(QPixmap())
+            if self.hyper_widget and self.hyper_widget.inference_img_item:
+                self.hyper_widget.inference_img_item.setPixmap(QPixmap())
         else:
             self.image_label.setText(f"오류:\n{error_msg}")
         self.is_running = False
@@ -539,6 +866,36 @@ class CameraView(QFrame):
 
         except Exception as e:
             log(f"라인 처리 오류: {str(e)}")
+            log(traceback.format_exc())
+
+    def process_hyperspectral_inference(self, info):
+        """추론 스트리밍 이미지 처리"""
+        if self.img_data is None or self.img_data.inference_buffer is None:
+            return
+
+        try:
+            width = int(info.get("width", 0))
+            height = int(info.get("height", 0))
+            data_body = info.get("data_body", b"")
+            if width <= 0 or height <= 0:
+                return
+
+            frame_array = np.frombuffer(data_body, dtype=np.uint8)
+            expected_size = width * height * 3
+            if frame_array.size != expected_size:
+                log(f"잘못된 추론 이미지 크기: {frame_array.size} (예상: {expected_size})")
+                return
+
+            image = frame_array.reshape(height, width, 3)
+            for row in image:
+                self.img_data.inference_buffer.append(np.ascontiguousarray(row))
+
+            current_time = time.time()
+            if current_time - self.img_data.inference_last_update_time >= self.img_data.update_interval:
+                self.update_hyperspectral_inference_image()
+                self.img_data.inference_last_update_time = current_time
+        except Exception as e:
+            log(f"추론 이미지 처리 오류: {str(e)}")
             log(traceback.format_exc())
 
     # def update_stats(self):
@@ -599,6 +956,46 @@ class CameraView(QFrame):
 
         except Exception as e:
             log(f"이미지 업데이트 오류: {str(e)}")
+            log(traceback.format_exc())
+
+    def update_hyperspectral_inference_image(self):
+        """추론 이미지 표시 업데이트 - 원본 스트림과 별도 버퍼 사용"""
+        try:
+            if not self.img_data or not self.img_data.inference_buffer:
+                return
+
+            img_data = np.array(list(self.img_data.inference_buffer), dtype=np.uint8)
+            width = int(img_data.shape[1])
+            if len(img_data) < self.img_data.max_lines:
+                padding = np.zeros(
+                    (self.img_data.max_lines - len(img_data), width, 3),
+                    dtype=np.uint8
+                )
+                img_data = np.vstack([padding, img_data])
+
+            h, w, _ch = img_data.shape
+            q_img = QImage(
+                img_data.data,
+                w,
+                h,
+                3 * w,
+                QImage.Format_RGB888
+            ).copy()
+            pixmap = QPixmap.fromImage(q_img)
+
+            if (
+                getattr(self, "hyper_widget", None)
+                and self.hyper_widget.inference_img_item is not None
+                and self.hyper_widget.inference_view is not None
+            ):
+                self.hyper_widget.inference_img_item.setPixmap(pixmap)
+                self.hyper_widget.inference_scene.setSceneRect(pixmap.rect())
+                self.hyper_widget.inference_view.fitInView(
+                    self.hyper_widget.inference_img_item,
+                    Qt.KeepAspectRatio
+                )
+        except Exception as e:
+            log(f"추론 이미지 업데이트 오류: {str(e)}")
             log(traceback.format_exc())
 
     def update_hyperspectral_overlay(self):
@@ -992,10 +1389,14 @@ class MonitoringPage(QWidget):
         self.lumo_stop_scan_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setText("스트리밍 정지")
         self._set_lumo_status_text("상태: 스트리밍 준비", "#d29922")
+        if self.hyper_camera and self.hyper_camera.inference_status_label:
+            self.hyper_camera.inference_status_label.setText("추론: 준비 중")
 
         self.lumo_scan_worker = LumoStreamWorker(self.app.config, frames=frames)
         self.lumo_scan_worker.status_ready.connect(self.on_lumo_scan_status)
         self.lumo_scan_worker.line_ready.connect(self.on_lumo_scan_line)
+        self.lumo_scan_worker.inference_ready.connect(self.on_lumo_inference_frame)
+        self.lumo_scan_worker.inference_status_ready.connect(self.on_lumo_inference_status)
         self.lumo_scan_worker.scan_finished.connect(self.on_lumo_scan_finished)
         self.lumo_scan_worker.error_ready.connect(self.on_lumo_scan_error)
         self.lumo_scan_worker.finished.connect(self._on_lumo_scan_worker_finished)
@@ -1025,6 +1426,18 @@ class MonitoringPage(QWidget):
         if self.hyper_camera and self.hyper_camera.is_running:
             self.hyper_camera.process_hyperspectral_line(info)
 
+    def on_lumo_inference_frame(self, info):
+        if self._lumo_shutting_down:
+            return
+        if self.hyper_camera and self.hyper_camera.is_running:
+            self.hyper_camera.process_hyperspectral_inference(info)
+
+    def on_lumo_inference_status(self, message):
+        if self._lumo_shutting_down:
+            return
+        if self.hyper_camera and self.hyper_camera.inference_status_label:
+            self.hyper_camera.inference_status_label.setText(str(message))
+
     def on_lumo_scan_finished(self, payload):
         if self._lumo_shutting_down:
             return
@@ -1033,6 +1446,8 @@ class MonitoringPage(QWidget):
         self.lumo_connect_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
         self.lumo_stop_scan_btn.setText("스트리밍 정지")
+        if self.hyper_camera and self.hyper_camera.inference_status_label:
+            self.hyper_camera.inference_status_label.setText("추론: 정지" if stopped else "추론: 종료")
         if isinstance(payload, dict):
             network = payload.get("network")
             device_index = payload.get("device_index")
@@ -1047,6 +1462,8 @@ class MonitoringPage(QWidget):
         self.lumo_connect_btn.setEnabled(True)
         self.lumo_stop_scan_btn.setEnabled(False)
         self.lumo_stop_scan_btn.setText("스트리밍 정지")
+        if self.hyper_camera and self.hyper_camera.inference_status_label:
+            self.hyper_camera.inference_status_label.setText("추론: 중단")
         log(f"[ERROR] Lumo stream failed: {message}")
         title = "초분광 스트리밍"
         self.app.on_popup("warning", title, f"{title} 실패: {message}")
