@@ -2032,6 +2032,11 @@ def _si_start(handle: int) -> int:
                     f"channel_state={channel_state}"
                 )
         _si_apply_acquisition_settings(lib, handle)
+        # Match the known-good minimal FX17e flow:
+        # Initialize -> SI_CreateBuffer -> Acquisition.Start -> SI_Wait.
+        # Some Specim SI runtimes block in Acquisition.Start when no frame buffer
+        # has been created yet, so prepare it before issuing the start command.
+        _si_prepare_frame_context(handle)
 
         start_candidates = _dedupe_preserve_order(
             [
