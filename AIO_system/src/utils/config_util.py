@@ -683,12 +683,13 @@ def build_default_camera_connection_config():
             },
             "inference": {
                 "enabled": True,
-                "model_bundle_path": DEFAULT_SPECTRAL_MODEL_BUNDLE_PATH,
+                "model_bundle_path": "",
                 "model_path": DEFAULT_SPECTRAL_MODEL_PATH,
+                "model_source": "model_file",
                 "model_input_kind": "raw",
                 "reference_required": False,
                 "reference_paths": {},
-                "use_bundle_runtime_params": True,
+                "use_bundle_runtime_params": False,
             },
         },
     }
