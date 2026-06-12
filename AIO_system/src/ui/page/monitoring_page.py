@@ -389,14 +389,15 @@ class LumoStreamWorker(QThread):
                     timestamp_chunk=runtime.timestamp_buffer[start_offset:end_offset],
                     frame_start=runtime.next_window_start,
                 )
-                log(
-                    "[INFO] live inference result: "
-                    f"window={runtime.window_index + 1}, "
-                    f"frames={payload['frame_start']}-{payload['frame_end']}, "
-                    f"objects={payload['total_objects']}, "
-                    f"classes={payload['objects_per_class']}, "
-                    f"boxes={payload['objects']}"
-                )
+                if payload['total_objects'] != 0:
+                    log(
+                        "[INFO] live inference result: "
+                        f"window={runtime.window_index + 1}, "
+                        f"frames={payload['frame_start']}-{payload['frame_end']}, "
+                        f"objects={payload['total_objects']}, "
+                        f"classes={payload['objects_per_class']}, "
+                        f"boxes={payload['objects']}"
+                    )
                 self.inference_ready.emit(payload)
                 self.inference_status_ready.emit(
                     f"추론: 객체 {payload['total_objects']} / window {runtime.window_index + 1}"
@@ -1559,6 +1560,11 @@ class MonitoringPage(QWidget):
             return
         if self.hyper_camera and self.hyper_camera.is_running:
             self.hyper_camera.process_hyperspectral_inference(info)
+            managers = getattr(self.app, "managers", None)
+            comm_manager = getattr(managers, "comm_manager", None)
+            processor = getattr(comm_manager, "process_lumo_inference_payload", None)
+            if callable(processor):
+                processor(info)
 
     def on_lumo_inference_status(self, message):
         if self._lumo_shutting_down:

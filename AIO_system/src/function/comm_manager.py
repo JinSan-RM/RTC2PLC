@@ -26,6 +26,9 @@ from .XGT_run import XGTTester
 SMALL_EVENT_TTL = 10.0
 SMALL_EVENT_MATCH_WINDOW = 0.35
 SMALL_EVENT_FALLBACK_WINDOW = 0.8
+LUMO_EVENT_TTL = 1.0
+LUMO_EVENT_CENTER_X_TOLERANCE = 80
+LUMO_EVENT_FRAME_TOLERANCE = 96
 
 
 # region data classes
@@ -103,6 +106,8 @@ class CommManager(threading.Thread):
         # 객체 추적 (Y 좌표 기반)
 
         self.trackings = Trackings()
+        self._lumo_event_lock = threading.Lock()
+        self._lumo_recent_events = deque(maxlen=256)
 
         self.xgt_tester = XGTTester(ip="192.168.1.3", port=2004)
 
@@ -727,6 +732,137 @@ class CommManager(threading.Thread):
             except Exception as e:
                 log(f"[ERROR] Error in data stream: {str(e)}")
                 continue
+    def _is_duplicate_lumo_event(self, *, classification: str, center_x: int, frame_center: int) -> bool:
+        now = time.time()
+        with self._lumo_event_lock:
+            while self._lumo_recent_events:
+                oldest = self._lumo_recent_events[0]
+                if now - float(oldest.get("timestamp", 0.0)) <= LUMO_EVENT_TTL:
+                    break
+                self._lumo_recent_events.popleft()
+
+            for event in self._lumo_recent_events:
+                if str(event.get("classification")) != classification:
+                    continue
+                if abs(int(event.get("center_x", 0)) - int(center_x)) > LUMO_EVENT_CENTER_X_TOLERANCE:
+                    continue
+                if abs(int(event.get("frame_center", 0)) - int(frame_center)) > LUMO_EVENT_FRAME_TOLERANCE:
+                    continue
+                return True
+
+            self._lumo_recent_events.append(
+                {
+                    "timestamp": now,
+                    "classification": classification,
+                    "center_x": int(center_x),
+                    "frame_center": int(frame_center),
+                }
+            )
+            return False
+
+    def process_lumo_inference_payload(self, payload):
+        if not getattr(self.app, "monitoring_enabled", True):
+            return
+        if not isinstance(payload, dict):
+            return
+
+        objects = payload.get("objects", [])
+        if not isinstance(objects, list):
+            return
+
+        try:
+            frame_start = int(payload.get("frame_start", 0) or 0)
+            frame_end = int(payload.get("frame_end", frame_start) or frame_start)
+        except (TypeError, ValueError):
+            frame_start = 0
+            frame_end = 0
+
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            classification = str(obj.get("class", "")).strip()
+            bbox = obj.get("bbox", [])
+            if not classification or not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                continue
+            try:
+                x, y, w, h = [int(value) for value in bbox]
+            except (TypeError, ValueError):
+                continue
+            if w <= 0 or h <= 0:
+                continue
+            if abs(w) < 15:
+                log("[INFO] ignoring thin Lumo object")
+                continue
+
+            center_x = int(x + (w // 2))
+            y_position = int(y + (h // 2))
+            frame_center = int(frame_start + y_position)
+            if y_position >= 1000:
+                continue
+
+            size = classify_object_size(center_x)
+            if size is None:
+                log("[가이드라인] Lumo 객체 무시")
+                continue
+
+            if size == "large":
+                plc_value = PLASTIC_VALUE_MAPPING_LARGE.get(classification)
+            elif size == "small":
+                plc_value = PLASTIC_VALUE_MAPPING_SMALL.get(classification)
+            else:
+                plc_value = None
+            size_addr = PLASTIC_SIZE_MAPPING.get(size)
+            if not plc_value or not size_addr:
+                log(f"[WARNING] Lumo PLC mapping failed: class={classification}, size={size}")
+                continue
+
+            if self._is_duplicate_lumo_event(
+                classification=classification,
+                center_x=center_x,
+                frame_center=frame_center,
+            ):
+                log(f"[INFO] duplicate Lumo PLC event skipped: class={classification}, x={center_x}")
+                continue
+
+            delay = calc_delay(y_position)
+            detection_time = time.time()
+            with self.trackings.tracking_lock:
+                obj_id = self.trackings.obj_counter
+                self.trackings.obj_counter += 1
+                obj_info = ObjectInfo(
+                    obj_id=obj_id,
+                    classification=classification,
+                    plc_value=plc_value,
+                    size=size,
+                    size_addr=size_addr,
+                    y_position=y_position,
+                )
+                self.trackings.tracked_objects[obj_id] = {
+                    "object_info": obj_info,
+                    "detect_time": detection_time,
+                    "analysis_complete": True,
+                    "status": "scheduled",
+                }
+
+            event_info = {
+                "x0": int(x),
+                "x1": int(x + w),
+                "y0": int(y),
+                "y1": int(y + h),
+                "start_frame": frame_start,
+                "end_frame": frame_end,
+            }
+            if hasattr(self.app, "on_obj_detected"):
+                self.app.on_obj_detected(event_info, classification)
+
+            if size == "large":
+                self._schedule_plc_signal_delay(obj_info, delay)
+            elif size == "small":
+                self._queue_small_event(obj_info, detection_time, delay)
+            log(
+                f"[Lumo PLC예약] ID={obj_id}, 재질={classification}, size={size}, "
+                f"Y={y_position}, delay={delay:.3f}s, 주소=P{plc_value:03X}/P{size_addr:03X}"
+            )
 # endregion data stream listener
 
 # region run, start, stop, quit
