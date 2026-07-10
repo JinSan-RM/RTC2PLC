@@ -76,6 +76,11 @@ class HyperSpectralData:
     overlay_info: deque = None
     inference_buffer: deque = None
     inference_last_update_time: float = 0.0
+    source_fps: float = 0.0
+    display_fps: float = 0.0
+    display_fps_window_start: float = 0.0
+    display_frame_count: int = 0
+    skipped_display_frames: int = 0
 
 
 @dataclass
@@ -113,6 +118,7 @@ class LumoStreamWorker(QThread):
     """Open Lumo camera and stream lines into the monitoring view."""
 
     line_ready = Signal(object)
+    line_batch_ready = Signal(object)
     inference_ready = Signal(object)
     inference_status_ready = Signal(str)
     status_ready = Signal(str)
@@ -218,9 +224,34 @@ class LumoStreamWorker(QThread):
             last_frame_received_at = time.monotonic()
             frame_timeout_s = 0.5
             max_idle_seconds = 30.0
+            ui_emit_interval_s = 1.0 / 60.0
+            preview_batch = []
+            last_preview_emit_at = time.monotonic()
+            measured_rx_fps = 0.0
+            rx_window_started_at = time.monotonic()
+            rx_window_frames = 0
+            last_rate_log_at = rx_window_started_at
             stream_worker = StreamWorker(source, queue_maxsize=64)
             self._stream_worker = stream_worker
             stream_worker.start(max_frames=self.frames)
+
+            def flush_preview_batch(*, force=False):
+                nonlocal preview_batch, last_preview_emit_at
+                if not preview_batch:
+                    return
+                now = time.monotonic()
+                if not force and now - last_preview_emit_at < ui_emit_interval_s:
+                    return
+                self.line_batch_ready.emit(
+                    {
+                        "lines": preview_batch,
+                        "source_fps": float(measured_rx_fps),
+                        "frame_count": int(frame_count),
+                        "queue_drops": int(stream_worker.stats.dropped_frames),
+                    }
+                )
+                preview_batch = []
+                last_preview_emit_at = now
 
             while not self._stop_requested:
                 frame = stream_worker.pop_frame(timeout_s=frame_timeout_s)
@@ -240,14 +271,29 @@ class LumoStreamWorker(QThread):
                     break
                 frame_count += 1
                 last_frame_received_at = time.monotonic()
+                rx_window_frames += 1
+                rx_elapsed = last_frame_received_at - rx_window_started_at
+                if rx_elapsed >= 1.0:
+                    measured_rx_fps = rx_window_frames / rx_elapsed
+                    rx_window_started_at = last_frame_received_at
+                    rx_window_frames = 0
+
                 frame_data = np.asarray(frame.data)
-                self.line_ready.emit(
-                    {
-                        "frame_number": int(getattr(frame, "index", frame_count)),
-                        "data_body": lumo_line_to_rgb_bytes(frame_data, rgb_bands),
-                    }
-                )
+                frame_number = int(getattr(frame, "index", frame_count))
                 timestamp_s = float(getattr(frame, "timestamp_monotonic_s", time.monotonic()))
+
+                if not self.enable_inference:
+                    display_width = int(frame_data.shape[1]) if frame_data.ndim == 2 else 640
+                    preview_batch.append(
+                        {
+                            "frame_number": frame_number,
+                            "width": display_width,
+                            "data_body": lumo_line_to_rgb_bytes(frame_data, rgb_bands),
+                            "timestamp_s": timestamp_s,
+                        }
+                    )
+                    flush_preview_batch()
+
                 if self.enable_inference:
                     self._process_live_inference_frame(
                         inference_runtime,
@@ -255,7 +301,17 @@ class LumoStreamWorker(QThread):
                         timestamp_s,
                         frame_count,
                     )
+                elif last_frame_received_at - last_rate_log_at >= 5.0:
+                    log(
+                        "[INFO] Lumo stream rate: "
+                        f"rx={measured_rx_fps:.1f}fps, "
+                        f"frames={frame_count}, "
+                        f"queue_drops={stream_worker.stats.dropped_frames}"
+                    )
+                    last_rate_log_at = last_frame_received_at
 
+            if not self.enable_inference:
+                flush_preview_batch(force=True)
             stream_worker.wait(timeout_s=2.0)
             if stream_worker.stats.error and not self._stop_requested:
                 raise RuntimeError(str(stream_worker.stats.error))
@@ -837,6 +893,14 @@ class CameraView(QFrame):
                 if self.hyper_widget and self.hyper_widget.img_item:
                     self.hyper_widget.img_item.setPixmap(QPixmap())
                 if self.img_data:
+                    self.img_data.current_line = 0
+                    self.img_data.last_update_time = 0.0
+                    self.img_data.inference_last_update_time = 0.0
+                    self.img_data.source_fps = 0.0
+                    self.img_data.display_fps = 0.0
+                    self.img_data.display_fps_window_start = 0.0
+                    self.img_data.display_frame_count = 0
+                    self.img_data.skipped_display_frames = 0
                     for item in self.img_data.overlay_items:
                         if self.hyper_widget and self.hyper_widget.scene:
                             self.hyper_widget.scene.removeItem(item)
@@ -847,6 +911,8 @@ class CameraView(QFrame):
                         self.img_data.inference_buffer.clear()
                 if self.inference_status_label:
                     self.inference_status_label.setText("추론: 대기")
+                if self.fps_label:
+                    self.fps_label.setText("FPS: 0")
             else:
                 self.image_label.setText("카메라 대기 중...")
                 self.image_label.setPixmap(QPixmap())
@@ -904,6 +970,35 @@ class CameraView(QFrame):
         except Exception as e:
             log(f"프레임 업데이트 오류: {e}")
 
+    def _record_hyperspectral_display_update(self):
+        if not self.is_hyperspectral or self.img_data is None:
+            return
+
+        now = time.monotonic()
+        if self.img_data.display_fps_window_start <= 0.0:
+            self.img_data.display_fps_window_start = now
+            self.img_data.display_frame_count = 0
+
+        self.img_data.display_frame_count += 1
+        elapsed = now - self.img_data.display_fps_window_start
+        if elapsed >= 1.0:
+            self.img_data.display_fps = self.img_data.display_frame_count / elapsed
+            self.img_data.display_fps_window_start = now
+            self.img_data.display_frame_count = 0
+        self._refresh_hyperspectral_fps_label()
+
+    def _refresh_hyperspectral_fps_label(self):
+        if not self.is_hyperspectral or self.img_data is None or self.fps_label is None:
+            return
+
+        rx_fps = float(self.img_data.source_fps or 0.0)
+        ui_fps = float(self.img_data.display_fps or 0.0)
+        skipped = int(self.img_data.skipped_display_frames or 0)
+        if skipped > 0:
+            self.fps_label.setText(f"RX: {rx_fps:.1f} fps | UI: {ui_fps:.1f} fps | skip: {skipped}")
+        else:
+            self.fps_label.setText(f"RX: {rx_fps:.1f} fps | UI: {ui_fps:.1f} fps")
+
     def update_status(self, connected):
         """상태 업데이트"""
         if connected:
@@ -926,53 +1021,110 @@ class CameraView(QFrame):
 
     def process_hyperspectral_line(self, info):
         """라인 데이터 처리"""
-        # pixel_format = self.format_var.get()
+        self.process_hyperspectral_line_batch(
+            {
+                "lines": [info],
+                "source_fps": info.get("source_fps", 0.0) if isinstance(info, dict) else 0.0,
+            }
+        )
+
+    def process_hyperspectral_line_batch(self, info):
+        """여러 라인을 버퍼에 반영하고 화면은 한 번만 갱신한다."""
         if self.img_data is None or self.hyperspectral_display_mode != "raw":
             return
 
-        cur_line = info["frame_number"]
-        line_data = info["data_body"]
-        prev_line = self.img_data.current_line
+        if isinstance(info, dict):
+            lines = info.get("lines", [])
+            source_fps = info.get("source_fps", 0.0)
+        elif isinstance(info, list):
+            lines = info
+            source_fps = 0.0
+        else:
+            lines = [info]
+            source_fps = 0.0
 
-        if prev_line != 0:
-            line_gap = cur_line - prev_line - 1
-            if 0 < line_gap < 500:
-                padding_line = self.img_data.line_buffer[-1] \
-                    if self.img_data.line_buffer else np.zeros((640, 3), dtype=np.uint8)
-                for _ in range(line_gap):
-                    self.img_data.line_buffer.append(padding_line)
+        if not lines:
+            return
+
+        if source_fps:
+            self.img_data.source_fps = float(source_fps)
+
+        appended_count = 0
+        skipped_frames = 0
+        try:
+            for line_info in lines:
+                if not isinstance(line_info, dict):
+                    continue
+                if line_info.get("source_fps"):
+                    self.img_data.source_fps = float(line_info.get("source_fps"))
+                skipped_frames += int(line_info.get("display_skipped_frames") or 0)
+                if self._append_hyperspectral_line(line_info):
+                    appended_count += 1
+
+            if appended_count <= 0:
+                self._refresh_hyperspectral_fps_label()
+                return
+
+            self.img_data.skipped_display_frames = skipped_frames
+            self.update_hyperspectral_image()
+            self.update_hyperspectral_overlay()
+            self.img_data.last_update_time = time.time()
+            self._record_hyperspectral_display_update()
+
+        except Exception as e:
+            log(f"라인 처리 오류: {str(e)}")
+            log(traceback.format_exc())
+
+    def _append_hyperspectral_line(self, info):
+        cur_line = int(info["frame_number"])
+        line_data = info["data_body"]
+        line_width = int(info.get("width") or 640)
+        if line_width <= 0:
+            line_width = 640
 
         try:
             line_array = np.frombuffer(line_data, dtype=np.uint8)
-            if len(line_array) == 640:
-                # Grayscale 640픽셀
+            if len(line_array) == line_width:
+                # Grayscale line_width 픽셀
                 # 색상 반전 (검정↔흰색) + 밝기 증폭
                 line_array = 255 - (line_array * 36)  # 0→255, 7→3 (반전 후 증폭)
                 line_array = np.clip(line_array, 0, 255).astype(np.uint8)
                 # 이 줄만 쓰면 픽셀 변환 그대로
                 line_rgb = np.stack([line_array, line_array, line_array], axis=1)
-            elif len(line_array) == 640*3:
-                # RGB 640*3픽셀
-                line_rgb = line_array.reshape(640, 3)
+            elif len(line_array) == line_width * 3:
+                # RGB line_width*3 픽셀
+                line_rgb = line_array.reshape(line_width, 3)
+            elif len(line_array) % 3 == 0:
+                line_width = len(line_array) // 3
+                line_rgb = line_array.reshape(line_width, 3)
             else:
-                log(f"잘못된 라인 크기: {len(line_array)} (예상: 640 또는 1920)")
-                return
+                log(f"잘못된 라인 크기: {len(line_array)} (예상: {line_width} 또는 {line_width * 3})")
+                return False
+
+            if self.img_data.line_buffer and self.img_data.line_buffer[-1].shape[0] != line_rgb.shape[0]:
+                self.img_data.line_buffer.clear()
+
+            prev_line = self.img_data.current_line
+            if prev_line != 0:
+                line_gap = cur_line - prev_line - 1
+                if 0 < line_gap < 500:
+                    padding_line = (
+                        self.img_data.line_buffer[-1]
+                        if self.img_data.line_buffer
+                        else np.zeros((line_rgb.shape[0], 3), dtype=np.uint8)
+                    )
+                    for _ in range(line_gap):
+                        self.img_data.line_buffer.append(padding_line)
 
             # deque에 라인 추가 (자동으로 오래된 라인 제거)
             self.img_data.line_buffer.append(line_rgb)
             self.img_data.current_line = cur_line
-
-            current_time = time.time()
-
-            # 이미지 업데이트 (30fps 제한)
-            if current_time - self.img_data.last_update_time >= self.img_data.update_interval:
-                self.update_hyperspectral_image()
-                self.update_hyperspectral_overlay()
-                self.img_data.last_update_time = current_time
+            return True
 
         except Exception as e:
             log(f"라인 처리 오류: {str(e)}")
             log(traceback.format_exc())
+            return False
 
     def process_hyperspectral_inference(self, info):
         """추론 스트리밍 이미지 처리"""
@@ -1562,6 +1714,7 @@ class MonitoringPage(QWidget):
         )
         self.lumo_scan_worker.status_ready.connect(self.on_lumo_scan_status)
         self.lumo_scan_worker.line_ready.connect(self.on_lumo_scan_line)
+        self.lumo_scan_worker.line_batch_ready.connect(self.on_lumo_scan_line_batch)
         self.lumo_scan_worker.inference_ready.connect(self.on_lumo_inference_frame)
         self.lumo_scan_worker.inference_status_ready.connect(self.on_lumo_inference_status)
         self.lumo_scan_worker.scan_finished.connect(self.on_lumo_scan_finished)
@@ -1600,6 +1753,12 @@ class MonitoringPage(QWidget):
             return
         if self.hyper_camera and self.hyper_camera.is_running:
             self.hyper_camera.process_hyperspectral_line(info)
+
+    def on_lumo_scan_line_batch(self, info):
+        if self._lumo_shutting_down:
+            return
+        if self.hyper_camera and self.hyper_camera.is_running:
+            self.hyper_camera.process_hyperspectral_line_batch(info)
 
     def on_lumo_inference_frame(self, info):
         if self._lumo_shutting_down:
