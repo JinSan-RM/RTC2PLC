@@ -16,12 +16,13 @@ from src.utils.logger import log
 # region ServoController
 class ServoController(QWidget):
     """개별 서보 제어 박스"""
-    def __init__(self, app, title, servo_id):
+    def __init__(self, app, title, servo_id, servo_type="feeder"):
         super().__init__()
 
         self.app = app
         self.title = title
         self.servo_id = servo_id
+        self.servo_type = servo_type
 
         self._init_ui()
 
@@ -196,7 +197,10 @@ class ServoController(QWidget):
         parent_layout.addLayout(layout)
 
     def _add_position_item(self, parent_layout, row):
-        _name = "폭 조정" if self.servo_id == 0 else "높이 조정"
+        if self.servo_type == "feeder":
+            _name = "폭 조정" if self.servo_id == 0 else "높이 조정"
+        else:
+            _name = "서보 1 조정" if self.servo_id == 2 else "서보 2 조정"
         name_label = QLabel(f"{_name} {row}:")
         name_label.setObjectName("name_label")
         parent_layout.addWidget(name_label, row, 0)
@@ -394,7 +398,10 @@ class ServoController(QWidget):
 
     def on_save_position(self, idx):
         """이동 위치 및 속도 저장"""
-        _name = "폭 조정" if self.servo_id == 0 else "높이 조정"
+        if self.servo_type == "feeder":
+            _name = "폭 조정" if self.servo_id == 0 else "높이 조정"
+        else:
+            _name = "서보 1 조정" if self.servo_id == 2 else "서보 2 조정"
 
         pos_txt = getattr(self, f"servo_{self.servo_id}_target_pos_{idx}")
         speed_txt = getattr(self, f"servo_{self.servo_id}_target_speed_{idx}")
@@ -669,9 +676,10 @@ class ServoController(QWidget):
 # region ServoTab
 class ServoTab(QWidget):
     """서보 제어 탭"""
-    def __init__(self, app):
+    def __init__(self, app, servo_type="feeder"):
         super().__init__()
         self.app = app
+        self.servo_type = servo_type
         self.init_ui()
 
     def init_ui(self):
@@ -695,15 +703,26 @@ class ServoTab(QWidget):
 
         scroll_layout.addSpacing(25)
 
-        # 폭 제어
-        width_controller = ServoController(self.app, "폭 제어", 0)
-        scroll_layout.addWidget(width_controller)
-        scroll_layout.addSpacing(30)
+        if self.servo_type == "feeder":
+            # 폭 제어
+            width_controller = ServoController(self.app, "폭 제어", 0, "feeder")
+            scroll_layout.addWidget(width_controller)
+            scroll_layout.addSpacing(30)
 
-        # 높이 제어
-        height_controller = ServoController(self.app, "높이 제어", 1)
-        scroll_layout.addWidget(height_controller)
-        scroll_layout.addSpacing(30)
+            # 높이 제어
+            height_controller = ServoController(self.app, "높이 제어", 1, "feeder")
+            scroll_layout.addWidget(height_controller)
+            scroll_layout.addSpacing(30)
+        else:
+            # 서보 1 제어
+            servo1_controller = ServoController(self.app, "서보 1 제어", 2, "sorter")
+            scroll_layout.addWidget(servo1_controller)
+            scroll_layout.addSpacing(30)
+
+            # 서보 2 제어
+            servo2_controller = ServoController(self.app, "서보 2 제어", 3, "sorter")
+            scroll_layout.addWidget(servo2_controller)
+            scroll_layout.addSpacing(30)
 
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
@@ -714,6 +733,11 @@ class ServoTab(QWidget):
     # 이벤트 핸들러
     def update_values(self, servo_id: int, _data):
         """서보 상태 UI 업데이트"""
+        if self.servo_type == "feeder" and servo_id not in (0, 1):
+            return
+        if self.servo_type == "sorter" and servo_id not in (2, 3):
+            return
+
         servo_on = check_mask(_data[0], StatusMask.STATUS_OPERATION_ENABLED)
         btn = self.findChild(ToggleButton, f"toggle_btn_{servo_id}")
         if btn and btn.isChecked() != servo_on:

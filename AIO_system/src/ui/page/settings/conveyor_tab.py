@@ -49,7 +49,7 @@ class ConveyorController(QWidget):
 
         self.app = app
         self.conv_id = conv_id
-        self.inverter_name = f"inverter_00{conv_id+2}"
+        self.inverter_name = f"inverter_00{conv_id+3}"
 
         self._init_ui()
 
@@ -506,8 +506,8 @@ class ConveyorTab(QWidget):
 
         scroll_layout.addSpacing(25)
 
-        # CV01 ~ CV04 컨베이어 섹션 생성
-        for i in range(1, 5):
+        # 선별기 인버터 CV01 ~ CV02 섹션 생성
+        for i in range(1, 3):
             _controller = ConveyorController(self.app, i)
             scroll_layout.addWidget(_controller)
             scroll_layout.addSpacing(20)

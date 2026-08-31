@@ -205,9 +205,9 @@ class App():
                 else:
                     # 카운터가 동일하다면 dead_count 증가
                     self.prcs_vars.dead_count += 1
-                    if self.prcs_vars.dead_count >= MAX_PRCS_DEAD_COUNT:
-                        # dead_count가 최대치에 도달하면 상대 프로세스 응답없음으로 판정
-                        log("[ERROR] EtherCAT sub process is dead")
+                    # if self.prcs_vars.dead_count >= MAX_PRCS_DEAD_COUNT:
+                    #     # dead_count가 최대치에 도달하면 상대 프로세스 응답없음으로 판정
+                    #     log("[ERROR] EtherCAT sub process is dead")
             else:
                 # 카운터가 변화했다면 dead_count 및 유예 카운트 0 으로
                 self.prcs_vars.dead_count = 0
@@ -281,7 +281,7 @@ class App():
         if self.ui.pages.settings_page is not None and \
             self.ui.children_widget.main_stack.currentIndex() == 2:
             tab_index = self.ui.pages.settings_page.pages.currentIndex()
-            if tab_index in (1, 2):
+            if tab_index in (2, 3):
                 self.ui.signals.inverter_updated.emit(_data)
 
     def on_set_freq(self, inverter_name: str, value: float):
@@ -378,7 +378,7 @@ class App():
         if self.ui.pages.settings_page and \
             self.ui.children_widget.main_stack.currentIndex() == 2:
             tab_index = self.ui.pages.settings_page.pages.currentIndex()
-            if tab_index == 0:
+            if tab_index in (0, 1):
                 self.ui.signals.servo_updated.emit(servo_id, _data)
 
     def servo_on(self, servo_id: int):
@@ -621,6 +621,16 @@ class App():
                     "jog_speed": 0.0,
                     "inch_distance": 0.0,
                 },
+                "servo_2": {
+                    "position": [pos[:] for pos in base_positions],
+                    "jog_speed": 0.0,
+                    "inch_distance": 0.0,
+                },
+                "servo_3": {
+                    "position": [pos[:] for pos in base_positions],
+                    "jog_speed": 0.0,
+                    "inch_distance": 0.0,
+                },
             },
             "airknife_config": airknife_config,
         }
@@ -630,6 +640,21 @@ class App():
             if os.path.exists(CONFIG_PATH):
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     self.config = json.load(f)
+
+                # 신규 서보 설정 마이그레이션
+                default_cfg = self._build_default_config()
+                updated = False
+                if "servo_config" not in self.config:
+                    self.config["servo_config"] = default_cfg["servo_config"]
+                    updated = True
+                else:
+                    for i in range(4):
+                        key = f"servo_{i}"
+                        if key not in self.config["servo_config"]:
+                            self.config["servo_config"][key] = default_cfg["servo_config"][key]
+                            updated = True
+                if updated:
+                    self._save_config()
 
                 log("[INFO] config loaded")
                 return

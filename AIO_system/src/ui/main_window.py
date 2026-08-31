@@ -75,7 +75,8 @@ class MainWindow(QMainWindow):
         self.signals = UpdateSignals()
 
         self.signals.log_updated.connect(self.pages.logs_page.add_log)
-        self.signals.servo_updated.connect(self.pages.settings_page.servo_tab.update_values)
+        self.signals.servo_updated.connect(self.pages.settings_page.feeder_servo_tab.update_values)
+        self.signals.servo_updated.connect(self.pages.settings_page.sorter_servo_tab.update_values)
         self.signals.inverter_updated.connect(self.pages.settings_page.feeder_tab.update_values)
         self.signals.inverter_updated.connect(self.pages.settings_page.conveyor_tab.update_values)
         self.signals.airknife_updated.connect(self.pages.settings_page.airknife_tab.on_airknife_off)

@@ -80,7 +80,7 @@ class ServoManager:
 
     def update_servo_values(self):
         """서보 업데이트 wrapper"""
-        for i in range(2):
+        for i in range(4):
             self._update_servo_values(i)
 # endregion
 

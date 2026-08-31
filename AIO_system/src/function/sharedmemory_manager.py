@@ -40,7 +40,7 @@ class SharedMemoryManager:
         else:
             self.shm = shared_memory.SharedMemory(name=mem_name)
 
-        self._data = np.frombuffer(self.shm.buf, dtype=self.mem_dtype)[0]
+        self._data = np.frombuffer(self.shm.buf[:self.mem_dtype.itemsize], dtype=self.mem_dtype)[0]
         log("SharedMemoryManager initialized")
 
         self._initialized = True

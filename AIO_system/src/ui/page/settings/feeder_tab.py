@@ -518,6 +518,11 @@ class FeederTab(QWidget):
         scroll_layout.addWidget(outer_controller)
         scroll_layout.addSpacing(20)
 
+        # 리턴 모터
+        return_controller = FeederController(self.app, 3, "리턴 모터")
+        scroll_layout.addWidget(return_controller)
+        scroll_layout.addSpacing(20)
+
         scroll_layout.addSpacing(30)
 
         # 배출물 사이즈 조절

@@ -51,12 +51,14 @@ class SettingsPage(QWidget):
         self.pages = QStackedWidget()
 
         # 각 탭 추가
-        self.servo_tab = ServoTab(self.app)
+        self.feeder_servo_tab = ServoTab(self.app, "feeder")
+        self.sorter_servo_tab = ServoTab(self.app, "sorter")
         self.feeder_tab = FeederTab(self.app)
         self.conveyor_tab = ConveyorTab(self.app)
         self.airknife_tab = AirKnifeTab(self.app)
 
-        self.pages.addWidget(self.servo_tab)
+        self.pages.addWidget(self.feeder_servo_tab)
+        self.pages.addWidget(self.sorter_servo_tab)
         self.pages.addWidget(self.feeder_tab)
         self.pages.addWidget(self.conveyor_tab)
         self.pages.addWidget(self.airknife_tab)
@@ -90,10 +92,11 @@ class SettingsPage(QWidget):
         parent_layout.addLayout(title_layout)
 
     nav_list = [
-        "서보 제어",
-        "피더 제어",
-        "컨베이어 제어",
-        "에어나이프 제어",
+        "피더 서보 제어",
+        "선별기 서보 제어",
+        "피더 인버터 제어",
+        "선별기 인버터 제어",
+        "배출부 제어",
     ]
 
     def _create_side_tab(self, parent_layout):
@@ -118,9 +121,9 @@ class SettingsPage(QWidget):
         if index < len(self.nav_list):
             self.title.setText(self.nav_list[index])
 
-        # 에어나이프 탭일 때에만 설명 텍스트 업데이트
-        if index == 3:
-            self.explain.setText("에어나이프는 플라스틱 분류 신호를 받은 후 설정된 타이밍에 에어를 분사합니다.")
+        # 배출부 제어 탭일 때에만 설명 텍스트 업데이트
+        if index == 4:
+            self.explain.setText("배출부는 플라스틱 분류 신호를 받은 후 설정된 타이밍에 움직입니다.")
         else:
             self.explain.setText("")
 

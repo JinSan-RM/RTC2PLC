@@ -82,7 +82,7 @@ class AirknifeController(QWidget):
 
     def _create_airknife_header(self, parent_layout):
         layout = QHBoxLayout()
-        air_title = QLabel(f"에어나이프 #{self.num}")
+        air_title = QLabel(f"배출부 #{self.num}")
         air_title.setObjectName("title_label")
         layout.addWidget(air_title)
 

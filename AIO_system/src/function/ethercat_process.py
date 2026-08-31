@@ -77,7 +77,7 @@ class EtherCATProcess(Process):
             shm = shared_memory.SharedMemory(name=SHM_NAME)
             self.vars = ProcessVars(
                 shm=shm,
-                shm_data=np.frombuffer(shm.buf, dtype=SHM_DTYPE)[0]
+                shm_data=np.frombuffer(shm.buf[:SHM_DTYPE.itemsize], dtype=SHM_DTYPE)[0]
             )
             self.wkc_vars = WkcVars(last_ok_time=time.monotonic())
             self.prcs_vars = ProcessCheckVars(last_check_time=time.time())

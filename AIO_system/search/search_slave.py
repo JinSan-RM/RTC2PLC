@@ -1,7 +1,7 @@
 import pysoem
 
 master = pysoem.Master()
-master.open('\\Device\\NPF_{C7EBE891-A804-4047-85E5-4D0148B1D3EA}')
+master.open('\\Device\\NPF_{06F9B9DF-B317-4C7A-9149-03ABF279A691}')
 if not master.config_init() > 0:
     print("[Error] EtherCAT slaves not found")
 else:

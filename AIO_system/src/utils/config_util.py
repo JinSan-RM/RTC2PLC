@@ -20,9 +20,9 @@ MODBUS_RTU_CONFIG = {
         "inverter_003": 3,
         "inverter_004": 4,
         "inverter_005": 5,
-        "inverter_006": 6
+        # "inverter_006": 6
     },
-    "port": "COM7",
+    "port": "COM8",
     "baudrate": 9600,
     "bytesize": 8,
     "parity": "N",
@@ -293,6 +293,22 @@ SHM_DTYPE = np.dtype([
         ('reserved_3', 'u2')
     ]),
     ('servo_1', [
+        ('input_pdo', input_pdo_struct),
+        ('reserved_1', 'u1'),
+        ('output_pdo', output_pdo_struct),
+        ('reserved_2', 'u1'),
+        ('variables', variable_pdo_struct),
+        ('reserved_3', 'u2')
+    ]),
+    ('servo_2', [
+        ('input_pdo', input_pdo_struct),
+        ('reserved_1', 'u1'),
+        ('output_pdo', output_pdo_struct),
+        ('reserved_2', 'u1'),
+        ('variables', variable_pdo_struct),
+        ('reserved_3', 'u2')
+    ]),
+    ('servo_3', [
         ('input_pdo', input_pdo_struct),
         ('reserved_1', 'u1'),
         ('output_pdo', output_pdo_struct),
